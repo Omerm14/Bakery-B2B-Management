@@ -14,22 +14,23 @@ const CustomTooltip = ({ active, payload, label }) => {
   )
 }
 
+const MAX_WEEKS = 12
+
 export default function History() {
-  const [viewMode, setViewMode] = useState('customer') // 'customer' | 'item'
+  const [viewMode, setViewMode] = useState('customer')
   const [customers, setCustomers] = useState([])
   const [menuItems, setMenuItems] = useState([])
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [selectedItem, setSelectedItem] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [historyData, setHistoryData] = useState([])
-  const [trendData, setTrendData] = useState([])
+  const [tableData, setTableData] = useState(null) // { weeks: [...iso], rows: [...], trendData: [...] }
 
   useEffect(() => { loadMaster() }, [])
 
   useEffect(() => {
     if (viewMode === 'customer' && selectedCustomer) loadCustomerHistory()
     else if (viewMode === 'item' && selectedItem) loadItemHistory()
-    else { setHistoryData([]); setTrendData([]) }
+    else setTableData(null)
   }, [viewMode, selectedCustomer, selectedItem])
 
   async function loadMaster() {
@@ -48,45 +49,50 @@ export default function History() {
     try {
       const { data: lines } = await supabase
         .from('order_lines')
-        .select('week_id, menu_item_id, quantity, weeks(start_date), menu_items(name_he, unit, category)')
+        .select('week_id, menu_item_id, quantity, weeks(start_date), menu_items(name_he, unit)')
         .eq('customer_id', selectedCustomer.id)
         .gt('quantity', 0)
-        .order('week_id')
 
-      if (!lines?.length) { setHistoryData([]); setTrendData([]); return }
+      if (!lines?.length) { setTableData(null); return }
 
-      // Group by week
-      const weekMap = {}
+      // Group by (menu_item_id, week)
+      const itemWeekMap = {} // itemId → { name, unit, weekQtys: {iso: qty}, total }
+      const weekSet = new Set()
+
       for (const l of lines) {
         const iso = l.weeks?.start_date
         if (!iso) continue
-        if (!weekMap[iso]) weekMap[iso] = { weekIso: iso, label: formatWeekShort(iso), items: {}, total: 0 }
-        const key = l.menu_item_id
-        weekMap[iso].items[key] = (weekMap[iso].items[key] || 0) + parseFloat(l.quantity)
-        weekMap[iso].total += parseFloat(l.quantity)
-      }
-
-      const sorted = Object.values(weekMap).sort((a, b) => a.weekIso.localeCompare(b.weekIso))
-
-      // Top items across all history
-      const itemTotals = {}
-      for (const l of lines) {
+        weekSet.add(iso)
         const id = l.menu_item_id
-        if (!itemTotals[id]) itemTotals[id] = { id, name: l.menu_items?.name_he, qty: 0 }
-        itemTotals[id].qty += parseFloat(l.quantity)
+        if (!itemWeekMap[id]) itemWeekMap[id] = { id, name: l.menu_items?.name_he, unit: l.menu_items?.unit, weekQtys: {}, total: 0 }
+        itemWeekMap[id].weekQtys[iso] = (itemWeekMap[id].weekQtys[iso] || 0) + parseFloat(l.quantity)
+        itemWeekMap[id].total += parseFloat(l.quantity)
       }
-      const topItems = Object.values(itemTotals).sort((a, b) => b.qty - a.qty).slice(0, 8)
 
-      // Build table rows: weeks × top items
-      const rows = sorted.map(w => ({
-        label: w.label,
-        weekIso: w.weekIso,
-        total: Math.round(w.total * 10) / 10,
-        ...Object.fromEntries(topItems.map(it => [it.id, Math.round((w.items[it.id] || 0) * 10) / 10])),
-      }))
+      // Sort weeks, take last MAX_WEEKS
+      const allWeeks = [...weekSet].sort()
+      const recentWeeks = allWeeks.slice(-MAX_WEEKS)
 
-      setHistoryData({ rows, topItems })
-      setTrendData(sorted.map(w => ({ label: w.label, כמות: Math.round(w.total * 10) / 10 })))
+      // Build rows, sorted by total desc, filter items with any qty in recent weeks
+      const rows = Object.values(itemWeekMap)
+        .filter(r => recentWeeks.some(w => r.weekQtys[w] > 0))
+        .sort((a, b) => b.total - a.total)
+        .map(r => ({
+          ...r,
+          standing: detectStanding(r.weekQtys, recentWeeks),
+          recentTotal: recentWeeks.reduce((s, w) => s + (r.weekQtys[w] || 0), 0),
+        }))
+
+      // Trend: total per week across all weeks
+      const weekTotals = {}
+      for (const l of lines) {
+        const iso = l.weeks?.start_date
+        if (!iso) continue
+        weekTotals[iso] = (weekTotals[iso] || 0) + parseFloat(l.quantity)
+      }
+      const trendData = allWeeks.map(iso => ({ label: fmtWeek(iso), כמות: Math.round((weekTotals[iso] || 0) * 10) / 10 }))
+
+      setTableData({ weeks: recentWeeks, rows, trendData, title: selectedCustomer.name })
     } finally {
       setLoading(false)
     }
@@ -101,58 +107,53 @@ export default function History() {
         .select('week_id, customer_id, quantity, weeks(start_date), customers(name)')
         .eq('menu_item_id', selectedItem.id)
         .gt('quantity', 0)
-        .order('week_id')
 
-      if (!lines?.length) { setHistoryData([]); setTrendData([]); return }
+      if (!lines?.length) { setTableData(null); return }
 
-      // Group by week
-      const weekMap = {}
+      const custWeekMap = {}
+      const weekSet = new Set()
+
       for (const l of lines) {
         const iso = l.weeks?.start_date
         if (!iso) continue
-        if (!weekMap[iso]) weekMap[iso] = { weekIso: iso, label: formatWeekShort(iso), customers: {}, total: 0 }
-        const cid = l.customer_id
-        weekMap[iso].customers[cid] = (weekMap[iso].customers[cid] || { name: l.customers?.name, qty: 0 })
-        weekMap[iso].customers[cid].qty += parseFloat(l.quantity)
-        weekMap[iso].total += parseFloat(l.quantity)
+        weekSet.add(iso)
+        const id = l.customer_id
+        if (!custWeekMap[id]) custWeekMap[id] = { id, name: l.customers?.name, weekQtys: {}, total: 0 }
+        custWeekMap[id].weekQtys[iso] = (custWeekMap[id].weekQtys[iso] || 0) + parseFloat(l.quantity)
+        custWeekMap[id].total += parseFloat(l.quantity)
       }
 
-      const sorted = Object.values(weekMap).sort((a, b) => a.weekIso.localeCompare(b.weekIso))
+      const allWeeks = [...weekSet].sort()
+      const recentWeeks = allWeeks.slice(-MAX_WEEKS)
 
-      // Top customers for this item
-      const custTotals = {}
+      const rows = Object.values(custWeekMap)
+        .filter(r => recentWeeks.some(w => r.weekQtys[w] > 0))
+        .sort((a, b) => b.total - a.total)
+        .map(r => ({
+          ...r,
+          standing: detectStanding(r.weekQtys, recentWeeks),
+          recentTotal: recentWeeks.reduce((s, w) => s + (r.weekQtys[w] || 0), 0),
+        }))
+
+      const weekTotals = {}
       for (const l of lines) {
-        const cid = l.customer_id
-        if (!custTotals[cid]) custTotals[cid] = { id: cid, name: l.customers?.name, qty: 0 }
-        custTotals[cid].qty += parseFloat(l.quantity)
+        const iso = l.weeks?.start_date
+        if (!iso) continue
+        weekTotals[iso] = (weekTotals[iso] || 0) + parseFloat(l.quantity)
       }
-      const topCusts = Object.values(custTotals).sort((a, b) => b.qty - a.qty).slice(0, 8)
+      const trendData = allWeeks.map(iso => ({ label: fmtWeek(iso), כמות: Math.round((weekTotals[iso] || 0) * 10) / 10 }))
 
-      const rows = sorted.map(w => ({
-        label: w.label,
-        weekIso: w.weekIso,
-        total: Math.round(w.total * 10) / 10,
-        ...Object.fromEntries(topCusts.map(c => [c.id, Math.round((w.customers[c.id]?.qty || 0) * 10) / 10])),
-      }))
-
-      setHistoryData({ rows, topItems: topCusts.map(c => ({ id: c.id, name: c.name })) })
-      setTrendData(sorted.map(w => ({ label: w.label, כמות: Math.round(w.total * 10) / 10 })))
+      setTableData({ weeks: recentWeeks, rows, trendData, title: selectedItem.name_he })
     } finally {
       setLoading(false)
     }
   }
 
-  function formatWeekShort(iso) {
-    const d = new Date(iso + 'T00:00:00')
-    return `${d.getDate()}/${d.getMonth() + 1}`
-  }
-
-  function detectStanding(rows, itemId) {
-    // 3+ consecutive weeks with same quantity > 0
-    let streak = 0
-    let lastQty = null
-    for (const r of rows) {
-      const q = r[itemId] || 0
+  function detectStanding(weekQtys, recentWeeks) {
+    // 3+ consecutive recent weeks with identical positive qty
+    let streak = 0, lastQty = null
+    for (const w of recentWeeks) {
+      const q = weekQtys[w] || 0
       if (q > 0 && q === lastQty) streak++
       else { streak = q > 0 ? 1 : 0; lastQty = q > 0 ? q : null }
       if (streak >= 3) return true
@@ -160,7 +161,10 @@ export default function History() {
     return false
   }
 
-  const COLORS = ['#06b6d4', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6']
+  function fmtWeek(iso) {
+    const d = new Date(iso + 'T00:00:00')
+    return `${d.getDate()}/${d.getMonth() + 1}`
+  }
 
   return (
     <div className="page">
@@ -175,9 +179,7 @@ export default function History() {
       <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 20 }}>
         {/* Selector sidebar */}
         <div>
-          <div className="section-title" style={{ marginBottom: 10 }}>
-            {viewMode === 'customer' ? 'לקוח' : 'פריט'}
-          </div>
+          <div className="section-title" style={{ marginBottom: 10 }}>{viewMode === 'customer' ? 'לקוח' : 'פריט'}</div>
           <div className="customer-list" style={{ maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' }}>
             {(viewMode === 'customer' ? customers : menuItems).map(item => {
               const isSelected = viewMode === 'customer' ? selectedCustomer?.id === item.id : selectedItem?.id === item.id
@@ -200,7 +202,7 @@ export default function History() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[...Array(5)].map((_, i) => <div key={i} className="shimmer" style={{ height: 44 }} />)}
             </div>
-          ) : !historyData?.rows?.length ? (
+          ) : !tableData?.rows?.length ? (
             <div className="empty">
               <div className="empty-icon">📊</div>
               <div className="empty-text">אין היסטוריה זמינה</div>
@@ -210,10 +212,10 @@ export default function History() {
               {/* Trend chart */}
               <div className="card" style={{ marginBottom: 20 }}>
                 <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 16 }}>
-                  מגמת כמות — {viewMode === 'customer' ? selectedCustomer?.name : selectedItem?.name_he}
+                  מגמת כמות — {tableData.title}
                 </div>
                 <ResponsiveContainer width="100%" height={160}>
-                  <LineChart data={trendData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <LineChart data={tableData.trendData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                     <CartesianGrid stroke="rgba(255,255,255,.05)" strokeDasharray="3 3" />
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
@@ -223,35 +225,46 @@ export default function History() {
                 </ResponsiveContainer>
               </div>
 
-              {/* Cross-tab table */}
+              {/* Cross-tab table: rows = items/customers, columns = weeks */}
               <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--bdr)', fontSize: 12, color: 'var(--t3)' }}>
+                  {viewMode === 'customer' ? 'פריטים' : 'לקוחות'} × {tableData.weeks.length} שבועות אחרונים
+                  {tableData.weeks.length === MAX_WEEKS && ' (12 אחרונים)'}
+                  <span style={{ marginRight: 12 }}>🔄 = הזמנה קבועה (3+ שבועות זהים)</span>
+                </div>
                 <div style={{ overflowX: 'auto' }}>
-                  <table className="itbl" style={{ minWidth: 600 }}>
+                  <table className="itbl" style={{ minWidth: 500 }}>
                     <thead>
                       <tr>
-                        <th style={{ minWidth: 70 }}>שבוע</th>
-                        {historyData.topItems.map((it, i) => (
-                          <th key={it.id} style={{ textAlign: 'center', minWidth: 80, color: COLORS[i % COLORS.length], fontSize: 11 }}>
-                            {it.name}
-                            {detectStanding(historyData.rows, it.id) && <span title="הזמנה קבועה" style={{ marginRight: 4 }}>🔄</span>}
-                          </th>
+                        <th style={{ minWidth: 160 }}>{viewMode === 'customer' ? 'פריט' : 'לקוח'}</th>
+                        {viewMode === 'customer' && <th style={{ fontSize: 10, color: 'var(--t3)', minWidth: 40 }}>יח׳</th>}
+                        {tableData.weeks.map(iso => (
+                          <th key={iso} style={{ textAlign: 'center', minWidth: 52, fontSize: 11 }}>{fmtWeek(iso)}</th>
                         ))}
-                        <th style={{ textAlign: 'center', fontWeight: 700 }}>סה״כ</th>
+                        <th style={{ textAlign: 'center', minWidth: 56, fontWeight: 700 }}>סה״כ</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {historyData.rows.map((row, ri) => (
-                        <tr key={row.weekIso}>
-                          <td style={{ fontSize: 12, color: 'var(--t2)' }}>{row.label}</td>
-                          {historyData.topItems.map((it, i) => {
-                            const qty = row[it.id] || 0
+                      {tableData.rows.map(row => (
+                        <tr key={row.id}>
+                          <td style={{ fontWeight: 500 }}>
+                            {row.name}
+                            {row.standing && <span title="הזמנה קבועה" style={{ marginRight: 6 }}>🔄</span>}
+                          </td>
+                          {viewMode === 'customer' && (
+                            <td style={{ fontSize: 11, color: 'var(--t3)' }}>{row.unit}</td>
+                          )}
+                          {tableData.weeks.map(iso => {
+                            const qty = row.weekQtys[iso] || 0
                             return (
-                              <td key={it.id} style={{ textAlign: 'center', color: qty ? COLORS[i % COLORS.length] : 'var(--bdr2)', fontWeight: qty ? 600 : 400, fontSize: 13 }}>
-                                {qty || '—'}
+                              <td key={iso} style={{ textAlign: 'center', color: qty ? 'var(--t1)' : 'var(--bdr2)', fontWeight: qty ? 600 : 400, fontSize: 13 }}>
+                                {qty ? (qty % 1 === 0 ? qty : qty.toFixed(1)) : '—'}
                               </td>
                             )
                           })}
-                          <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--t1)' }}>{row.total}</td>
+                          <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--cyan)', fontSize: 13 }}>
+                            {row.recentTotal % 1 === 0 ? row.recentTotal : row.recentTotal.toFixed(1)}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
