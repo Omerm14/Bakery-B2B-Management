@@ -2,11 +2,14 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 const links = [
-  { to: '/orders',     label: 'הזמנות' },
-  { to: '/production', label: 'ייצור היום' },
-  { to: '/packing',    label: 'אריזה' },
-  { to: '/weekly',     label: 'תוכנית שבועית' },
-  { to: '/settings',   label: 'הגדרות' },
+  { to: '/dashboard',   label: 'דשבורד' },
+  { to: '/orders',      label: 'הזמנות' },
+  { to: '/production',  label: 'ייצור היום' },
+  { to: '/packing',     label: 'אריזה' },
+  { to: '/weekly',      label: 'תוכנית שבועית' },
+  { to: '/history',     label: 'היסטוריה' },
+  { to: '/forecasting', label: 'תחזית' },
+  { to: '/settings',    label: 'הגדרות' },
 ]
 
 export default function NavBar() {

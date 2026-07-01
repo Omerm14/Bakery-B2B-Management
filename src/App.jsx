@@ -8,6 +8,9 @@ import Production from './pages/Production'
 import Packing from './pages/Packing'
 import Weekly from './pages/Weekly'
 import Settings from './pages/Settings'
+import Dashboard from './pages/Dashboard'
+import History from './pages/History'
+import Forecasting from './pages/Forecasting'
 
 function ProtectedLayout({ children }) {
   return (
@@ -41,12 +44,15 @@ export default function App() {
         <Route path="/login" element={session ? <Navigate to="/orders" replace /> : <Login />} />
         {session ? (
           <>
+            <Route path="/dashboard" element={<ProtectedLayout><Dashboard /></ProtectedLayout>} />
             <Route path="/orders" element={<ProtectedLayout><Orders /></ProtectedLayout>} />
             <Route path="/production" element={<ProtectedLayout><Production /></ProtectedLayout>} />
             <Route path="/packing" element={<ProtectedLayout><Packing /></ProtectedLayout>} />
             <Route path="/weekly" element={<ProtectedLayout><Weekly /></ProtectedLayout>} />
+            <Route path="/history" element={<ProtectedLayout><History /></ProtectedLayout>} />
+            <Route path="/forecasting" element={<ProtectedLayout><Forecasting /></ProtectedLayout>} />
             <Route path="/settings" element={<ProtectedLayout><Settings /></ProtectedLayout>} />
-            <Route path="*" element={<Navigate to="/orders" replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </>
         ) : (
           <Route path="*" element={<Navigate to="/login" replace />} />
