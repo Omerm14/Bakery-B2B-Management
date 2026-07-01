@@ -141,7 +141,7 @@ export default function Dashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 28 }}>
+      <div className="stat-grid" style={{ marginBottom: 28 }}>
         <div className="card stat-card stat-cyan">
           <div className="stat-lbl">כמות שבועית</div>
           <div className="stat-val"><AnimatedNumber value={stats.thisWeekLines} loading={loading} /></div>
@@ -167,7 +167,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 20 }}>
+      <div className="dash-layout">
         {/* Area chart — 8 week trend */}
         <div className="card">
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>מגמת כמויות — 8 שבועות אחרונים</div>

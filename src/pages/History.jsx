@@ -176,7 +176,7 @@ export default function History() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 20 }}>
+      <div className="sidebar-layout">
         {/* Selector sidebar */}
         <div>
           <div className="section-title" style={{ marginBottom: 10 }}>{viewMode === 'customer' ? 'לקוח' : 'פריט'}</div>

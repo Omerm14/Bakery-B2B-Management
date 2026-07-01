@@ -150,7 +150,7 @@ function ImportTab() {
         <h1 className="page-title">הגדרות</h1>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
+      <div className="settings-tabs" style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
         {[['menu', 'תפריט'], ['suppliers', 'ספקים'], ['customers', 'לקוחות'], ['import', 'ייבוא Excel']].map(([k, l]) => (
           <button key={k} className={'btn btn-sm ' + (tab === k ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab(k)}>{l}</button>
         ))}
