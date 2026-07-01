@@ -27,7 +27,7 @@ export default function NavBar() {
   return (
     <nav className="nav">
       <a className="nav-brand" href="/orders">
-        <span>נוגה</span> 🥐
+        <span style={{ fontWeight: 800, letterSpacing: '-0.03em' }}>Floory</span>
       </a>
       <div className={'nav-links' + (menuOpen ? ' open' : '')}>
         {links.map(l => (
