@@ -181,17 +181,21 @@ export function ImportProvider({ children }) {
   const [logs, setLogs] = useState([])
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
-  const LS_KEY = 'noga_imported_hashes'
-  function getSeenHashes() { try { return new Set(JSON.parse(localStorage.getItem(LS_KEY) || '[]')) } catch { return new Set() } }
-  function saveHash(h) { try { const s = getSeenHashes(); s.add(h); localStorage.setItem(LS_KEY, JSON.stringify([...s])) } catch {} }
+  async function isHashSeen(h) {
+    const { data } = await supabase.from('import_log').select('id').eq('file_hash', h).maybeSingle()
+    return !!data
+  }
+  async function saveHash(h, fileName, rowsNew, rowsExisting) {
+    await supabase.from('import_log').upsert({ file_hash: h, file_name: fileName, rows_new: rowsNew, rows_existing: rowsExisting }, { onConflict: 'file_hash' })
+  }
 
   function log(msg) { setLogs(prev => [...prev, msg]) }
 
   async function importWorkbook(wb, fileName) {
     // Dedup by content hash
     const hash = workbookHash(wb)
-    if (getSeenHashes().has(hash)) {
-      log(`⏭️ ${fileName} — קובץ זה כבר יובא בסשן זה, מדלג`)
+    if (await isHashSeen(hash)) {
+      log(`⏭️ ${fileName} — קובץ זה כבר יובא בעבר, מדלג`)
       log('──────────')
       return
     }
@@ -270,7 +274,7 @@ export function ImportProvider({ children }) {
       }).length
     }
 
-    saveHash(hash)
+    await saveHash(hash, fileName, newLines.length, dupCount)
     log(`✅ הסתיים — ${newLines.length} שורות חדשות, ${dupCount} קיימות`)
     log('──────────')
   }

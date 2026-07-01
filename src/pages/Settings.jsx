@@ -66,6 +66,12 @@ export default function Settings() {
 function ImportTab() {
   const { logs, running, startImport } = useImport()
   const fileRef = useRef()
+  const [importHistory, setImportHistory] = useState([])
+
+  useEffect(() => {
+    supabase.from('import_log').select('file_name, imported_at, rows_new, rows_existing').order('imported_at', { ascending: false }).limit(20)
+      .then(({ data }) => setImportHistory(data || []))
+  }, [running])
 
   async function handleFiles(e) {
     const files = [...e.target.files]
@@ -97,13 +103,41 @@ function ImportTab() {
       </div>
 
       {logs.length > 0 && (
-        <div className="card" style={{ fontFamily: 'monospace', fontSize: 13, lineHeight: 1.8, direction: 'rtl' }}>
+        <div className="card" style={{ fontFamily: 'monospace', fontSize: 13, lineHeight: 1.8, direction: 'rtl', marginBottom: 16 }}>
           {logs.map((l, i) => (
             <div key={i} style={{
               color: l.startsWith('✅') ? 'var(--green)' : l.startsWith('❌') ? 'var(--red)' : l.startsWith('⏭') ? 'var(--amber)' : 'var(--t1)',
             }}>{l}</div>
           ))}
           {running && <div className="shimmer" style={{ height: 14, width: 200, borderRadius: 4, marginTop: 8 }} />}
+        </div>
+      )}
+
+      {importHistory.length > 0 && (
+        <div className="card" style={{ padding: 0 }}>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--bdr)', fontWeight: 600, fontSize: 14 }}>היסטוריית ייבוא</div>
+          <table className="itbl">
+            <thead>
+              <tr>
+                <th>שם קובץ</th>
+                <th style={{ textAlign: 'center' }}>שורות חדשות</th>
+                <th style={{ textAlign: 'center' }}>קיימות</th>
+                <th style={{ textAlign: 'left' }}>תאריך</th>
+              </tr>
+            </thead>
+            <tbody>
+              {importHistory.map((row, i) => (
+                <tr key={i}>
+                  <td style={{ fontSize: 13 }}>{row.file_name || '—'}</td>
+                  <td style={{ textAlign: 'center', color: 'var(--green)', fontWeight: 600 }}>{row.rows_new ?? '—'}</td>
+                  <td style={{ textAlign: 'center', color: 'var(--t3)' }}>{row.rows_existing ?? '—'}</td>
+                  <td dir="ltr" style={{ fontSize: 12, color: 'var(--t3)' }}>
+                    {new Date(row.imported_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
