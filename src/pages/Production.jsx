@@ -136,7 +136,7 @@ export default function Production() {
   const doneCount = filtered.filter(i => (prodStatus[i.menu_item_id] || 'pending') === 'done').length
 
   const dateLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString('he-IL', {
-    weekday: 'long', day: 'numeric', month: 'long',
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
 
   return (

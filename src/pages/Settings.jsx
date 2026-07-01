@@ -132,7 +132,7 @@ function ImportTab() {
                   <td style={{ textAlign: 'center', color: 'var(--green)', fontWeight: 600 }}>{row.rows_new ?? '—'}</td>
                   <td style={{ textAlign: 'center', color: 'var(--t3)' }}>{row.rows_existing ?? '—'}</td>
                   <td dir="ltr" style={{ fontSize: 12, color: 'var(--t3)' }}>
-                    {new Date(row.imported_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    {new Date(row.imported_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
                   </td>
                 </tr>
               ))}
@@ -150,7 +150,7 @@ function ImportTab() {
         <h1 className="page-title">הגדרות</h1>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
+      <div className="settings-tabs" style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
         {[['menu', 'תפריט'], ['suppliers', 'ספקים'], ['customers', 'לקוחות'], ['import', 'ייבוא Excel']].map(([k, l]) => (
           <button key={k} className={'btn btn-sm ' + (tab === k ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab(k)}>{l}</button>
         ))}

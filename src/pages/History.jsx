@@ -163,7 +163,7 @@ export default function History() {
 
   function fmtWeek(iso) {
     const d = new Date(iso + 'T00:00:00')
-    return `${d.getDate()}/${d.getMonth() + 1}`
+    return `${d.getDate()}/${d.getMonth() + 1}/${String(d.getFullYear()).slice(2)}`
   }
 
   return (
@@ -176,7 +176,7 @@ export default function History() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 20 }}>
+      <div className="sidebar-layout">
         {/* Selector sidebar */}
         <div>
           <div className="section-title" style={{ marginBottom: 10 }}>{viewMode === 'customer' ? 'לקוח' : 'פריט'}</div>

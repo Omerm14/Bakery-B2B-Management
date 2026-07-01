@@ -213,7 +213,7 @@ export default function Forecasting() {
         <button className="btn btn-ghost btn-sm" onClick={week.goToToday} style={{ fontSize: 12 }}>השבוע</button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 20 }}>
+      <div className="sidebar-layout">
         {/* Customer sidebar */}
         <div>
           <div className="section-title" style={{ marginBottom: 10 }}>לקוח</div>

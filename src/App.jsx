@@ -12,6 +12,7 @@ import Dashboard from './pages/Dashboard'
 import History from './pages/History'
 import Forecasting from './pages/Forecasting'
 import { ImportProvider, useImport } from './context/ImportContext'
+import Landing from './pages/Landing'
 
 function ImportToast() {
   const { running, progress, logs } = useImport()
@@ -99,6 +100,7 @@ export default function App() {
     <ImportProvider>
       <BrowserRouter>
         <Routes>
+          <Route path="/" element={session ? <Navigate to="/dashboard" replace /> : <Landing />} />
           <Route path="/login" element={session ? <Navigate to="/dashboard" replace /> : <Login />} />
           {session ? (
             <>

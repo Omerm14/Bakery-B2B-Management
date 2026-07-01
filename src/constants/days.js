@@ -27,7 +27,8 @@ export function formatWeekLabel(weekStartDate) {
   const end = new Date(d)
   end.setDate(d.getDate() + 5)
   const fmt = (dt) => dt.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })
-  return `${fmt(d)} – ${fmt(end)}`
+  const fmtEnd = (dt) => dt.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric', year: '2-digit' })
+  return `${fmt(d)} – ${fmtEnd(end)}`
 }
 
 export function isoToday() {

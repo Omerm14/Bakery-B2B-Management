@@ -218,7 +218,7 @@ export default function Orders() {
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 20 }}>
+      <div className="sidebar-layout">
         {/* Customer Sidebar */}
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
