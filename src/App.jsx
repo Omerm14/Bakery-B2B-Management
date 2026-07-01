@@ -8,12 +8,72 @@ import Production from './pages/Production'
 import Packing from './pages/Packing'
 import Weekly from './pages/Weekly'
 import Settings from './pages/Settings'
+import Dashboard from './pages/Dashboard'
+import History from './pages/History'
+import Forecasting from './pages/Forecasting'
+import { ImportProvider, useImport } from './context/ImportContext'
+
+function ImportToast() {
+  const { running, progress, logs } = useImport()
+  const [visible, setVisible] = useState(false)
+  const [fadeOut, setFadeOut] = useState(false)
+
+  useEffect(() => {
+    if (running) { setVisible(true); setFadeOut(false) }
+    else if (visible) {
+      const t = setTimeout(() => { setFadeOut(true) }, 2000)
+      const t2 = setTimeout(() => setVisible(false), 2800)
+      return () => { clearTimeout(t); clearTimeout(t2) }
+    }
+  }, [running])
+
+  if (!visible) return null
+
+  const lastLog = logs[logs.length - 1] || ''
+  const lineCount = logs.filter(l => l.startsWith('✅')).join(' ').match(/\d+ שורות חדשות/g)?.[0] || ''
+
+  return (
+    <div style={{
+      position: 'fixed', bottom: 24, left: 24, zIndex: 9999,
+      background: 'var(--surf2)', border: '1px solid var(--bdr2)',
+      borderRadius: 12, padding: '12px 18px',
+      display: 'flex', alignItems: 'center', gap: 12,
+      boxShadow: '0 8px 32px rgba(0,0,0,.4)',
+      opacity: fadeOut ? 0 : 1,
+      transform: fadeOut ? 'translateY(8px)' : 'translateY(0)',
+      transition: 'opacity .6s, transform .6s',
+      minWidth: 260, maxWidth: 360,
+    }}>
+      {running ? (
+        <div style={{ width: 18, height: 18, border: '2px solid var(--cyan)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
+      ) : (
+        <span style={{ fontSize: 18 }}>✅</span>
+      )}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--t1)' }}>
+          {running
+            ? `מייבא קובץ ${progress.current}/${progress.total}…`
+            : 'ייבוא הושלם'}
+        </div>
+        {running && (
+          <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {lastLog.replace(/^[^\s]+\s/, '')}
+          </div>
+        )}
+        {!running && lineCount && (
+          <div style={{ fontSize: 11, color: 'var(--green)', marginTop: 2 }}>{lineCount}</div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function ProtectedLayout({ children }) {
   return (
     <>
       <NavBar />
       {children}
+      <ImportToast />
     </>
   )
 }
@@ -36,22 +96,27 @@ export default function App() {
   }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={session ? <Navigate to="/orders" replace /> : <Login />} />
-        {session ? (
-          <>
-            <Route path="/orders" element={<ProtectedLayout><Orders /></ProtectedLayout>} />
-            <Route path="/production" element={<ProtectedLayout><Production /></ProtectedLayout>} />
-            <Route path="/packing" element={<ProtectedLayout><Packing /></ProtectedLayout>} />
-            <Route path="/weekly" element={<ProtectedLayout><Weekly /></ProtectedLayout>} />
-            <Route path="/settings" element={<ProtectedLayout><Settings /></ProtectedLayout>} />
-            <Route path="*" element={<Navigate to="/orders" replace />} />
-          </>
-        ) : (
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        )}
-      </Routes>
-    </BrowserRouter>
+    <ImportProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={session ? <Navigate to="/dashboard" replace /> : <Login />} />
+          {session ? (
+            <>
+              <Route path="/dashboard" element={<ProtectedLayout><Dashboard /></ProtectedLayout>} />
+              <Route path="/orders" element={<ProtectedLayout><Orders /></ProtectedLayout>} />
+              <Route path="/production" element={<ProtectedLayout><Production /></ProtectedLayout>} />
+              <Route path="/packing" element={<ProtectedLayout><Packing /></ProtectedLayout>} />
+              <Route path="/weekly" element={<ProtectedLayout><Weekly /></ProtectedLayout>} />
+              <Route path="/history" element={<ProtectedLayout><History /></ProtectedLayout>} />
+              <Route path="/forecasting" element={<ProtectedLayout><Forecasting /></ProtectedLayout>} />
+              <Route path="/settings" element={<ProtectedLayout><Settings /></ProtectedLayout>} />
+              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            </>
+          ) : (
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          )}
+        </Routes>
+      </BrowserRouter>
+    </ImportProvider>
   )
 }

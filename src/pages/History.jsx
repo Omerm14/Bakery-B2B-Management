@@ -1,0 +1,280 @@
+import { useState, useEffect } from 'react'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { supabase } from '../lib/supabase'
+
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{ background: 'var(--surf2)', border: '1px solid var(--bdr2)', borderRadius: 8, padding: '8px 12px', fontSize: 13 }}>
+      <div style={{ color: 'var(--t2)', marginBottom: 4 }}>{label}</div>
+      {payload.map((p, i) => (
+        <div key={i} style={{ color: p.color || 'var(--cyan)', fontWeight: 600 }}>{p.name}: {p.value?.toLocaleString('he-IL')}</div>
+      ))}
+    </div>
+  )
+}
+
+const MAX_WEEKS = 12
+
+export default function History() {
+  const [viewMode, setViewMode] = useState('customer')
+  const [customers, setCustomers] = useState([])
+  const [menuItems, setMenuItems] = useState([])
+  const [selectedCustomer, setSelectedCustomer] = useState(null)
+  const [selectedItem, setSelectedItem] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [tableData, setTableData] = useState(null) // { weeks: [...iso], rows: [...], trendData: [...] }
+
+  useEffect(() => { loadMaster() }, [])
+
+  useEffect(() => {
+    if (viewMode === 'customer' && selectedCustomer) loadCustomerHistory()
+    else if (viewMode === 'item' && selectedItem) loadItemHistory()
+    else setTableData(null)
+  }, [viewMode, selectedCustomer, selectedItem])
+
+  async function loadMaster() {
+    const [{ data: custs }, { data: items }] = await Promise.all([
+      supabase.from('customers').select('id, name').eq('active', true).order('name'),
+      supabase.from('menu_items').select('id, name_he, unit, category').eq('active', true).order('name_he'),
+    ])
+    setCustomers(custs || [])
+    setMenuItems(items || [])
+    if (custs?.length) setSelectedCustomer(custs[0])
+  }
+
+  async function loadCustomerHistory() {
+    if (!selectedCustomer) return
+    setLoading(true)
+    try {
+      const { data: lines } = await supabase
+        .from('order_lines')
+        .select('week_id, menu_item_id, quantity, weeks(start_date), menu_items(name_he, unit)')
+        .eq('customer_id', selectedCustomer.id)
+        .gt('quantity', 0)
+
+      if (!lines?.length) { setTableData(null); return }
+
+      // Group by (menu_item_id, week)
+      const itemWeekMap = {} // itemId → { name, unit, weekQtys: {iso: qty}, total }
+      const weekSet = new Set()
+
+      for (const l of lines) {
+        const iso = l.weeks?.start_date
+        if (!iso) continue
+        weekSet.add(iso)
+        const id = l.menu_item_id
+        if (!itemWeekMap[id]) itemWeekMap[id] = { id, name: l.menu_items?.name_he, unit: l.menu_items?.unit, weekQtys: {}, total: 0 }
+        itemWeekMap[id].weekQtys[iso] = (itemWeekMap[id].weekQtys[iso] || 0) + parseFloat(l.quantity)
+        itemWeekMap[id].total += parseFloat(l.quantity)
+      }
+
+      // Sort weeks, take last MAX_WEEKS
+      const allWeeks = [...weekSet].sort()
+      const recentWeeks = allWeeks.slice(-MAX_WEEKS)
+
+      // Build rows, sorted by total desc, filter items with any qty in recent weeks
+      const rows = Object.values(itemWeekMap)
+        .filter(r => recentWeeks.some(w => r.weekQtys[w] > 0))
+        .sort((a, b) => b.total - a.total)
+        .map(r => ({
+          ...r,
+          standing: detectStanding(r.weekQtys, recentWeeks),
+          recentTotal: recentWeeks.reduce((s, w) => s + (r.weekQtys[w] || 0), 0),
+        }))
+
+      // Trend: total per week across all weeks
+      const weekTotals = {}
+      for (const l of lines) {
+        const iso = l.weeks?.start_date
+        if (!iso) continue
+        weekTotals[iso] = (weekTotals[iso] || 0) + parseFloat(l.quantity)
+      }
+      const trendData = allWeeks.map(iso => ({ label: fmtWeek(iso), כמות: Math.round((weekTotals[iso] || 0) * 10) / 10 }))
+
+      setTableData({ weeks: recentWeeks, rows, trendData, title: selectedCustomer.name })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function loadItemHistory() {
+    if (!selectedItem) return
+    setLoading(true)
+    try {
+      const { data: lines } = await supabase
+        .from('order_lines')
+        .select('week_id, customer_id, quantity, weeks(start_date), customers(name)')
+        .eq('menu_item_id', selectedItem.id)
+        .gt('quantity', 0)
+
+      if (!lines?.length) { setTableData(null); return }
+
+      const custWeekMap = {}
+      const weekSet = new Set()
+
+      for (const l of lines) {
+        const iso = l.weeks?.start_date
+        if (!iso) continue
+        weekSet.add(iso)
+        const id = l.customer_id
+        if (!custWeekMap[id]) custWeekMap[id] = { id, name: l.customers?.name, weekQtys: {}, total: 0 }
+        custWeekMap[id].weekQtys[iso] = (custWeekMap[id].weekQtys[iso] || 0) + parseFloat(l.quantity)
+        custWeekMap[id].total += parseFloat(l.quantity)
+      }
+
+      const allWeeks = [...weekSet].sort()
+      const recentWeeks = allWeeks.slice(-MAX_WEEKS)
+
+      const rows = Object.values(custWeekMap)
+        .filter(r => recentWeeks.some(w => r.weekQtys[w] > 0))
+        .sort((a, b) => b.total - a.total)
+        .map(r => ({
+          ...r,
+          standing: detectStanding(r.weekQtys, recentWeeks),
+          recentTotal: recentWeeks.reduce((s, w) => s + (r.weekQtys[w] || 0), 0),
+        }))
+
+      const weekTotals = {}
+      for (const l of lines) {
+        const iso = l.weeks?.start_date
+        if (!iso) continue
+        weekTotals[iso] = (weekTotals[iso] || 0) + parseFloat(l.quantity)
+      }
+      const trendData = allWeeks.map(iso => ({ label: fmtWeek(iso), כמות: Math.round((weekTotals[iso] || 0) * 10) / 10 }))
+
+      setTableData({ weeks: recentWeeks, rows, trendData, title: selectedItem.name_he })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function detectStanding(weekQtys, recentWeeks) {
+    // 3+ consecutive recent weeks with identical positive qty
+    let streak = 0, lastQty = null
+    for (const w of recentWeeks) {
+      const q = weekQtys[w] || 0
+      if (q > 0 && q === lastQty) streak++
+      else { streak = q > 0 ? 1 : 0; lastQty = q > 0 ? q : null }
+      if (streak >= 3) return true
+    }
+    return false
+  }
+
+  function fmtWeek(iso) {
+    const d = new Date(iso + 'T00:00:00')
+    return `${d.getDate()}/${d.getMonth() + 1}`
+  }
+
+  return (
+    <div className="page">
+      <div className="page-header">
+        <h1 className="page-title">היסטוריה</h1>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button className={'btn btn-sm ' + (viewMode === 'customer' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('customer')}>לפי לקוח</button>
+          <button className={'btn btn-sm ' + (viewMode === 'item' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('item')}>לפי פריט</button>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 20 }}>
+        {/* Selector sidebar */}
+        <div>
+          <div className="section-title" style={{ marginBottom: 10 }}>{viewMode === 'customer' ? 'לקוח' : 'פריט'}</div>
+          <div className="customer-list" style={{ maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' }}>
+            {(viewMode === 'customer' ? customers : menuItems).map(item => {
+              const isSelected = viewMode === 'customer' ? selectedCustomer?.id === item.id : selectedItem?.id === item.id
+              return (
+                <div
+                  key={item.id}
+                  className={'customer-pill' + (isSelected ? ' active' : '')}
+                  onClick={() => viewMode === 'customer' ? setSelectedCustomer(item) : setSelectedItem(item)}
+                >
+                  {viewMode === 'customer' ? item.name : item.name_he}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div>
+          {loading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {[...Array(5)].map((_, i) => <div key={i} className="shimmer" style={{ height: 44 }} />)}
+            </div>
+          ) : !tableData?.rows?.length ? (
+            <div className="empty">
+              <div className="empty-icon">📊</div>
+              <div className="empty-text">אין היסטוריה זמינה</div>
+            </div>
+          ) : (
+            <>
+              {/* Trend chart */}
+              <div className="card" style={{ marginBottom: 20 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 16 }}>
+                  מגמת כמות — {tableData.title}
+                </div>
+                <ResponsiveContainer width="100%" height={160}>
+                  <LineChart data={tableData.trendData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                    <CartesianGrid stroke="rgba(255,255,255,.05)" strokeDasharray="3 3" />
+                    <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Line type="monotone" dataKey="כמות" stroke="#06b6d4" strokeWidth={2} dot={{ fill: '#06b6d4', r: 3 }} activeDot={{ r: 5 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Cross-tab table: rows = items/customers, columns = weeks */}
+              <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--bdr)', fontSize: 12, color: 'var(--t3)' }}>
+                  {viewMode === 'customer' ? 'פריטים' : 'לקוחות'} × {tableData.weeks.length} שבועות אחרונים
+                  {tableData.weeks.length === MAX_WEEKS && ' (12 אחרונים)'}
+                  <span style={{ marginRight: 12 }}>🔄 = הזמנה קבועה (3+ שבועות זהים)</span>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="itbl" style={{ minWidth: 500 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ minWidth: 160 }}>{viewMode === 'customer' ? 'פריט' : 'לקוח'}</th>
+                        {viewMode === 'customer' && <th style={{ fontSize: 10, color: 'var(--t3)', minWidth: 40 }}>יח׳</th>}
+                        {tableData.weeks.map(iso => (
+                          <th key={iso} style={{ textAlign: 'center', minWidth: 52, fontSize: 11 }}>{fmtWeek(iso)}</th>
+                        ))}
+                        <th style={{ textAlign: 'center', minWidth: 56, fontWeight: 700 }}>סה״כ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tableData.rows.map(row => (
+                        <tr key={row.id}>
+                          <td style={{ fontWeight: 500 }}>
+                            {row.name}
+                            {row.standing && <span title="הזמנה קבועה" style={{ marginRight: 6 }}>🔄</span>}
+                          </td>
+                          {viewMode === 'customer' && (
+                            <td style={{ fontSize: 11, color: 'var(--t3)' }}>{row.unit}</td>
+                          )}
+                          {tableData.weeks.map(iso => {
+                            const qty = row.weekQtys[iso] || 0
+                            return (
+                              <td key={iso} style={{ textAlign: 'center', color: qty ? 'var(--t1)' : 'var(--bdr2)', fontWeight: qty ? 600 : 400, fontSize: 13 }}>
+                                {qty ? (qty % 1 === 0 ? qty : qty.toFixed(1)) : '—'}
+                              </td>
+                            )
+                          })}
+                          <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--cyan)', fontSize: 13 }}>
+                            {row.recentTotal % 1 === 0 ? row.recentTotal : row.recentTotal.toFixed(1)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
