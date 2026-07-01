@@ -205,3 +205,84 @@ body {
   .stat-grid { grid-template-columns: 1fr; }
   .modal { padding: 20px; }
 }
+
+/* ─── PRODUCTION STATUS CHIP ─── */
+.status-chip { white-space: nowrap; user-select: none; }
+.status-chip:hover { filter: brightness(1.15); transform: scale(1.04); }
+.stat-amber .stat-val { color: var(--amber); }
+.stat-blue .stat-val  { color: var(--blue); }
+
+/* ─── PACKING — STICKY PROGRESS ─── */
+.packing-sticky-header {
+  position: sticky;
+  top: 56px;
+  z-index: 50;
+  background: var(--bg);
+  padding: 12px 0 10px;
+  border-bottom: 1px solid var(--bdr);
+  margin-bottom: 16px;
+}
+
+/* ─── PACKING — CLIENT BODY SMOOTH EXPAND ─── */
+.client-body {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height .35s cubic-bezier(.16,1,.3,1);
+}
+.client-body.open {
+  max-height: 2000px;
+}
+
+/* ─── COMPLETION BANNER ─── */
+.completion-banner {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  background: rgba(16,185,129,.1);
+  border: 1px solid rgba(16,185,129,.3);
+  border-radius: var(--r);
+  margin-bottom: 20px;
+  animation: slideUp .4s cubic-bezier(.16,1,.3,1);
+}
+
+/* ─── PRINT ─── */
+@keyframes countUp { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+.stat-val { animation: countUp .4s cubic-bezier(.16,1,.3,1) both; }
+
+@media print {
+  .no-print { display: none !important; }
+  .nav       { display: none !important; }
+  body       { background: #fff; color: #111; direction: rtl; }
+  .page      { padding: 0; max-width: 100%; }
+  .card      { background: #fff; border: 1px solid #ddd; }
+  .produce-item { border-color: #ddd; }
+  .supplier-tag { background: #eee; color: #333; }
+  .produce-item-name { color: #111; }
+  .produce-qty { color: #111; }
+  .produce-unit { color: #555; }
+  .stat-grid { display: none; }
+  .week-nav  { display: none; }
+}
+
+/* ─── SLIDE-IN ANIMATION FOR PRODUCE ITEMS ─── */
+@keyframes slideInRight { from { opacity: 0; transform: translateX(-14px) } to { opacity: 1; transform: none } }
+.production-page .produce-item {
+  animation: slideInRight .3s cubic-bezier(.16,1,.3,1) both;
+}
+.production-page .supplier-group:nth-child(1) .produce-item { animation-delay: .04s }
+.production-page .supplier-group:nth-child(2) .produce-item { animation-delay: .08s }
+.production-page .supplier-group:nth-child(3) .produce-item { animation-delay: .12s }
+.production-page .supplier-group:nth-child(4) .produce-item { animation-delay: .16s }
+
+/* ─── MOBILE PACKING ─── */
+@media (max-width: 600px) {
+  .client-hdr { padding: 16px 14px; min-height: 64px; }
+  .pack-item  { padding: 16px 14px; min-height: 52px; }
+  .pack-check { width: 26px; height: 26px; }
+  .pack-label { font-size: 16px; }
+  .pack-qty   { font-size: 15px; }
+}
+
+/* ─── ORDERS COPY BUTTON ─── */
+.btn:disabled { opacity: .55; cursor: not-allowed; }

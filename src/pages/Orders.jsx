@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { ChevronRight, ChevronLeft, Plus, RefreshCw } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { ChevronRight, ChevronLeft, Plus, RefreshCw, Copy } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useWeek } from '../hooks/useWeek'
 import { WEEK_DAYS } from '../constants/days'
@@ -15,6 +15,8 @@ export default function Orders() {
   const [saving, setSaving] = useState(false)
   const [showAddCustomer, setShowAddCustomer] = useState(false)
   const [newCustomerName, setNewCustomerName] = useState('')
+  const [copying, setCopying] = useState(false)
+  const gridRef = useRef(null)
 
   useEffect(() => {
     loadMasterData()
@@ -120,6 +122,68 @@ export default function Orders() {
     setShowAddCustomer(false)
   }
 
+  async function copyPrevWeek() {
+    if (!selectedCustomer || !weekId) return
+    setCopying(true)
+    try {
+      // Get previous week
+      const prevStart = new Date(week.weekStartISO)
+      prevStart.setDate(prevStart.getDate() - 7)
+      const { data: prevWeekRow } = await supabase
+        .from('weeks').select('id').eq('start_date', prevStart.toISOString().slice(0, 10)).single()
+      if (!prevWeekRow) { setCopying(false); return }
+
+      const { data: prevLines } = await supabase
+        .from('order_lines')
+        .select('menu_item_id, delivery_date, quantity')
+        .eq('week_id', prevWeekRow.id)
+        .eq('customer_id', selectedCustomer.id)
+        .gt('quantity', 0)
+
+      if (!prevLines?.length) { setCopying(false); return }
+
+      // Shift dates by 7 days
+      const upserts = prevLines.map(l => {
+        const d = new Date(l.delivery_date)
+        d.setDate(d.getDate() + 7)
+        return {
+          week_id: weekId,
+          customer_id: selectedCustomer.id,
+          menu_item_id: l.menu_item_id,
+          delivery_date: d.toISOString().slice(0, 10),
+          quantity: l.quantity,
+          source: 'manual',
+          status: 'ok',
+        }
+      })
+
+      await supabase.from('order_lines').upsert(upserts, {
+        onConflict: 'week_id,customer_id,menu_item_id,delivery_date',
+        ignoreDuplicates: true,
+      })
+      await loadOrders()
+    } finally {
+      setCopying(false)
+    }
+  }
+
+  function handleKeyDown(e, menuItemId, dayIdx, date) {
+    const inputs = gridRef.current?.querySelectorAll('input[type="number"]')
+    if (!inputs) return
+    const idx = [...inputs].indexOf(e.target)
+    if (idx === -1) return
+
+    if (e.key === 'Tab' || e.key === 'Enter') {
+      e.preventDefault()
+      const next = inputs[idx + (e.shiftKey ? -1 : 1)]
+      if (next) next.focus()
+    }
+    if (e.key === 'Escape') {
+      e.target.value = ''
+      handleQtyChange(menuItemId, date, 0)
+    }
+  }
+
   // Group menu items by category
   const grouped = menuItems.reduce((acc, item) => {
     const cat = item.category || 'כללי'
@@ -188,12 +252,20 @@ export default function Orders() {
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
               <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--bdr)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontWeight: 700, fontSize: 16 }}>{selectedCustomer.name}</span>
-                <div style={{ display: 'flex', gap: 6 }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={copyPrevWeek}
+                    disabled={copying}
+                    title="העתק הזמנה מהשבוע הקודם"
+                  >
+                    <Copy size={13} /> {copying ? '...' : 'העתק שבוע קודם'}
+                  </button>
                   <span className="badge badge-noga">נוגה</span>
                   <span style={{ fontSize: 12, color: 'var(--t3)' }}>= הוזן אוטומטית</span>
                 </div>
               </div>
-              <div className="order-grid-wrap">
+              <div className="order-grid-wrap" ref={gridRef}>
                 <table className="order-grid">
                   <thead>
                     <tr>
@@ -240,6 +312,7 @@ export default function Orders() {
                                     value={line?.quantity || ''}
                                     placeholder="—"
                                     onChange={e => handleQtyChange(item.id, date, e.target.value)}
+                                    onKeyDown={e => handleKeyDown(e, item.id, d.key, date)}
                                     title={line?.source === 'noga' ? 'הוזן ע"י נוגה' : line?.status === 'needs_review' ? 'דורש בדיקה' : ''}
                                   />
                                 </td>
