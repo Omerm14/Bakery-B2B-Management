@@ -128,7 +128,7 @@ export default function Dashboard() {
 
   function formatWeekShort(iso) {
     const d = new Date(iso + 'T00:00:00')
-    return `${d.getDate()}/${d.getMonth() + 1}`
+    return `${d.getDate()}/${d.getMonth() + 1}/${String(d.getFullYear()).slice(2)}`
   }
 
   const maxBar = topItems[0]?.qty || 1

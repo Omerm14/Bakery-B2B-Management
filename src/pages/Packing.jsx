@@ -96,7 +96,7 @@ export default function Packing() {
 
   function printClient(client) {
     const dateStr = new Date(selectedDate + 'T00:00:00').toLocaleDateString('he-IL', {
-      weekday: 'long', day: 'numeric', month: 'long',
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
     })
     const rows = client.items.map(i =>
       `<tr><td style="padding:8px 12px;border-bottom:1px solid #eee">☐ ${i.name_he}</td><td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:left">${i.quantity} ${i.unit}</td></tr>`
@@ -116,7 +116,7 @@ export default function Packing() {
 
   function printAll() {
     const dateStr = new Date(selectedDate + 'T00:00:00').toLocaleDateString('he-IL', {
-      weekday: 'long', day: 'numeric', month: 'long',
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
     })
     const sections = clients.map(client => {
       const rows = client.items.map(i =>
@@ -145,7 +145,7 @@ export default function Packing() {
   const checkedItems = Object.values(checks).filter(Boolean).length
 
   const dateLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString('he-IL', {
-    weekday: 'long', day: 'numeric', month: 'long',
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
 
   return (

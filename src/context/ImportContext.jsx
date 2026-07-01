@@ -205,7 +205,7 @@ export function ImportProvider({ children }) {
     if (!parsed) { log('❌ לא ניתן לזהות תאריכי שבוע בקובץ'); log('──────────'); return }
     const { wsIso, weekStart, customers, items, orderLines } = parsed
 
-    const label = `שבוע ${weekStart.getDate().toString().padStart(2, '0')}/${(weekStart.getMonth() + 1).toString().padStart(2, '0')}`
+    const label = `שבוע ${weekStart.getDate().toString().padStart(2, '0')}/${(weekStart.getMonth() + 1).toString().padStart(2, '0')}/${weekStart.getFullYear()}`
     log(`📅 שבוע: ${label} (${wsIso})`)
     log(`👤 לקוחות: ${customers.length} | 🥐 פריטים: ${items.length} | 📋 שורות: ${orderLines.length}`)
 
