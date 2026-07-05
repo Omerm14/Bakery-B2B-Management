@@ -225,7 +225,7 @@ export default function Packing() {
               >
                 <div style={{
                   width: 32, height: 32, borderRadius: '50%',
-                  background: done ? 'rgba(16,185,129,.15)' : 'var(--surf2)',
+                  background: done ? 'var(--green-tint)' : 'var(--surf2)',
                   border: `2px solid ${done ? 'var(--green)' : 'var(--bdr2)'}`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                   transition: 'all .3s',

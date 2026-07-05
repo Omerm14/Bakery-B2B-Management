@@ -178,15 +178,15 @@ export default function Dashboard() {
               <AreaChart data={trendData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
+                    <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="rgba(255,255,255,.05)" strokeDasharray="3 3" />
+                <CartesianGrid stroke="var(--bdr)" strokeDasharray="3 3" />
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="qty" name="כמות" stroke="#06b6d4" strokeWidth={2} fill="url(#areaGrad)" dot={{ fill: '#06b6d4', r: 3 }} activeDot={{ r: 5 }} />
+                <Area type="monotone" dataKey="qty" name="כמות" stroke="var(--accent)" strokeWidth={2} fill="url(#areaGrad)" dot={{ fill: 'var(--accent)', r: 3 }} activeDot={{ r: 5 }} />
               </AreaChart>
             </ResponsiveContainer>
           )}
@@ -213,7 +213,7 @@ export default function Dashboard() {
                     <div style={{
                       height: '100%',
                       width: `${(item.qty / maxBar) * 100}%`,
-                      background: i === 0 ? 'var(--grad)' : 'var(--cyan)',
+                      background: i === 0 ? 'var(--grad)' : 'var(--accent)',
                       borderRadius: 2,
                       opacity: 1 - i * 0.07,
                       transition: 'width .8s cubic-bezier(.16,1,.3,1)',
@@ -232,11 +232,11 @@ export default function Dashboard() {
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>כמויות לפי פריט — שבוע נוכחי</div>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={topItems} margin={{ top: 4, right: 8, left: -20, bottom: 60 }}>
-              <CartesianGrid stroke="rgba(255,255,255,.05)" strokeDasharray="3 3" vertical={false} />
+              <CartesianGrid stroke="var(--bdr)" strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--t3)' }} axisLine={false} tickLine={false} angle={-35} textAnchor="end" interval={0} />
               <YAxis tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="qty" name="כמות" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="qty" name="כמות" fill="var(--brass)" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
