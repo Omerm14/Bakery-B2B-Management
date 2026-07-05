@@ -285,7 +285,7 @@ export default function Orders() {
                     {Object.entries(grouped).map(([cat, items]) => (
                       <>
                         <tr key={`cat-${cat}`}>
-                          <td colSpan={8} style={{ padding: '8px 16px', background: 'rgba(255,255,255,.02)', fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                          <td colSpan={8} style={{ padding: '8px 16px', background: 'var(--surf2)', fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
                             {cat}
                           </td>
                         </tr>
@@ -327,7 +327,7 @@ export default function Orders() {
               </div>
               <div style={{ padding: '10px 20px', borderTop: '1px solid var(--bdr)', display: 'flex', gap: 16, fontSize: 12, color: 'var(--t3)' }}>
                 <span>⬜ ידני</span>
-                <span style={{ color: 'var(--cyan)' }}>🟦 נוגה</span>
+                <span style={{ color: 'var(--accent)' }}>🟦 נוגה</span>
                 <span style={{ color: 'var(--amber)' }}>🟨 דורש בדיקה</span>
               </div>
             </div>

@@ -8,7 +8,7 @@ const CustomTooltip = ({ active, payload, label }) => {
     <div style={{ background: 'var(--surf2)', border: '1px solid var(--bdr2)', borderRadius: 8, padding: '8px 12px', fontSize: 13 }}>
       <div style={{ color: 'var(--t2)', marginBottom: 4 }}>{label}</div>
       {payload.map((p, i) => (
-        <div key={i} style={{ color: p.color || 'var(--cyan)', fontWeight: 600 }}>{p.name}: {p.value?.toLocaleString('he-IL')}</div>
+        <div key={i} style={{ color: p.color || 'var(--accent)', fontWeight: 600 }}>{p.name}: {p.value?.toLocaleString('he-IL')}</div>
       ))}
     </div>
   )
@@ -216,11 +216,11 @@ export default function History() {
                 </div>
                 <ResponsiveContainer width="100%" height={160}>
                   <LineChart data={tableData.trendData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                    <CartesianGrid stroke="rgba(255,255,255,.05)" strokeDasharray="3 3" />
+                    <CartesianGrid stroke="var(--bdr)" strokeDasharray="3 3" />
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Line type="monotone" dataKey="כמות" stroke="#06b6d4" strokeWidth={2} dot={{ fill: '#06b6d4', r: 3 }} activeDot={{ r: 5 }} />
+                    <Line type="monotone" dataKey="כמות" stroke="var(--accent)" strokeWidth={2} dot={{ fill: 'var(--accent)', r: 3 }} activeDot={{ r: 5 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -230,7 +230,7 @@ export default function History() {
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--bdr)', fontSize: 12, color: 'var(--t3)' }}>
                   {viewMode === 'customer' ? 'פריטים' : 'לקוחות'} × {tableData.weeks.length} שבועות אחרונים
                   {tableData.weeks.length === MAX_WEEKS && ' (12 אחרונים)'}
-                  <span style={{ marginRight: 12 }}>🔄 = הזמנה קבועה (3+ שבועות זהים)</span>
+                  <span style={{ marginInlineStart: 12 }}>🔄 = הזמנה קבועה (3+ שבועות זהים)</span>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
                   <table className="itbl" style={{ minWidth: 500 }}>
@@ -249,7 +249,7 @@ export default function History() {
                         <tr key={row.id}>
                           <td style={{ fontWeight: 500 }}>
                             {row.name}
-                            {row.standing && <span title="הזמנה קבועה" style={{ marginRight: 6 }}>🔄</span>}
+                            {row.standing && <span title="הזמנה קבועה" style={{ marginInlineStart: 6 }}>🔄</span>}
                           </td>
                           {viewMode === 'customer' && (
                             <td style={{ fontSize: 11, color: 'var(--t3)' }}>{row.unit}</td>
@@ -262,7 +262,7 @@ export default function History() {
                               </td>
                             )
                           })}
-                          <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--cyan)', fontSize: 13 }}>
+                          <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--accent)', fontSize: 13 }}>
                             {row.recentTotal % 1 === 0 ? row.recentTotal : row.recentTotal.toFixed(1)}
                           </td>
                         </tr>

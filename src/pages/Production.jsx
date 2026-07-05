@@ -6,7 +6,7 @@ import { isoToday } from '../constants/days'
 const STATUS_CYCLE = { pending: 'in_progress', in_progress: 'done', done: 'pending' }
 const STATUS_LABEL = { pending: 'ממתין', in_progress: 'בייצור', done: 'הושלם' }
 const STATUS_COLOR = { pending: 'var(--t3)', in_progress: 'var(--amber)', done: 'var(--green)' }
-const STATUS_BG = { pending: 'transparent', in_progress: 'rgba(245,158,11,.1)', done: 'rgba(16,185,129,.1)' }
+const STATUS_BG = { pending: 'transparent', in_progress: 'var(--amber-tint)', done: 'var(--green-tint)' }
 
 function AnimatedNumber({ value, loading }) {
   const [display, setDisplay] = useState(0)

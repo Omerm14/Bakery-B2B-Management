@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './lib/supabase'
-import NavBar from './components/NavBar'
+import Sidebar from './components/layout/Sidebar'
+import GlobalHeader from './components/layout/GlobalHeader'
 import Login from './pages/Login'
 import Orders from './pages/Orders'
 import Production from './pages/Production'
@@ -35,18 +36,18 @@ function ImportToast() {
 
   return (
     <div style={{
-      position: 'fixed', bottom: 24, left: 24, zIndex: 9999,
+      position: 'fixed', bottom: 24, insetInlineStart: 24, zIndex: 9999,
       background: 'var(--surf2)', border: '1px solid var(--bdr2)',
       borderRadius: 12, padding: '12px 18px',
       display: 'flex', alignItems: 'center', gap: 12,
-      boxShadow: '0 8px 32px rgba(0,0,0,.4)',
+      boxShadow: 'var(--shadow-pop)',
       opacity: fadeOut ? 0 : 1,
       transform: fadeOut ? 'translateY(8px)' : 'translateY(0)',
       transition: 'opacity .6s, transform .6s',
       minWidth: 260, maxWidth: 360,
     }}>
       {running ? (
-        <div style={{ width: 18, height: 18, border: '2px solid var(--cyan)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
+        <div style={{ width: 18, height: 18, border: '2px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
       ) : (
         <span style={{ fontSize: 18 }}>✅</span>
       )}
@@ -69,24 +70,36 @@ function ImportToast() {
   )
 }
 
-function ProtectedLayout({ children }) {
+function ProtectedLayout({ children, isDark, onToggleTheme }) {
+  const [mobileOpen, setMobileOpen] = useState(false)
   return (
-    <>
-      <NavBar />
-      {children}
+    <div className="app-shell">
+      <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
+      <div className="app-main">
+        <GlobalHeader isDark={isDark} onToggleTheme={onToggleTheme} onMenuOpen={() => setMobileOpen(true)} />
+        {children}
+      </div>
       <ImportToast />
-    </>
+    </div>
   )
 }
 
 export default function App() {
   const [session, setSession] = useState(undefined)
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('floory_theme') !== 'day')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
     return () => subscription.unsubscribe()
   }, [])
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = isDark ? 'night' : 'day'
+    localStorage.setItem('floory_theme', isDark ? 'night' : 'day')
+  }, [isDark])
+
+  const toggleTheme = useCallback(() => setIsDark(v => !v), [])
 
   if (session === undefined) {
     return (
@@ -104,14 +117,14 @@ export default function App() {
           <Route path="/login" element={session ? <Navigate to="/dashboard" replace /> : <Login />} />
           {session ? (
             <>
-              <Route path="/dashboard" element={<ProtectedLayout><Dashboard /></ProtectedLayout>} />
-              <Route path="/orders" element={<ProtectedLayout><Orders /></ProtectedLayout>} />
-              <Route path="/production" element={<ProtectedLayout><Production /></ProtectedLayout>} />
-              <Route path="/packing" element={<ProtectedLayout><Packing /></ProtectedLayout>} />
-              <Route path="/weekly" element={<ProtectedLayout><Weekly /></ProtectedLayout>} />
-              <Route path="/history" element={<ProtectedLayout><History /></ProtectedLayout>} />
-              <Route path="/forecasting" element={<ProtectedLayout><Forecasting /></ProtectedLayout>} />
-              <Route path="/settings" element={<ProtectedLayout><Settings /></ProtectedLayout>} />
+              <Route path="/dashboard" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Dashboard /></ProtectedLayout>} />
+              <Route path="/orders" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Orders /></ProtectedLayout>} />
+              <Route path="/production" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Production /></ProtectedLayout>} />
+              <Route path="/packing" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Packing /></ProtectedLayout>} />
+              <Route path="/weekly" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Weekly /></ProtectedLayout>} />
+              <Route path="/history" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><History /></ProtectedLayout>} />
+              <Route path="/forecasting" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Forecasting /></ProtectedLayout>} />
+              <Route path="/settings" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Settings /></ProtectedLayout>} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </>
           ) : (

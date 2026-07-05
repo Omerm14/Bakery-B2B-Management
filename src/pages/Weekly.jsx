@@ -199,7 +199,7 @@ export default function Weekly() {
                   return (
                     <>
                       <tr key={`g-${group}`}>
-                        <td colSpan={10} style={{ background: 'rgba(6,182,212,.06)', padding: '8px 14px' }}>
+                        <td colSpan={10} style={{ background: 'var(--accent-tint)', padding: '8px 14px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span className="supplier-tag" style={{ marginBottom: 0 }}>
                               {viewMode === 'supplier' ? '🏭' : '📦'} {group}
@@ -207,7 +207,7 @@ export default function Weekly() {
                             <span style={{ fontSize: 12, color: 'var(--t2)', fontWeight: 600 }}>
                               {groupTotal.toLocaleString('he-IL')}
                               {gChange !== null && (
-                                <span style={{ marginRight: 8, color: gChange >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                                <span style={{ marginInlineStart: 8, color: gChange >= 0 ? 'var(--green)' : 'var(--red)' }}>
                                   {gChange > 0 ? '+' : ''}{gChange}%
                                 </span>
                               )}
@@ -232,7 +232,7 @@ export default function Weekly() {
                                 </td>
                               )
                             })}
-                            <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--cyan)' }}>
+                            <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--accent)' }}>
                               {row.total % 1 === 0 ? row.total : row.total.toFixed(1)}
                             </td>
                             <td style={{ textAlign: 'center', fontSize: 12, color: chg === null ? 'var(--t3)' : chg >= 0 ? 'var(--green)' : 'var(--red)' }}>
