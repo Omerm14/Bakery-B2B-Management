@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { supabase } from '../lib/supabase'
+import { useCustomers } from '../hooks/useCustomers'
+import { useMenuItems } from '../hooks/useMenuItems'
+import SearchInput from '../components/SearchInput'
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null
@@ -17,31 +21,37 @@ const CustomTooltip = ({ active, payload, label }) => {
 const MAX_WEEKS = 12
 
 export default function History() {
+  const location = useLocation()
+  const navigate = useNavigate()
   const [viewMode, setViewMode] = useState('customer')
-  const [customers, setCustomers] = useState([])
-  const [menuItems, setMenuItems] = useState([])
+  const { customers } = useCustomers()
+  const { menuItems } = useMenuItems()
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [selectedItem, setSelectedItem] = useState(null)
   const [loading, setLoading] = useState(false)
   const [tableData, setTableData] = useState(null) // { weeks: [...iso], rows: [...], trendData: [...] }
+  const [pillFilter, setPillFilter] = useState('')
 
-  useEffect(() => { loadMaster() }, [])
+  useEffect(() => {
+    if (customers.length && !selectedCustomer) setSelectedCustomer(customers[0])
+  }, [customers])
+
+  useEffect(() => {
+    if (!menuItems.length) return
+    const wantedId = location.state?.itemId
+    if (!wantedId) return
+    const match = menuItems.find(i => i.id === wantedId)
+    if (match) { setViewMode('item'); setSelectedItem(match) }
+    navigate(location.pathname, { replace: true, state: null })
+  }, [menuItems, location.state])
+
+  useEffect(() => { setPillFilter('') }, [viewMode])
 
   useEffect(() => {
     if (viewMode === 'customer' && selectedCustomer) loadCustomerHistory()
     else if (viewMode === 'item' && selectedItem) loadItemHistory()
     else setTableData(null)
   }, [viewMode, selectedCustomer, selectedItem])
-
-  async function loadMaster() {
-    const [{ data: custs }, { data: items }] = await Promise.all([
-      supabase.from('customers').select('id, name').eq('active', true).order('name'),
-      supabase.from('menu_items').select('id, name_he, unit, category').eq('active', true).order('name_he'),
-    ])
-    setCustomers(custs || [])
-    setMenuItems(items || [])
-    if (custs?.length) setSelectedCustomer(custs[0])
-  }
 
   async function loadCustomerHistory() {
     if (!selectedCustomer) return
@@ -180,8 +190,11 @@ export default function History() {
         {/* Selector sidebar */}
         <div>
           <div className="section-title" style={{ marginBottom: 10 }}>{viewMode === 'customer' ? 'לקוח' : 'פריט'}</div>
+          <SearchInput value={pillFilter} onChange={setPillFilter} placeholder={viewMode === 'customer' ? 'חיפוש לקוח...' : 'חיפוש פריט...'} />
           <div className="customer-list" style={{ maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' }}>
-            {(viewMode === 'customer' ? customers : menuItems).map(item => {
+            {(viewMode === 'customer' ? customers : menuItems)
+              .filter(item => (viewMode === 'customer' ? item.name : item.name_he).includes(pillFilter.trim()))
+              .map(item => {
               const isSelected = viewMode === 'customer' ? selectedCustomer?.id === item.id : selectedItem?.id === item.id
               return (
                 <div

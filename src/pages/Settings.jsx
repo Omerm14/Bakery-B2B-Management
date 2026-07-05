@@ -2,13 +2,20 @@ import { useState, useEffect, useRef } from 'react'
 import { Plus, Upload } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useImport } from '../context/ImportContext'
+import { useCustomers } from '../hooks/useCustomers'
+import { useMenuItems } from '../hooks/useMenuItems'
+import { useToast } from '../context/ToastContext'
+import SearchInput from '../components/SearchInput'
 
 export default function Settings() {
+  const toast = useToast()
   const [tab, setTab] = useState('menu')
-  const [menuItems, setMenuItems] = useState([])
+  const { menuItems, setMenuItems } = useMenuItems({ activeOnly: false })
+  const { customers, setCustomers } = useCustomers({ activeOnly: false })
   const [suppliers, setSuppliers] = useState([])
-  const [customers, setCustomers] = useState([])
-  const [loading, setLoading] = useState(false)
+  const [filterText, setFilterText] = useState('')
+
+  useEffect(() => { setFilterText('') }, [tab])
 
   // New item form
   const [newItem, setNewItem] = useState({ name_he: '', name_en: '', unit: 'יח׳', category: '', supplier_id: '' })
@@ -16,49 +23,56 @@ export default function Settings() {
   const [showAddItem, setShowAddItem] = useState(false)
   const [showAddSupplier, setShowAddSupplier] = useState(false)
 
-  useEffect(() => { loadAll() }, [])
-
-  async function loadAll() {
-    setLoading(true)
-    const [{ data: items }, { data: sups }, { data: custs }] = await Promise.all([
-      supabase.from('menu_items').select('*, suppliers(name)').order('category').order('name_he'),
-      supabase.from('suppliers').select('*').order('name'),
-      supabase.from('customers').select('*').order('name'),
-    ])
-    setMenuItems(items || [])
-    setSuppliers(sups || [])
-    setCustomers(custs || [])
-    setLoading(false)
-  }
+  useEffect(() => {
+    supabase.from('suppliers').select('*').order('name').then(({ data }) => setSuppliers(data || []))
+  }, [])
 
   async function addMenuItem() {
     if (!newItem.name_he.trim()) return
-    const { data } = await supabase.from('menu_items').insert({
+    const { data, error } = await supabase.from('menu_items').insert({
       ...newItem,
       supplier_id: newItem.supplier_id || null,
       active: true,
     }).select('*, suppliers(name)').single()
-    if (data) setMenuItems(prev => [...prev, data])
+    if (error) {
+      toast.error('הוספת הפריט נכשלה')
+      return
+    }
+    setMenuItems(prev => [...prev, data])
+    toast.success(`נוסף פריט: ${data.name_he}`)
     setNewItem({ name_he: '', name_en: '', unit: 'יח׳', category: '', supplier_id: '' })
     setShowAddItem(false)
   }
 
   async function toggleItemActive(id, current) {
-    await supabase.from('menu_items').update({ active: !current }).eq('id', id)
     setMenuItems(prev => prev.map(i => i.id === id ? { ...i, active: !current } : i))
+    const { error } = await supabase.from('menu_items').update({ active: !current }).eq('id', id)
+    if (error) {
+      setMenuItems(prev => prev.map(i => i.id === id ? { ...i, active: current } : i))
+      toast.error('עדכון הסטטוס נכשל')
+    }
   }
 
   async function addSupplier() {
     if (!newSupplier.trim()) return
-    const { data } = await supabase.from('suppliers').insert({ name: newSupplier.trim() }).select().single()
-    if (data) setSuppliers(prev => [...prev, data])
+    const { data, error } = await supabase.from('suppliers').insert({ name: newSupplier.trim() }).select().single()
+    if (error) {
+      toast.error('הוספת הספק נכשלה')
+      return
+    }
+    setSuppliers(prev => [...prev, data])
+    toast.success(`נוסף ספק: ${data.name}`)
     setNewSupplier('')
     setShowAddSupplier(false)
   }
 
   async function toggleCustomerActive(id, current) {
-    await supabase.from('customers').update({ active: !current }).eq('id', id)
     setCustomers(prev => prev.map(c => c.id === id ? { ...c, active: !current } : c))
+    const { error } = await supabase.from('customers').update({ active: !current }).eq('id', id)
+    if (error) {
+      setCustomers(prev => prev.map(c => c.id === id ? { ...c, active: current } : c))
+      toast.error('עדכון הסטטוס נכשל')
+    }
   }
 
   const UNITS = ['יח׳', 'ק״ג', 'גרם', 'ליטר', 'מ״ל', 'מגש', 'קרטון']
@@ -164,6 +178,7 @@ function ImportTab() {
               <Plus size={14} /> הוספת פריט
             </button>
           </div>
+          <SearchInput value={filterText} onChange={setFilterText} placeholder="חיפוש פריט..." />
           <div className="card" style={{ padding: 0 }}>
             <table className="itbl">
               <thead>
@@ -177,7 +192,7 @@ function ImportTab() {
                 </tr>
               </thead>
               <tbody>
-                {menuItems.map(item => (
+                {menuItems.filter(item => item.name_he.includes(filterText.trim())).map(item => (
                   <tr key={item.id} style={{ opacity: item.active ? 1 : 0.45 }}>
                     <td style={{ fontWeight: 500 }}>{item.name_he}</td>
                     <td style={{ color: 'var(--t3)' }}>{item.name_en || '—'}</td>
@@ -205,11 +220,12 @@ function ImportTab() {
               <Plus size={14} /> הוספת ספק
             </button>
           </div>
+          <SearchInput value={filterText} onChange={setFilterText} placeholder="חיפוש ספק..." />
           <div className="card" style={{ padding: 0 }}>
             <table className="itbl">
               <thead><tr><th>שם הספק</th></tr></thead>
               <tbody>
-                {suppliers.map(s => (
+                {suppliers.filter(s => s.name.includes(filterText.trim())).map(s => (
                   <tr key={s.id}><td style={{ fontWeight: 500 }}>{s.name}</td></tr>
                 ))}
               </tbody>
@@ -221,13 +237,14 @@ function ImportTab() {
       {/* CUSTOMERS */}
       {tab === 'customers' && (
         <div>
+          <SearchInput value={filterText} onChange={setFilterText} placeholder="חיפוש לקוח..." />
           <div className="card" style={{ padding: 0 }}>
             <table className="itbl">
               <thead>
                 <tr><th>שם</th><th>טלפון</th><th>סטטוס</th></tr>
               </thead>
               <tbody>
-                {customers.map(c => (
+                {customers.filter(c => c.name.includes(filterText.trim())).map(c => (
                   <tr key={c.id} style={{ opacity: c.active ? 1 : 0.45 }}>
                     <td style={{ fontWeight: 500 }}>{c.name}</td>
                     <td dir="ltr" style={{ color: 'var(--t3)' }}>{c.phone || '—'}</td>

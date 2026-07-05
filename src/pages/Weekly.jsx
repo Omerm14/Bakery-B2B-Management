@@ -178,7 +178,7 @@ export default function Weekly() {
             <table className="itbl" style={{ minWidth: 820 }}>
               <thead>
                 <tr>
-                  <th style={{ minWidth: 180 }}>פריט</th>
+                  <th className="sticky-col" style={{ minWidth: 180 }}>פריט</th>
                   <th>{viewMode === 'supplier' ? 'ספק' : 'קטגוריה'}</th>
                   <th>יח׳</th>
                   {WEEK_DAYS.map(d => (
@@ -220,7 +220,7 @@ export default function Weekly() {
                         const chg = prev > 0 ? Math.round(((row.total - prev) / prev) * 100) : null
                         return (
                           <tr key={row.menu_item_id}>
-                            <td style={{ fontWeight: 500 }}>{row.name_he}</td>
+                            <td className="sticky-col" style={{ fontWeight: 500 }}>{row.name_he}</td>
                             <td style={{ color: 'var(--t3)', fontSize: 12 }}>{row[viewMode === 'supplier' ? 'supplier' : 'category']}</td>
                             <td style={{ color: 'var(--t3)', fontSize: 12 }}>{row.unit}</td>
                             {WEEK_DAYS.map(d => {

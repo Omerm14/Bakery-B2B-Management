@@ -1,14 +1,23 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { ChevronRight, ChevronLeft, Plus, RefreshCw, Copy } from 'lucide-react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { ChevronRight, ChevronLeft, Plus, RefreshCw, Copy, Wand2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useWeek } from '../hooks/useWeek'
+import { useCustomers } from '../hooks/useCustomers'
+import { useMenuItems } from '../hooks/useMenuItems'
+import { useToast } from '../context/ToastContext'
 import { WEEK_DAYS } from '../constants/days'
+import SearchInput from '../components/SearchInput'
 
 export default function Orders() {
+  const toast = useToast()
+  const location = useLocation()
+  const navigate = useNavigate()
   const week = useWeek()
-  const [customers, setCustomers] = useState([])
-  const [menuItems, setMenuItems] = useState([])
+  const { customers, setCustomers } = useCustomers()
+  const { menuItems } = useMenuItems()
   const [selectedCustomer, setSelectedCustomer] = useState(null)
+  const [customerFilter, setCustomerFilter] = useState('')
   const [orderLines, setOrderLines] = useState({}) // key: `${menuItemId}_${date}` => line
   const [weekId, setWeekId] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -16,26 +25,29 @@ export default function Orders() {
   const [showAddCustomer, setShowAddCustomer] = useState(false)
   const [newCustomerName, setNewCustomerName] = useState('')
   const [copying, setCopying] = useState(false)
+  const [bulkFillItem, setBulkFillItem] = useState(null)
+  const [bulkFillQty, setBulkFillQty] = useState('')
+  const [bulkFilling, setBulkFilling] = useState(false)
   const gridRef = useRef(null)
 
+  const filteredCustomers = customers.filter(c => c.name.includes(customerFilter.trim()))
+
   useEffect(() => {
-    loadMasterData()
-  }, [])
+    if (!customers.length) return
+    const wantedId = location.state?.customerId
+    if (wantedId) {
+      const match = customers.find(c => c.id === wantedId)
+      if (match) setSelectedCustomer(match)
+      navigate(location.pathname, { replace: true, state: null })
+      return
+    }
+    if (!selectedCustomer) setSelectedCustomer(customers[0])
+  }, [customers, location.state])
 
   useEffect(() => {
     if (selectedCustomer) loadOrders()
     else setOrderLines({})
   }, [selectedCustomer, week.weekStartISO])
-
-  async function loadMasterData() {
-    const [{ data: custs }, { data: items }] = await Promise.all([
-      supabase.from('customers').select('id, name, phone').eq('active', true).order('name'),
-      supabase.from('menu_items').select('id, name_he, name_en, unit, category, supplier_id, suppliers(name)').eq('active', true).order('category').order('name_he'),
-    ])
-    setCustomers(custs || [])
-    setMenuItems(items || [])
-    if (custs?.length) setSelectedCustomer(custs[0])
-  }
 
   async function loadOrders() {
     setLoading(true)
@@ -69,13 +81,15 @@ export default function Orders() {
       [key]: { ...prev[key], quantity: qty, source: 'manual', status: 'ok' }
     }))
 
+    const prevLine = orderLines[key]
     setSaving(true)
     try {
       if (qty === 0) {
         // Delete the line if quantity is zero
-        const existing = orderLines[key]
+        const existing = prevLine
         if (existing?.id) {
-          await supabase.from('order_lines').delete().eq('id', existing.id)
+          const { error } = await supabase.from('order_lines').delete().eq('id', existing.id)
+          if (error) throw error
           setOrderLines(prev => {
             const next = { ...prev }
             delete next[key]
@@ -84,7 +98,7 @@ export default function Orders() {
         }
       } else {
         const wid = weekId || await week.getOrCreateWeek()
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('order_lines')
           .upsert({
             week_id: wid,
@@ -98,10 +112,20 @@ export default function Orders() {
           .select('id')
           .single()
 
+        if (error) throw error
         if (data) {
           setOrderLines(prev => ({ ...prev, [key]: { ...prev[key], id: data.id } }))
         }
       }
+    } catch (err) {
+      console.error('[handleQtyChange]', err)
+      setOrderLines(prev => {
+        const next = { ...prev }
+        if (prevLine) next[key] = prevLine
+        else delete next[key]
+        return next
+      })
+      toast.error('שמירת הכמות נכשלה — נסה שוב')
     } finally {
       setSaving(false)
     }
@@ -109,15 +133,18 @@ export default function Orders() {
 
   async function addCustomer() {
     if (!newCustomerName.trim()) return
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('customers')
       .insert({ name: newCustomerName.trim(), active: true })
       .select()
       .single()
-    if (data) {
-      setCustomers(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name, 'he')))
-      setSelectedCustomer(data)
+    if (error) {
+      toast.error('הוספת הלקוח נכשלה')
+      return
     }
+    setCustomers(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name, 'he')))
+    setSelectedCustomer(data)
+    toast.success(`נוסף לקוח: ${data.name}`)
     setNewCustomerName('')
     setShowAddCustomer(false)
   }
@@ -131,7 +158,7 @@ export default function Orders() {
       prevStart.setDate(prevStart.getDate() - 7)
       const { data: prevWeekRow } = await supabase
         .from('weeks').select('id').eq('start_date', prevStart.toISOString().slice(0, 10)).single()
-      if (!prevWeekRow) { setCopying(false); return }
+      if (!prevWeekRow) { toast.info('אין הזמנה בשבוע הקודם להעתקה'); return }
 
       const { data: prevLines } = await supabase
         .from('order_lines')
@@ -140,7 +167,7 @@ export default function Orders() {
         .eq('customer_id', selectedCustomer.id)
         .gt('quantity', 0)
 
-      if (!prevLines?.length) { setCopying(false); return }
+      if (!prevLines?.length) { toast.info('אין הזמנה בשבוע הקודם להעתקה'); return }
 
       // Shift dates by 7 days
       const upserts = prevLines.map(l => {
@@ -157,13 +184,39 @@ export default function Orders() {
         }
       })
 
-      await supabase.from('order_lines').upsert(upserts, {
+      const { error } = await supabase.from('order_lines').upsert(upserts, {
         onConflict: 'week_id,customer_id,menu_item_id,delivery_date',
         ignoreDuplicates: true,
       })
+      if (error) throw error
       await loadOrders()
+      toast.success(`הועתקו ${upserts.length} שורות מהשבוע הקודם`)
+    } catch (err) {
+      console.error('[copyPrevWeek]', err)
+      toast.error('העתקת השבוע הקודם נכשלה')
     } finally {
       setCopying(false)
+    }
+  }
+
+  async function confirmBulkFill() {
+    if (!bulkFillItem) return
+    const qty = parseFloat(bulkFillQty)
+    if (!(qty >= 0)) { toast.error('כמות לא תקינה'); return }
+    setBulkFilling(true)
+    try {
+      // Sequential, not concurrent — reuses the exact same save path as manual
+      // entry (handleQtyChange), one day at a time, so there's no risk of a
+      // duplicate-week-creation race if weekId weren't resolved yet.
+      for (const d of WEEK_DAYS) {
+        const date = week.dayDate(d.key)
+        await handleQtyChange(bulkFillItem.id, date, bulkFillQty)
+      }
+      toast.success(`מולא: ${qty} על כל השבוע — ${bulkFillItem.name_he}`)
+      setBulkFillItem(null)
+      setBulkFillQty('')
+    } finally {
+      setBulkFilling(false)
     }
   }
 
@@ -227,8 +280,9 @@ export default function Orders() {
               <Plus size={14} />
             </button>
           </div>
+          <SearchInput value={customerFilter} onChange={setCustomerFilter} placeholder="חיפוש לקוח..." />
           <div className="customer-list">
-            {customers.map(c => (
+            {filteredCustomers.map(c => (
               <div
                 key={c.id}
                 className={'customer-pill' + (selectedCustomer?.id === c.id ? ' active' : '')}
@@ -269,7 +323,7 @@ export default function Orders() {
                 <table className="order-grid">
                   <thead>
                     <tr>
-                      <th className="item-col">פריט</th>
+                      <th className="item-col sticky-col">פריט</th>
                       <th style={{ fontSize: 10, color: 'var(--t3)' }}>ספק</th>
                       {WEEK_DAYS.map(d => (
                         <th key={d.key}>
@@ -279,19 +333,20 @@ export default function Orders() {
                           </div>
                         </th>
                       ))}
+                      <th style={{ width: 36 }} aria-label="מילוי שבועי" />
                     </tr>
                   </thead>
                   <tbody>
                     {Object.entries(grouped).map(([cat, items]) => (
                       <>
                         <tr key={`cat-${cat}`}>
-                          <td colSpan={8} style={{ padding: '8px 16px', background: 'var(--surf2)', fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                          <td colSpan={9} style={{ padding: '8px 16px', background: 'var(--surf2)', fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
                             {cat}
                           </td>
                         </tr>
                         {items.map(item => (
                           <tr key={item.id}>
-                            <td className="item-name">{item.name_he}</td>
+                            <td className="item-name sticky-col">{item.name_he}</td>
                             <td className="item-supplier">{item.suppliers?.name || '—'}</td>
                             {WEEK_DAYS.map(d => {
                               const date = week.dayDate(d.key)
@@ -318,6 +373,17 @@ export default function Orders() {
                                 </td>
                               )
                             })}
+                            <td style={{ textAlign: 'center' }}>
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                style={{ padding: '4px 6px' }}
+                                onClick={() => { setBulkFillItem(item); setBulkFillQty('') }}
+                                title="מילוי כמות לכל השבוע"
+                                aria-label={`מילוי כמות לכל השבוע — ${item.name_he}`}
+                              >
+                                <Wand2 size={13} />
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </>
@@ -354,6 +420,38 @@ export default function Orders() {
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={() => setShowAddCustomer(false)}>ביטול</button>
               <button className="btn btn-primary" onClick={addCustomer}>הוספה</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk-fill Modal */}
+      {bulkFillItem && (
+        <div className="overlay" onClick={() => !bulkFilling && setBulkFillItem(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-title">מילוי כמות לכל השבוע — {bulkFillItem.name_he}</div>
+            <div style={{ marginBottom: 8 }}>
+              <label className="lbl">כמות</label>
+              <input
+                className="input"
+                type="number"
+                min="0"
+                step="0.5"
+                placeholder="0"
+                value={bulkFillQty}
+                onChange={e => setBulkFillQty(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && confirmBulkFill()}
+                autoFocus
+              />
+            </div>
+            <div className="alert alert-warn" style={{ marginBottom: 0 }}>
+              הפעולה תדרוס את כל 6 ימי השבוע עבור פריט זה, כולל תאים שהוזנו אוטומטית ע"י נוגה או מסומנים כדורשים בדיקה.
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setBulkFillItem(null)} disabled={bulkFilling}>ביטול</button>
+              <button className="btn btn-primary" onClick={confirmBulkFill} disabled={bulkFilling}>
+                {bulkFilling ? 'ממלא...' : 'מלא'}
+              </button>
             </div>
           </div>
         </div>

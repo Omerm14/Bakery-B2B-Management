@@ -2,8 +2,11 @@ import { useState, useEffect } from 'react'
 import { ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Check, Printer } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { isoToday } from '../constants/days'
+import { buildPackingListHtml, openAndPrint } from '../lib/printHtml'
+import { useToast } from '../context/ToastContext'
 
 export default function Packing() {
+  const toast = useToast()
   const [selectedDate, setSelectedDate] = useState(isoToday())
   const [clients, setClients] = useState([])
   const [checks, setChecks] = useState({})    // line_id → packed_at ISO string or null
@@ -98,46 +101,25 @@ export default function Packing() {
     const dateStr = new Date(selectedDate + 'T00:00:00').toLocaleDateString('he-IL', {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
     })
-    const rows = client.items.map(i =>
-      `<tr><td style="padding:8px 12px;border-bottom:1px solid #eee">☐ ${i.name_he}</td><td style="padding:8px 12px;border-bottom:1px solid #eee;text-align:left">${i.quantity} ${i.unit}</td></tr>`
-    ).join('')
-    const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8">
-      <title>שליחה – ${client.name}</title>
-      <style>body{font-family:Arial,sans-serif;margin:30px}h2{margin-bottom:4px}p{color:#666;font-size:14px;margin:0 0 16px}table{width:100%;border-collapse:collapse}td{font-size:15px}</style>
-      </head><body>
-      <h2>${client.name}</h2><p>${dateStr}</p>
-      <table>${rows}</table>
-      <script>window.onload=()=>{window.print()}<\/script>
-      </body></html>`
-    const w = window.open('', '_blank')
-    w.document.write(html)
-    w.document.close()
+    const html = buildPackingListHtml({
+      htmlTitle: `שליחה – ${client.name}`,
+      h2: client.name,
+      subheading: dateStr,
+      sections: [{ items: client.items }],
+    })
+    if (!openAndPrint(html)) toast.error('הדפדפן חסם את חלון ההדפסה')
   }
 
   function printAll() {
     const dateStr = new Date(selectedDate + 'T00:00:00').toLocaleDateString('he-IL', {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
     })
-    const sections = clients.map(client => {
-      const rows = client.items.map(i =>
-        `<tr><td style="padding:6px 10px;border-bottom:1px solid #eee">☐ ${i.name_he}</td><td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:left">${i.quantity} ${i.unit}</td></tr>`
-      ).join('')
-      return `<div style="page-break-inside:avoid;margin-bottom:28px">
-        <h3 style="margin:0 0 4px">${client.name}</h3>
-        <table style="width:100%;border-collapse:collapse">${rows}</table>
-      </div>`
-    }).join('<hr style="margin:24px 0">')
-    const html = `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8">
-      <title>רשימות אריזה – ${dateStr}</title>
-      <style>body{font-family:Arial,sans-serif;margin:30px}h2{margin-bottom:16px}h3{font-size:16px}</style>
-      </head><body>
-      <h2>רשימות אריזה – ${dateStr}</h2>
-      ${sections}
-      <script>window.onload=()=>{window.print()}<\/script>
-      </body></html>`
-    const w = window.open('', '_blank')
-    w.document.write(html)
-    w.document.close()
+    const html = buildPackingListHtml({
+      htmlTitle: `רשימות אריזה – ${dateStr}`,
+      h2: `רשימות אריזה – ${dateStr}`,
+      sections: clients.map(client => ({ heading: client.name, items: client.items })),
+    })
+    if (!openAndPrint(html)) toast.error('הדפדפן חסם את חלון ההדפסה')
   }
 
   const doneCount = clients.filter(isClientDone).length
