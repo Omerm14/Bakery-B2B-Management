@@ -14,14 +14,14 @@ export default function Settings() {
   const { customers, setCustomers } = useCustomers({ activeOnly: false })
   const [suppliers, setSuppliers] = useState([])
   const [filterText, setFilterText] = useState('')
+  const { running: importRunning, startImport } = useImport()
+  const importFileRef = useRef()
 
   useEffect(() => { setFilterText('') }, [tab])
 
   // New item form
   const [newItem, setNewItem] = useState({ name_he: '', name_en: '', unit: 'יח׳', category: '', supplier_id: '', price: '' })
-  const [newSupplier, setNewSupplier] = useState('')
   const [showAddItem, setShowAddItem] = useState(false)
-  const [showAddSupplier, setShowAddSupplier] = useState(false)
 
   useEffect(() => {
     supabase.from('suppliers').select('*').order('name').then(({ data, error }) => {
@@ -78,19 +78,6 @@ export default function Settings() {
       setMenuItems(prev => prev.map(i => i.id === id ? { ...i, category: prevCategory } : i))
       toast.error('עדכון הקטגוריה נכשל')
     }
-  }
-
-  async function addSupplier() {
-    if (!newSupplier.trim()) return
-    const { data, error } = await supabase.from('suppliers').insert({ name: newSupplier.trim() }).select().single()
-    if (error) {
-      toast.error('הוספת הספק נכשלה')
-      return
-    }
-    setSuppliers(prev => [...prev, data])
-    toast.success(`נוסף ספק: ${data.name}`)
-    setNewSupplier('')
-    setShowAddSupplier(false)
   }
 
   async function toggleCustomerActive(id, current) {
@@ -153,6 +140,12 @@ export default function Settings() {
   const UNITS = ['יח׳', 'ק״ג', 'גרם', 'ליטר', 'מ״ל', 'מגש', 'קרטון']
   const knownCategories = [...new Set(menuItems.map(i => i.category).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'he'))
 
+  const sortedMenuItems = [...menuItems].sort((a, b) => a.name_he.localeCompare(b.name_he, 'he'))
+  const sortedCustomers = [...customers].sort((a, b) => {
+    if (a.active !== b.active) return a.active ? -1 : 1
+    return a.name.localeCompare(b.name, 'he')
+  })
+
   function handleCategoryChange(itemId, e) {
     const value = e.target.value
     if (value === '__new__') {
@@ -163,9 +156,15 @@ export default function Settings() {
     updateItemCategory(itemId, value || null)
   }
 
+  async function handleImportFiles(e) {
+    const files = [...e.target.files]
+    if (!files.length) return
+    e.target.value = ''
+    startImport(files)
+  }
+
 function ImportTab() {
-  const { logs, running, startImport } = useImport()
-  const fileRef = useRef()
+  const { logs, running } = useImport()
   const [importHistory, setImportHistory] = useState([])
 
   useEffect(() => {
@@ -173,33 +172,12 @@ function ImportTab() {
       .then(({ data }) => setImportHistory(data || []))
   }, [running])
 
-  async function handleFiles(e) {
-    const files = [...e.target.files]
-    if (!files.length) return
-    e.target.value = ''
-    startImport(files)
-  }
-
   return (
     <div>
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>ייבוא היסטוריית הזמנות מ-Excel</div>
-        <div style={{ color: 'var(--t2)', fontSize: 13, marginBottom: 16, lineHeight: 1.6 }}>
-          בחר קובץ Excel שבועי (פורמט המאפייה) — לקוח לכל גיליון, תאריכים בשורה 1, כמויות בעמודות B–H.
-          ניתן לבחור מספר קבצים בו-זמנית. ניתן לנווט לדפים אחרים בזמן הייבוא — הוא ימשיך ברקע.
-        </div>
-        <label
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-            padding: '10px 20px', borderRadius: 'var(--rs)',
-            background: 'var(--grad)', color: '#fff', fontWeight: 600, fontSize: 14,
-            opacity: running ? 0.6 : 1, pointerEvents: running ? 'none' : 'auto',
-          }}
-        >
-          <Upload size={16} />
-          {running ? 'מייבא ברקע...' : 'בחר קובץ/ים Excel'}
-          <input ref={fileRef} type="file" accept=".xlsx,.xls" multiple style={{ display: 'none' }} onChange={handleFiles} />
-        </label>
+      <div className="card" style={{ marginBottom: 16, color: 'var(--t2)', fontSize: 13, lineHeight: 1.6 }}>
+        בחר קובץ Excel שבועי (פורמט המאפייה) — לקוח לכל גיליון, תאריכים בשורה 1, כמויות בעמודות B–H.
+        ניתן לבחור מספר קבצים בו-זמנית. ניתן לנווט לדפים אחרים בזמן הייבוא — הוא ימשיך ברקע.
+        השתמשו בכפתור "ייבוא Excel" בראש העמוד כדי להעלות קבצים.
       </div>
 
       {logs.length > 0 && (
@@ -312,10 +290,22 @@ function AuditLogTab({ filterText }) {
     <div className="page">
       <div className="page-header">
         <h1 className="page-title">הגדרות</h1>
+        <label
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+            padding: '10px 20px', borderRadius: 'var(--rs)',
+            background: 'var(--grad)', color: '#fff', fontWeight: 600, fontSize: 14,
+            opacity: importRunning ? 0.6 : 1, pointerEvents: importRunning ? 'none' : 'auto',
+          }}
+        >
+          <Upload size={16} />
+          {importRunning ? 'מייבא ברקע...' : 'ייבוא Excel'}
+          <input ref={importFileRef} type="file" accept=".xlsx,.xls" multiple style={{ display: 'none' }} onChange={handleImportFiles} />
+        </label>
       </div>
 
       <div className="settings-tabs" style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
-        {[['menu', 'תפריט'], ['suppliers', 'ספקים'], ['customers', 'לקוחות'], ['import', 'ייבוא Excel'], ['audit', 'יומן שינויים']].map(([k, l]) => (
+        {[['menu', 'תפריט'], ['customers', 'לקוחות'], ['import', 'ייבוא Excel'], ['audit', 'יומן שינויים']].map(([k, l]) => (
           <button key={k} className={'btn btn-sm ' + (tab === k ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -343,7 +333,7 @@ function AuditLogTab({ filterText }) {
                 </tr>
               </thead>
               <tbody>
-                {menuItems.filter(item => item.name_he.includes(filterText.trim())).map(item => (
+                {sortedMenuItems.filter(item => item.name_he.includes(filterText.trim())).map(item => (
                   <tr key={item.id} style={{ opacity: item.active ? 1 : 0.45 }}>
                     <td style={{ fontWeight: 500 }}>{item.name_he}</td>
                     <td style={{ color: 'var(--t3)' }}>{item.name_en || '—'}</td>
@@ -386,28 +376,6 @@ function AuditLogTab({ filterText }) {
         </div>
       )}
 
-      {/* SUPPLIERS */}
-      {tab === 'suppliers' && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-            <button className="btn btn-primary btn-sm" onClick={() => setShowAddSupplier(true)}>
-              <Plus size={14} /> הוספת ספק
-            </button>
-          </div>
-          <SearchInput value={filterText} onChange={setFilterText} placeholder="חיפוש ספק..." />
-          <div className="card" style={{ padding: 0 }}>
-            <table className="itbl">
-              <thead><tr><th>שם הספק</th></tr></thead>
-              <tbody>
-                {suppliers.filter(s => s.name.includes(filterText.trim())).map(s => (
-                  <tr key={s.id}><td style={{ fontWeight: 500 }}>{s.name}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       {/* CUSTOMERS */}
       {tab === 'customers' && (
         <div>
@@ -418,7 +386,7 @@ function AuditLogTab({ filterText }) {
                 <tr><th>שם</th><th>טלפון</th><th>גישה לפורטל</th><th>סטטוס</th></tr>
               </thead>
               <tbody>
-                {customers.filter(c => c.name.includes(filterText.trim())).map(c => (
+                {sortedCustomers.filter(c => c.name.includes(filterText.trim())).map(c => (
                   <tr key={c.id} style={{ opacity: c.active ? 1 : 0.45 }}>
                     <td style={{ fontWeight: 500 }}>{c.name}</td>
                     <td>
@@ -539,23 +507,6 @@ function AuditLogTab({ filterText }) {
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={() => setShowAddItem(false)}>ביטול</button>
               <button className="btn btn-primary" onClick={addMenuItem}>הוספה</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add Supplier Modal */}
-      {showAddSupplier && (
-        <div className="overlay" onClick={() => setShowAddSupplier(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-title">הוספת ספק</div>
-            <div>
-              <label className="lbl">שם הספק</label>
-              <input className="input" placeholder="שם הספק" value={newSupplier} onChange={e => setNewSupplier(e.target.value)} onKeyDown={e => e.key === 'Enter' && addSupplier()} autoFocus />
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-ghost" onClick={() => setShowAddSupplier(false)}>ביטול</button>
-              <button className="btn btn-primary" onClick={addSupplier}>הוספה</button>
             </div>
           </div>
         </div>
