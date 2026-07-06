@@ -1,6 +1,7 @@
 import { createContext, useContext, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import { toLocalISODate } from '../constants/days'
 
 // ── helpers (copied from Settings so they run in context, not component) ──────
 
@@ -27,8 +28,7 @@ function parseQty(v) {
 function toIso(d) {
   if (!d) return null
   if (typeof d === 'string') return d
-  const dt = new Date(d)
-  return dt.toISOString().slice(0, 10)
+  return toLocalISODate(new Date(d))
 }
 
 function parseExcelWorkbook(wb) {
@@ -49,7 +49,7 @@ function parseExcelWorkbook(wb) {
         if (dt) {
           const d = new Date(dt.y, dt.m - 1, dt.d)
           while (d.getDay() !== 0) d.setDate(d.getDate() - 1)
-          wsIso = d.toISOString().slice(0, 10)
+          wsIso = toLocalISODate(d)
           weekStart = d
           break
         }
@@ -62,7 +62,7 @@ function parseExcelWorkbook(wb) {
           const d = new Date(year, month - 1, day)
           if (!isNaN(d.getTime())) {
             while (d.getDay() !== 0) d.setDate(d.getDate() - 1)
-            wsIso = d.toISOString().slice(0, 10)
+            wsIso = toLocalISODate(d)
             weekStart = d
           }
           break
@@ -79,7 +79,7 @@ function parseExcelWorkbook(wb) {
       const d = new Date(year, month - 1, day)
       if (!isNaN(d.getTime())) {
         while (d.getDay() !== 0) d.setDate(d.getDate() - 1)
-        wsIso = d.toISOString().slice(0, 10)
+        wsIso = toLocalISODate(d)
         weekStart = d
       }
     }
