@@ -357,7 +357,6 @@ export default function Orders() {
                   <thead>
                     <tr>
                       <th className="item-col sticky-col">פריט</th>
-                      <th style={{ fontSize: 10, color: 'var(--t3)' }}>ספק</th>
                       {WEEK_DAYS.map(d => (
                         <th key={d.key}>
                           <div>{d.short}</div>
@@ -373,14 +372,13 @@ export default function Orders() {
                     {Object.entries(grouped).map(([cat, items]) => (
                       <>
                         <tr key={`cat-${cat}`}>
-                          <td colSpan={10} style={{ padding: '8px 16px', background: 'var(--surf2)', fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                          <td colSpan={9} style={{ padding: '8px 16px', background: 'var(--surf2)', fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
                             {cat}
                           </td>
                         </tr>
                         {items.map(item => (
                           <tr key={item.id}>
                             <td className="item-name sticky-col">{item.name_he}</td>
-                            <td className="item-supplier">{item.suppliers?.name || '—'}</td>
                             {WEEK_DAYS.map(d => {
                               const date = week.dayDate(d.key)
                               const key = `${item.id}_${date}`
