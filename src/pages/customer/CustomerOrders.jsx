@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useCustomerWeek } from '../../hooks/useCustomerWeek'
 import { useCustomerMenuItems } from '../../hooks/useCustomerMenuItems'
 import { useToast } from '../../context/ToastContext'
-import { WEEK_DAYS } from '../../constants/days'
+import { WEEK_DAYS, formatShortDate } from '../../constants/days'
 import DayOrderView from './DayOrderView'
 import WeekSummaryView from './WeekSummaryView'
 
@@ -342,7 +342,7 @@ export default function CustomerOrders() {
       ) : viewMode === 'day' ? (
         <DayOrderView
           dayLabel={WEEK_DAYS[dayOffset].label}
-          dateLabel={selectedDate.slice(5).replace('-', '/')}
+          dateLabel={formatShortDate(selectedDate)}
           date={selectedDate}
           grouped={grouped}
           orderLines={orderLines}
