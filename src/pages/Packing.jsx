@@ -24,10 +24,11 @@ export default function Packing() {
         .select(`
           id, quantity, customer_id, menu_item_id,
           menu_items(name_he, unit),
-          customers(name),
+          customers!inner(name, active),
           packing_checks(id, packed_at)
         `)
         .eq('delivery_date', selectedDate)
+        .eq('customers.active', true)
         .gt('quantity', 0)
         .order('customer_id')
 

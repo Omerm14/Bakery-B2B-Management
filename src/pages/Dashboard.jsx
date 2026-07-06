@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+
+const TREND_WINDOW = 8
 
 function AnimatedNumber({ value, loading, prefix = '', suffix = '' }) {
   const [display, setDisplay] = useState(0)
@@ -39,7 +42,8 @@ const CustomTooltip = ({ active, payload, label }) => {
 export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({ thisWeekLines: 0, activeCustomers: 0, topItem: null, topItemQty: 0, wowChange: null })
-  const [trendData, setTrendData] = useState([])
+  const [weekHistory, setWeekHistory] = useState([]) // ascending, weeks with data only
+  const [chartEnd, setChartEnd] = useState(-1) // index into weekHistory of the trend chart's rightmost week
   const [topItems, setTopItems] = useState([])
   const [latestWeekLabel, setLatestWeekLabel] = useState(null)
 
@@ -48,44 +52,55 @@ export default function Dashboard() {
   async function loadDashboard() {
     setLoading(true)
     try {
-      // Base "current week" on the most recent week that actually has data,
-      // not on the literal real-world calendar week — the latest Excel
-      // import may lag behind today by days or weeks, and a fixed calendar
-      // window would then show all-zero stats even though the platform has
-      // plenty of (slightly older) data.
-      const { data: recentWeeksDesc } = await supabase
+      // Base "current week" on the most recent week that actually has order
+      // data, not just the most recent row in `weeks` — calendar navigation
+      // and the customer ordering portal can pre-create a blank week row
+      // before any order exists in it, which must not be mistaken for "this
+      // week" (it would show zero everywhere despite real recent data).
+      const { data: candidateWeeksDesc } = await supabase
         .from('weeks')
         .select('id, start_date')
         .order('start_date', { ascending: false })
-        .limit(8)
+        .limit(104)
 
-      const weeksAsc = (recentWeeksDesc || []).slice().reverse() // oldest first
-      const weekIds = weeksAsc.map(w => w.id)
-      const thisWeek = weeksAsc[weeksAsc.length - 1] || null
-      const prevWeek = weeksAsc[weeksAsc.length - 2] || null
-      setLatestWeekLabel(thisWeek ? formatWeekShort(thisWeek.start_date) : null)
-
-      // Fetch order lines for these weeks
-      const { data: rawLines } = weekIds.length
-        ? await supabase.from('order_lines').select('week_id, customer_id, menu_item_id, quantity, menu_items(name_he)').in('week_id', weekIds).gt('quantity', 0)
+      const candidateIds = (candidateWeeksDesc || []).map(w => w.id)
+      const { data: rawLines } = candidateIds.length
+        ? await supabase.from('order_lines').select('week_id, customer_id, menu_item_id, quantity, menu_items(name_he), customers!inner(active)').in('week_id', candidateIds).eq('customers.active', true).gt('quantity', 0)
         : { data: [] }
-      // Exclude a corrupted historical menu item ("תאריך") whose bogus
-      // quantities (leftover date-serial values from an old import bug) would
-      // otherwise blow up every total that includes it.
-      const allLines = (rawLines || []).filter(l => l.menu_items && l.menu_items.name_he !== 'תאריך')
 
-      // Build trend data: total quantity per week
-      const trendMap = {}
-      for (const w of weeksAsc) trendMap[w.start_date] = { label: formatWeekShort(w.start_date), qty: 0, iso: w.start_date }
-      for (const line of allLines) {
-        const w = weeksAsc.find(w => w.id === line.week_id)
-        if (w) trendMap[w.start_date].qty += parseFloat(line.quantity)
+      const linesByWeek = new Map()
+      for (const l of rawLines || []) {
+        // Exclude a corrupted historical menu item ("תאריך") whose bogus
+        // quantities (leftover date-serial values from an old import bug)
+        // would otherwise blow up every total that includes it.
+        if (!l.menu_items || l.menu_items.name_he === 'תאריך') continue
+        if (!linesByWeek.has(l.week_id)) linesByWeek.set(l.week_id, [])
+        linesByWeek.get(l.week_id).push(l)
       }
-      setTrendData(Object.values(trendMap))
+
+      // Full history of weeks that actually have data, oldest first — kept in
+      // state so the trend chart can be paged through client-side with no
+      // extra queries. KPI cards below always reflect the true latest week,
+      // independent of whatever range the chart is currently showing.
+      const historyAsc = (candidateWeeksDesc || [])
+        .filter(w => linesByWeek.has(w.id))
+        .reverse()
+        .map(w => ({
+          id: w.id,
+          start_date: w.start_date,
+          label: formatWeekShort(w.start_date),
+          qty: (linesByWeek.get(w.id) || []).reduce((s, l) => s + parseFloat(l.quantity), 0),
+        }))
+      setWeekHistory(historyAsc)
+      setChartEnd(historyAsc.length - 1)
+
+      const thisWeek = historyAsc[historyAsc.length - 1] || null
+      const prevWeek = historyAsc[historyAsc.length - 2] || null
+      setLatestWeekLabel(thisWeek ? thisWeek.label : null)
 
       // This week stats
-      const thisWeekLines = thisWeek ? allLines.filter(l => l.week_id === thisWeek.id) : []
-      const prevWeekLines = prevWeek ? allLines.filter(l => l.week_id === prevWeek.id) : []
+      const thisWeekLines = thisWeek ? (linesByWeek.get(thisWeek.id) || []) : []
+      const prevWeekLines = prevWeek ? (linesByWeek.get(prevWeek.id) || []) : []
       const thisTotal = thisWeekLines.reduce((s, l) => s + parseFloat(l.quantity), 0)
       const prevTotal = prevWeekLines.reduce((s, l) => s + parseFloat(l.quantity), 0)
       const wowChange = prevTotal > 0 ? Math.round(((thisTotal - prevTotal) / prevTotal) * 100) : null
@@ -121,6 +136,9 @@ export default function Dashboard() {
   }
 
   const maxBar = topItems[0]?.qty || 1
+  const trendData = weekHistory.slice(Math.max(0, chartEnd - (TREND_WINDOW - 1)), chartEnd + 1)
+  const atLatest = chartEnd >= weekHistory.length - 1
+  const atOldest = chartEnd <= 0
 
   return (
     <div className="page">
@@ -161,7 +179,22 @@ export default function Dashboard() {
       <div className="dash-layout">
         {/* Area chart — 8 week trend */}
         <div className="card">
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>מגמת כמויות — 8 שבועות אחרונים</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>מגמת כמויות — 8 שבועות</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {!atLatest && (
+                <button className="btn btn-ghost btn-sm" onClick={() => setChartEnd(weekHistory.length - 1)} style={{ fontSize: 12 }}>
+                  לשבוע האחרון
+                </button>
+              )}
+              <button className="btn btn-ghost btn-sm" disabled={atOldest} onClick={() => setChartEnd(i => Math.max(0, i - 1))}>
+                <ChevronRight size={16} />
+              </button>
+              <button className="btn btn-ghost btn-sm" disabled={atLatest} onClick={() => setChartEnd(i => Math.min(weekHistory.length - 1, i + 1))}>
+                <ChevronLeft size={16} />
+              </button>
+            </div>
+          </div>
           {loading ? (
             <div className="shimmer" style={{ height: 220 }} />
           ) : (
