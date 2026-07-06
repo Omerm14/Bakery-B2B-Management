@@ -14,11 +14,12 @@ export default function CustomerOrders() {
   const { menuItems, loading: itemsLoading } = useCustomerMenuItems()
   const [customer, setCustomer] = useState(null)
   const [weekId, setWeekId] = useState(null)
-  // `${menuItemId}_${date}` -> { quantity, id?, pending? }. `pending: true`
-  // means this value only exists in this browser tab — either a
-  // customer-typed edit or a suggested default from last week — and has
-  // NOT been written to the real order yet. Nothing saves until
-  // sendOrder() runs; see the model note on handleQtyChange below.
+  // `${menuItemId}_${date}` -> { quantity, id?, pending? }. Last week's
+  // amount is carried forward and written through immediately (silently,
+  // same as the existing Wednesday auto-copy) — the customer never needs
+  // to "confirm" an unchanged default. `pending: true` marks only a value
+  // the customer has actually typed this session, which stays local-only
+  // until שלח הזמנה sends it.
   const [orderLines, setOrderLines] = useState({})
   const [lockAtByDate, setLockAtByDate] = useState({})
   const [loading, setLoading] = useState(false)
@@ -114,18 +115,49 @@ export default function CustomerOrders() {
           .eq('customer_id', customer.id)
         if (linesError) { setLoadError(true); toast.error('טעינת ההזמנה נכשלה — נסו שוב') }
         for (const l of lines || []) map[`${l.menu_item_id}_${l.delivery_date}`] = l
-      }
 
-      // Suggest last week's quantities for anything with no real row yet —
-      // local only, nothing written until the customer sends.
-      const prevQtyByItemOffset = await fetchPreviousWeekQtyByOffset()
-      for (const item of menuItems) {
-        for (const d of WEEK_DAYS) {
-          const date = week.dayDate(d.key)
-          const key = `${item.id}_${date}`
-          if (map[key]) continue
-          const prevQty = prevQtyByItemOffset[`${item.id}_${d.key}`]
-          if (prevQty > 0) map[key] = { quantity: prevQty, pending: true }
+        // Carry last week's quantities into any cell with no real row yet
+        // — written through immediately (same as the Wednesday auto-copy,
+        // just triggered by a view instead of a schedule), not just shown
+        // locally, so the customer never has to "confirm" a default that
+        // hasn't changed. Only touches days still open for editing.
+        const prevQtyByItemOffset = await fetchPreviousWeekQtyByOffset()
+        const autoDefaults = []
+        for (const item of menuItems) {
+          for (const d of WEEK_DAYS) {
+            const date = week.dayDate(d.key)
+            // Use the lock times just fetched above directly — the
+            // memoized `canEdit` in component scope reflects the PREVIOUS
+            // render's lockAtByDate, not what this same load just computed.
+            const lockAt = lockAts[date]
+            const dateCanEdit = lockAt ? Date.now() < new Date(lockAt).getTime() : true
+            if (!dateCanEdit) continue
+            const key = `${item.id}_${date}`
+            if (map[key]) continue
+            const prevQty = prevQtyByItemOffset[`${item.id}_${d.key}`]
+            if (!(prevQty > 0)) continue
+            map[key] = { quantity: prevQty, change_reason: 'auto_copy' }
+            autoDefaults.push({
+              week_id: wid,
+              customer_id: customer.id,
+              menu_item_id: item.id,
+              delivery_date: date,
+              quantity: prevQty,
+              source: 'manual',
+              status: 'ok',
+              change_reason: 'auto_copy',
+              change_note: 'הועתק אוטומטית משבוע קודם בעת צפיית הלקוח',
+              changed_by: customer.phone || customer.name,
+              changed_via: 'customer_portal',
+              updated_at: new Date().toISOString(),
+            })
+          }
+        }
+        if (autoDefaults.length) {
+          const { error: defaultsErr } = await supabase
+            .from('order_lines')
+            .upsert(autoDefaults, { onConflict: 'week_id,customer_id,menu_item_id,delivery_date' })
+          if (defaultsErr) console.error('[CustomerOrders.loadWeek] auto-default write-through failed', defaultsErr)
         }
       }
 
@@ -192,9 +224,10 @@ export default function CustomerOrders() {
     }
   }
 
-  // The one action that actually updates the real order the floor sees —
-  // everything up to this point (typed edits, suggested defaults) only
-  // ever lived in this component's local state.
+  // The one action that actually updates the real order for anything the
+  // customer has genuinely touched this session — untouched defaults are
+  // already real (loadWeek writes those through immediately), so this
+  // only ever sends `pending` entries, not the whole week.
   async function sendOrder() {
     if (!customer || !weekId || sending) return
 
@@ -203,6 +236,7 @@ export default function CustomerOrders() {
       let skippedLocked = 0
       const upserts = []
       for (const [key, line] of Object.entries(orderLines)) {
+        if (!line.pending) continue
         const [menuItemId, date] = key.split('_')
         if (canEdit[date] === false) { skippedLocked++; continue }
         upserts.push({
@@ -221,7 +255,7 @@ export default function CustomerOrders() {
       }
 
       if (!upserts.length) {
-        toast.info(skippedLocked > 0 ? 'כל הימים הרלוונטיים נעולים לעדכון' : 'אין הזמנה לשליחה')
+        toast.info(skippedLocked > 0 ? 'כל הימים הרלוונטיים נעולים לעדכון' : 'אין שינויים לשליחה')
         return
       }
 
