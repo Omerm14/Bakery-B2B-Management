@@ -88,6 +88,34 @@ export default function Settings() {
     }
   }
 
+  async function updateCustomerPhone(id, phone) {
+    const prevPhone = customers.find(c => c.id === id)?.phone
+    if (phone === prevPhone) return
+    setCustomers(prev => prev.map(c => c.id === id ? { ...c, phone } : c))
+    const { error } = await supabase.from('customers').update({ phone: phone || null }).eq('id', id)
+    if (error) {
+      setCustomers(prev => prev.map(c => c.id === id ? { ...c, phone: prevPhone } : c))
+      toast.error('עדכון הטלפון נכשל')
+    }
+  }
+
+  const [provisioning, setProvisioning] = useState(null)
+  async function provisionCustomer(customer) {
+    if (!customer.phone) { toast.error('יש להזין מספר טלפון לפני הפעלת גישה'); return }
+    setProvisioning(customer.id)
+    try {
+      const { data, error } = await supabase.functions.invoke('provision-and-welcome-customer', { body: { customer_id: customer.id } })
+      if (error || !data?.ok) {
+        toast.error(data?.error || 'הפעלת הגישה נכשלה')
+        return
+      }
+      setCustomers(prev => prev.map(c => c.id === customer.id ? { ...c, auth_user_id: c.auth_user_id || 'pending' } : c))
+      toast.success(`נשלחה הודעת ברוכים הבאים ל${customer.name}`)
+    } finally {
+      setProvisioning(null)
+    }
+  }
+
   const UNITS = ['יח׳', 'ק״ג', 'גרם', 'ליטר', 'מ״ל', 'מגש', 'קרטון']
 
 function ImportTab() {
@@ -331,13 +359,32 @@ function AuditLogTab({ filterText }) {
           <div className="card" style={{ padding: 0 }}>
             <table className="itbl">
               <thead>
-                <tr><th>שם</th><th>טלפון</th><th>סטטוס</th></tr>
+                <tr><th>שם</th><th>טלפון</th><th>גישה לפורטל</th><th>סטטוס</th></tr>
               </thead>
               <tbody>
                 {customers.filter(c => c.name.includes(filterText.trim())).map(c => (
                   <tr key={c.id} style={{ opacity: c.active ? 1 : 0.45 }}>
                     <td style={{ fontWeight: 500 }}>{c.name}</td>
-                    <td dir="ltr" style={{ color: 'var(--t3)' }}>{c.phone || '—'}</td>
+                    <td>
+                      <input
+                        className="input"
+                        dir="ltr"
+                        style={{ width: 130, padding: '4px 8px' }}
+                        defaultValue={c.phone ?? ''}
+                        placeholder="050-1234567"
+                        onBlur={e => updateCustomerPhone(c.id, e.target.value)}
+                      />
+                    </td>
+                    <td>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => provisionCustomer(c)}
+                        disabled={provisioning === c.id}
+                        title="שולח הודעת ברוכים הבאים בוואטסאפ עם קישור לפורטל ההזמנות"
+                      >
+                        {provisioning === c.id ? 'שולח...' : c.auth_user_id ? 'שלח שוב' : 'הפעל גישה'}
+                      </button>
+                    </td>
                     <td>
                       <button className={'btn btn-sm ' + (c.active ? 'btn-success' : 'btn-ghost')} onClick={() => toggleCustomerActive(c.id, c.active)}>
                         {c.active ? 'פעיל' : 'לא פעיל'}

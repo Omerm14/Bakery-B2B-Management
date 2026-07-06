@@ -17,6 +17,9 @@ import { ToastProvider } from './context/ToastContext'
 import ToastHost from './components/ToastHost'
 import SearchOverlay from './components/search/SearchOverlay'
 import Landing from './pages/Landing'
+import CustomerLoginPhone from './pages/customer/CustomerLoginPhone'
+import CustomerLoginOtp from './pages/customer/CustomerLoginOtp'
+import CustomerOrders from './pages/customer/CustomerOrders'
 
 function ImportToast() {
   const { running, progress, logs } = useImport()
@@ -118,6 +121,7 @@ export default function App() {
   }, [isDark])
 
   const toggleTheme = useCallback(() => setIsDark(v => !v), [])
+  const isCustomer = session?.user?.app_metadata?.role === 'customer'
 
   if (session === undefined) {
     return (
@@ -132,9 +136,16 @@ export default function App() {
       <ImportProvider>
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={session ? <Navigate to="/dashboard" replace /> : <Landing />} />
-            <Route path="/login" element={session ? <Navigate to="/dashboard" replace /> : <Login />} />
-            {session ? (
+            <Route path="/" element={session ? <Navigate to={isCustomer ? '/portal/orders' : '/dashboard'} replace /> : <Landing />} />
+            <Route path="/login" element={session ? <Navigate to={isCustomer ? '/portal/orders' : '/dashboard'} replace /> : <Login />} />
+            <Route path="/portal/login" element={session ? <Navigate to={isCustomer ? '/portal/orders' : '/dashboard'} replace /> : <CustomerLoginPhone />} />
+            <Route path="/portal/verify" element={session ? <Navigate to={isCustomer ? '/portal/orders' : '/dashboard'} replace /> : <CustomerLoginOtp />} />
+            {session && isCustomer ? (
+              <>
+                <Route path="/portal/orders" element={<CustomerOrders />} />
+                <Route path="*" element={<Navigate to="/portal/orders" replace />} />
+              </>
+            ) : session ? (
               <>
                 <Route path="/dashboard" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Dashboard /></ProtectedLayout>} />
                 <Route path="/orders" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Orders /></ProtectedLayout>} />
