@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { ChevronRight, ChevronLeft, ChevronDown } from 'lucide-react'
+import { ChevronRight, ChevronLeft, ChevronDown, Send } from 'lucide-react'
 import { WEEK_DAYS, weekStart, dayDate, formatWeekLabel, formatShortDate } from '../../constants/days'
 import QtyStepper from './QtyStepper'
 import CutoffCountdown from './CutoffCountdown'
@@ -67,6 +67,11 @@ export default function CustomerPortalDemo() {
   const [qty, setQty] = useState(MOCK_STARTING_QTY)
   const [search, setSearch] = useState('')
   const [collapsed, setCollapsed] = useState(() => new Set())
+  // Mirrors the real portal's draft model: nothing is "sent" until שלח
+  // הזמנה is pressed, so the mock starting quantities begin flagged as
+  // unsent (as if suggested from last week), same as a real fresh week.
+  const [pendingKeys, setPendingKeys] = useState(() => new Set(Object.keys(MOCK_STARTING_QTY)))
+  const [justSent, setJustSent] = useState(false)
 
   const grouped = MOCK_ITEMS.reduce((acc, item) => {
     if (!acc[item.category]) acc[item.category] = []
@@ -76,9 +81,9 @@ export default function CustomerPortalDemo() {
 
   const orderLines = useMemo(() => {
     const map = {}
-    for (const key in qty) map[key] = { quantity: qty[key] }
+    for (const key in qty) map[key] = { quantity: qty[key], pending: pendingKeys.has(key) }
     return map
-  }, [qty])
+  }, [qty, pendingKeys])
 
   const canEdit = useMemo(() => {
     const map = {}
@@ -87,7 +92,15 @@ export default function CustomerPortalDemo() {
   }, [])
 
   function handleQtyChange(itemId, date, rawValue) {
-    setQty(prev => ({ ...prev, [`${itemId}_${date}`]: parseFloat(rawValue) || 0 }))
+    const key = `${itemId}_${date}`
+    setQty(prev => ({ ...prev, [key]: Math.round(parseFloat(rawValue)) || 0 }))
+    setPendingKeys(prev => new Set(prev).add(key))
+  }
+
+  function sendOrder() {
+    setPendingKeys(new Set())
+    setJustSent(true)
+    setTimeout(() => setJustSent(false), 2000)
   }
 
   function nextDay() { setDayOffset(o => (o + 1) % 7) }
@@ -144,6 +157,12 @@ export default function CustomerPortalDemo() {
         <span className="week-label">{formatWeekLabel(START)}</span>
       </div>
 
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <button className="btn btn-primary btn-sm" onClick={sendOrder}>
+          <Send size={14} /> {justSent ? 'נשלח!' : 'שלח הזמנה'}
+        </button>
+      </div>
+
       {viewMode === 'day' ? (
         <div>
           <div className="day-nav">
@@ -186,7 +205,10 @@ export default function CustomerPortalDemo() {
                       return (
                         <div key={item.id} className="day-list-row">
                           <div className="day-list-item">
-                            <div className="day-list-item-name">{item.name_he}</div>
+                            <div className="day-list-item-name">
+                              {item.name_he}
+                              {orderLines[key]?.pending && <span className="badge-pending">טרם נשלח</span>}
+                            </div>
                             <div className="day-list-item-unit">{item.unit}</div>
                           </div>
                           <QtyStepper

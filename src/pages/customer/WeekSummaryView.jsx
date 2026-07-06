@@ -15,12 +15,16 @@ export default function WeekSummaryView({ dayDate, grouped, orderLines, canEdit,
         const locked = canEdit[date] === false
         const activeItems = items.filter(item => (orderLines[`${item.id}_${date}`]?.quantity || 0) > 0)
         const total = activeItems.reduce((sum, item) => sum + (orderLines[`${item.id}_${date}`]?.quantity || 0), 0)
+        const hasPending = activeItems.some(item => orderLines[`${item.id}_${date}`]?.pending)
 
         return (
           <button key={d.key} type="button" className="week-day-card" onClick={() => onSelectDay(d.key)}>
             <div className="week-day-card-hdr">
               <div>
-                <div className="week-day-card-label">{d.label}{locked && ' 🔒'}</div>
+                <div className="week-day-card-label">
+                  {d.label}{locked && ' 🔒'}
+                  {hasPending && <span className="badge-pending" style={{ marginInlineStart: 6 }}>טרם נשלח</span>}
+                </div>
                 <div className="week-day-card-date">{formatShortDate(date)}</div>
               </div>
               {total > 0 && <div className="week-day-card-total">{total}</div>}

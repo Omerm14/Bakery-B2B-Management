@@ -14,7 +14,7 @@ const SWIPE_THRESHOLD = 50
 // order).
 export default function DayOrderView({
   dayLabel, dateLabel, date, grouped, orderLines, canEdit, lockAt,
-  saveStates, onQtyChange, onPrevDay, onNextDay, dayTotal,
+  onQtyChange, onPrevDay, onNextDay, dayTotal,
 }) {
   const touchStartX = useRef(null)
   const [search, setSearch] = useState('')
@@ -88,12 +88,14 @@ export default function DayOrderView({
                 const key = `${item.id}_${date}`
                 const line = orderLines[key]
                 const isAutoCopy = line?.change_reason === 'auto_copy'
+                const isPending = !!line?.pending
                 return (
                   <div key={item.id} className="day-list-row">
                     <div className="day-list-item">
                       <div className="day-list-item-name">
                         {item.name_he}
                         {isAutoCopy && <span className="badge-autocopy">הועתק משבוע שעבר</span>}
+                        {isPending && <span className="badge-pending">טרם נשלח</span>}
                       </div>
                       <div className="day-list-item-unit">
                         {item.unit}{item.price != null ? ` · ${item.price}₪` : ''}
@@ -103,7 +105,6 @@ export default function DayOrderView({
                       value={line?.quantity || 0}
                       onChange={v => onQtyChange(item.id, date, v)}
                       disabled={!canEdit}
-                      saveState={saveStates[key]}
                     />
                   </div>
                 )
