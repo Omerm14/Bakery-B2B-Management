@@ -45,31 +45,12 @@ function formatWeekShort(iso) {
   return `${d.getDate()}/${d.getMonth() + 1}/${String(d.getFullYear()).slice(2)}`
 }
 
-const PAGE_SIZE = 1000
-
-// Supabase/PostgREST caps a single response at PAGE_SIZE rows by default —
-// with enough historical order data across many weeks, that cap can be hit
-// before the response ever reaches the most recent (physically later in the
-// table) rows, silently dropping the current week from every aggregate.
-// Paginate with .range() until a page comes back short to fetch everything.
-async function fetchAllOrderLines(weekIds) {
-  const all = []
-  let from = 0
-  while (true) {
-    const { data, error } = await supabase
-      .from('order_lines')
-      .select('week_id, customer_id, menu_item_id, quantity, menu_items(name_he), customers!inner(active)')
-      .in('week_id', weekIds)
-      .eq('customers.active', true)
-      .gt('quantity', 0)
-      .range(from, from + PAGE_SIZE - 1)
-    if (error) { console.error('[Dashboard] fetchAllOrderLines', error); break }
-    all.push(...(data || []))
-    if (!data || data.length < PAGE_SIZE) break
-    from += PAGE_SIZE
-  }
-  return all
-}
+// Aggregation happens server-side (see migration 029_dashboard_week_data_function.sql)
+// via the dashboard_week_data RPC — it returns one row per (week, item) with
+// that week's active-customer count attached, instead of raw per-customer,
+// per-day order_lines rows. That result set is orders of magnitude smaller,
+// so it fits in a single response regardless of how much order history
+// accumulates, without needing client-side pagination at all.
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(true)
@@ -102,37 +83,33 @@ export default function Dashboard() {
         .limit(104)
 
       const candidateIds = (candidateWeeksDesc || []).map(w => w.id)
-      const rawLines = candidateIds.length ? await fetchAllOrderLines(candidateIds) : []
+      const { data: weekRows, error: weekDataError } = candidateIds.length
+        ? await supabase.rpc('dashboard_week_data', { p_week_ids: candidateIds })
+        : { data: [] }
+      if (weekDataError) console.error('[Dashboard] dashboard_week_data', weekDataError)
 
-      const linesByWeek = new Map()
-      for (const l of rawLines || []) {
-        // Exclude a corrupted historical menu item ("תאריך") whose bogus
-        // quantities (leftover date-serial values from an old import bug)
-        // would otherwise blow up every total that includes it.
-        if (!l.menu_items || l.menu_items.name_he === 'תאריך') continue
-        if (!linesByWeek.has(l.week_id)) linesByWeek.set(l.week_id, [])
-        linesByWeek.get(l.week_id).push(l)
+      const itemsByWeek = new Map() // week_id → [{name, qty}]
+      const activeCustomersByWeek = new Map() // week_id → count
+      for (const row of weekRows || []) {
+        if (!itemsByWeek.has(row.week_id)) itemsByWeek.set(row.week_id, [])
+        itemsByWeek.get(row.week_id).push({ name: row.item_name, qty: parseFloat(row.item_qty) })
+        activeCustomersByWeek.set(row.week_id, row.active_customers)
       }
 
       // Full history of weeks that actually have data, oldest first, each
       // pre-aggregated (qty, active customers, top items) so navigating
       // between weeks afterward is just an index change — no re-fetching.
       const historyAsc = (candidateWeeksDesc || [])
-        .filter(w => linesByWeek.has(w.id))
+        .filter(w => itemsByWeek.has(w.id))
         .reverse()
         .map(w => {
-          const lines = linesByWeek.get(w.id) || []
-          const qty = lines.reduce((s, l) => s + parseFloat(l.quantity), 0)
-          const activeCustomers = new Set(lines.map(l => l.customer_id)).size
+          const items = itemsByWeek.get(w.id) || []
+          const qty = items.reduce((s, i) => s + i.qty, 0)
+          const activeCustomers = activeCustomersByWeek.get(w.id) || 0
 
-          const itemTotals = {}
-          for (const l of lines) {
-            if (!itemTotals[l.menu_item_id]) itemTotals[l.menu_item_id] = { name: l.menu_items?.name_he, qty: 0 }
-            itemTotals[l.menu_item_id].qty += parseFloat(l.quantity)
-          }
-          const sortedItems = Object.entries(itemTotals).sort((a, b) => b[1].qty - a[1].qty)
-          const top10 = sortedItems.slice(0, 10).map(([, v]) => ({ name: v.name, qty: Math.round(v.qty * 10) / 10 }))
-          const topItem = sortedItems[0] ? { name: sortedItems[0][1].name, qty: Math.round(sortedItems[0][1].qty * 10) / 10 } : null
+          const sortedItems = [...items].sort((a, b) => b.qty - a.qty)
+          const top10 = sortedItems.slice(0, 10).map(i => ({ name: i.name, qty: Math.round(i.qty * 10) / 10 }))
+          const topItem = sortedItems[0] ? { name: sortedItems[0].name, qty: Math.round(sortedItems[0].qty * 10) / 10 } : null
 
           return { id: w.id, start_date: w.start_date, label: formatWeekShort(w.start_date), qty, activeCustomers, top10, topItem }
         })
