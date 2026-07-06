@@ -18,7 +18,7 @@ export default function Settings() {
   useEffect(() => { setFilterText('') }, [tab])
 
   // New item form
-  const [newItem, setNewItem] = useState({ name_he: '', name_en: '', unit: 'יח׳', category: '', supplier_id: '' })
+  const [newItem, setNewItem] = useState({ name_he: '', name_en: '', unit: 'יח׳', category: '', supplier_id: '', price: '' })
   const [newSupplier, setNewSupplier] = useState('')
   const [showAddItem, setShowAddItem] = useState(false)
   const [showAddSupplier, setShowAddSupplier] = useState(false)
@@ -32,6 +32,7 @@ export default function Settings() {
     const { data, error } = await supabase.from('menu_items').insert({
       ...newItem,
       supplier_id: newItem.supplier_id || null,
+      price: newItem.price ? parseFloat(newItem.price) : null,
       active: true,
     }).select('*, suppliers(name)').single()
     if (error) {
@@ -40,7 +41,7 @@ export default function Settings() {
     }
     setMenuItems(prev => [...prev, data])
     toast.success(`נוסף פריט: ${data.name_he}`)
-    setNewItem({ name_he: '', name_en: '', unit: 'יח׳', category: '', supplier_id: '' })
+    setNewItem({ name_he: '', name_en: '', unit: 'יח׳', category: '', supplier_id: '', price: '' })
     setShowAddItem(false)
   }
 
@@ -50,6 +51,18 @@ export default function Settings() {
     if (error) {
       setMenuItems(prev => prev.map(i => i.id === id ? { ...i, active: current } : i))
       toast.error('עדכון הסטטוס נכשל')
+    }
+  }
+
+  async function updateItemPrice(id, value) {
+    const price = value === '' ? null : parseFloat(value)
+    const prevPrice = menuItems.find(i => i.id === id)?.price
+    if (price === prevPrice) return
+    setMenuItems(prev => prev.map(i => i.id === id ? { ...i, price } : i))
+    const { error } = await supabase.from('menu_items').update({ price }).eq('id', id)
+    if (error) {
+      setMenuItems(prev => prev.map(i => i.id === id ? { ...i, price: prevPrice } : i))
+      toast.error('עדכון המחיר נכשל')
     }
   }
 
@@ -158,6 +171,70 @@ function ImportTab() {
   )
 }
 
+const AUDIT_REASON_LABELS = {
+  customer_request: '📞 לקוח / וואטסאפ',
+  internal_decision: '🏭 החלטה פנימית',
+  correction: '✏️ תיקון טעות',
+  other: 'אחר',
+  import: 'ייבוא',
+  forecast: 'תחזית',
+}
+
+function AuditLogTab({ filterText }) {
+  const [rows, setRows] = useState([])
+
+  useEffect(() => {
+    supabase.from('order_line_audit')
+      .select('created_at, customer_name, item_name_he, delivery_date, old_quantity, new_quantity, source, change_reason, change_note, changed_by, changed_via')
+      .order('created_at', { ascending: false })
+      .limit(200)
+      .then(({ data }) => setRows(data || []))
+  }, [])
+
+  const filtered = rows.filter(r =>
+    (r.customer_name || '').includes(filterText.trim()) || (r.item_name_he || '').includes(filterText.trim())
+  )
+
+  return (
+    <div className="card" style={{ padding: 0 }}>
+      <table className="itbl">
+        <thead>
+          <tr>
+            <th>תאריך שינוי</th>
+            <th>לקוח</th>
+            <th>פריט</th>
+            <th>תאריך אספקה</th>
+            <th style={{ textAlign: 'center' }}>כמות</th>
+            <th>מקור</th>
+            <th>סיבה</th>
+            <th>הערה</th>
+            <th>בוצע ע"י</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.map((row, i) => (
+            <tr key={i}>
+              <td dir="ltr" style={{ fontSize: 12, color: 'var(--t3)' }}>
+                {new Date(row.created_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+              </td>
+              <td style={{ fontWeight: 500 }}>{row.customer_name || '—'}</td>
+              <td>{row.item_name_he || '—'}</td>
+              <td dir="ltr" style={{ fontSize: 12, color: 'var(--t3)' }}>{row.delivery_date}</td>
+              <td style={{ textAlign: 'center', fontSize: 12 }}>
+                {row.old_quantity ?? '—'} → {row.new_quantity}
+              </td>
+              <td style={{ fontSize: 12, color: 'var(--t3)' }}>{row.source}</td>
+              <td style={{ fontSize: 12 }}>{AUDIT_REASON_LABELS[row.change_reason] || row.change_reason || '—'}</td>
+              <td style={{ fontSize: 12, color: 'var(--t3)' }}>{row.change_note || '—'}</td>
+              <td style={{ fontSize: 12, color: 'var(--t3)' }}>{row.changed_by || '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
   return (
     <div className="page">
       <div className="page-header">
@@ -165,7 +242,7 @@ function ImportTab() {
       </div>
 
       <div className="settings-tabs" style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
-        {[['menu', 'תפריט'], ['suppliers', 'ספקים'], ['customers', 'לקוחות'], ['import', 'ייבוא Excel']].map(([k, l]) => (
+        {[['menu', 'תפריט'], ['suppliers', 'ספקים'], ['customers', 'לקוחות'], ['import', 'ייבוא Excel'], ['audit', 'יומן שינויים']].map(([k, l]) => (
           <button key={k} className={'btn btn-sm ' + (tab === k ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -188,6 +265,7 @@ function ImportTab() {
                   <th>יחידה</th>
                   <th>קטגוריה</th>
                   <th>ספק</th>
+                  <th>מחיר</th>
                   <th>סטטוס</th>
                 </tr>
               </thead>
@@ -199,6 +277,18 @@ function ImportTab() {
                     <td>{item.unit}</td>
                     <td>{item.category || '—'}</td>
                     <td>{item.suppliers?.name || '—'}</td>
+                    <td>
+                      <input
+                        className="input"
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        style={{ width: 80, padding: '4px 8px' }}
+                        defaultValue={item.price ?? ''}
+                        placeholder="—"
+                        onBlur={e => updateItemPrice(item.id, e.target.value)}
+                      />
+                    </td>
                     <td>
                       <button className={'btn btn-sm ' + (item.active ? 'btn-success' : 'btn-ghost')} onClick={() => toggleItemActive(item.id, item.active)}>
                         {item.active ? 'פעיל' : 'לא פעיל'}
@@ -264,6 +354,14 @@ function ImportTab() {
       {/* IMPORT */}
       {tab === 'import' && <ImportTab />}
 
+      {/* AUDIT LOG */}
+      {tab === 'audit' && (
+        <div>
+          <SearchInput value={filterText} onChange={setFilterText} placeholder="חיפוש לפי לקוח או פריט..." />
+          <AuditLogTab filterText={filterText} />
+        </div>
+      )}
+
       {/* Add Menu Item Modal */}
       {showAddItem && (
         <div className="overlay" onClick={() => setShowAddItem(false)}>
@@ -290,12 +388,18 @@ function ImportTab() {
                   <input className="input" placeholder="מאפים" value={newItem.category} onChange={e => setNewItem(p => ({ ...p, category: e.target.value }))} />
                 </div>
               </div>
-              <div>
-                <label className="lbl">ספק</label>
-                <select className="input" value={newItem.supplier_id} onChange={e => setNewItem(p => ({ ...p, supplier_id: e.target.value }))}>
-                  <option value="">ללא ספק</option>
-                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label className="lbl">ספק</label>
+                  <select className="input" value={newItem.supplier_id} onChange={e => setNewItem(p => ({ ...p, supplier_id: e.target.value }))}>
+                    <option value="">ללא ספק</option>
+                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="lbl">מחיר (ש״ח) — אופציונלי</label>
+                  <input className="input" type="number" min="0" step="0.1" placeholder="לא נקבע" value={newItem.price} onChange={e => setNewItem(p => ({ ...p, price: e.target.value }))} />
+                </div>
               </div>
             </div>
             <div className="modal-footer">

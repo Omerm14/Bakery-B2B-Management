@@ -219,7 +219,7 @@ export default function Weekly() {
                   return (
                     <>
                       <tr key={`g-${group}`}>
-                        <td colSpan={10} style={{ background: 'var(--accent-tint)', padding: '8px 14px' }}>
+                        <td colSpan={12} style={{ background: 'var(--accent-tint)', padding: '8px 14px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span className="supplier-tag" style={{ marginBottom: 0 }}>
                               {viewMode === 'supplier' ? '🏭' : '📦'} {group}

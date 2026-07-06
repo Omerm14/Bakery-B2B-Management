@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
-import { ChevronRight, ChevronLeft, Printer } from 'lucide-react'
+import { ChevronRight, ChevronLeft, Printer, FileDown } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { isoToday } from '../constants/days'
+import { useToast } from '../context/ToastContext'
+import { buildProductionListHtml, openAndPrint } from '../lib/printHtml'
 
 const STATUS_CYCLE = { pending: 'in_progress', in_progress: 'done', done: 'pending' }
 const STATUS_LABEL = { pending: 'ממתין', in_progress: 'בייצור', done: 'הושלם' }
@@ -30,6 +32,7 @@ function AnimatedNumber({ value, loading }) {
 }
 
 export default function Production() {
+  const toast = useToast()
   const [selectedDate, setSelectedDate] = useState(isoToday())
   const [items, setItems] = useState([])
   const [prodStatus, setProdStatus] = useState({}) // menu_item_id → status
@@ -117,6 +120,34 @@ export default function Production() {
     window.print()
   }
 
+  function exportByDepartment() {
+    const byCategory = items.reduce((acc, item) => {
+      if (!acc[item.category]) acc[item.category] = []
+      acc[item.category].push(item)
+      return acc
+    }, {})
+    const categories = Object.keys(byCategory).sort((a, b) => a.localeCompare(b, 'he'))
+    const sections = categories.map(cat => ({
+      heading: cat,
+      items: byCategory[cat]
+        .slice()
+        .sort((a, b) => a.name_he.localeCompare(b.name_he, 'he'))
+        .map(i => ({
+          name_he: i.name_he,
+          unit: i.unit,
+          total_qty: i.total_qty % 1 === 0 ? i.total_qty : i.total_qty.toFixed(1),
+          customerBreakdown: i.customers.map(c => `${c.name} (${c.qty})`).join(', '),
+        })),
+    }))
+    const html = buildProductionListHtml({
+      htmlTitle: `רשימת ייצור לפי מחלקה – ${dateLabel}`,
+      h2: 'רשימת ייצור לפי מחלקה',
+      subheading: dateLabel,
+      sections,
+    })
+    if (!openAndPrint(html)) toast.error('הדפדפן חסם את חלון ההדפסה')
+  }
+
   const suppliers = ['all', ...new Set(items.map(i => i.supplier))]
   const filtered = filterSupplier === 'all' ? items : items.filter(i => i.supplier === filterSupplier)
 
@@ -139,9 +170,14 @@ export default function Production() {
     <div className="page production-page">
       <div className="page-header">
         <h1 className="page-title">ייצור היום</h1>
-        <button className="btn btn-ghost btn-sm no-print" onClick={printView}>
-          <Printer size={15} /> הדפסה
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button className="btn btn-ghost btn-sm no-print" onClick={exportByDepartment}>
+            <FileDown size={15} /> PDF לפי מחלקה
+          </button>
+          <button className="btn btn-ghost btn-sm no-print" onClick={printView}>
+            <Printer size={15} /> הדפסה
+          </button>
+        </div>
       </div>
 
       {/* Date Navigation */}
