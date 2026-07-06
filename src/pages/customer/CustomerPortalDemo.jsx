@@ -67,10 +67,11 @@ export default function CustomerPortalDemo() {
   const [qty, setQty] = useState(MOCK_STARTING_QTY)
   const [search, setSearch] = useState('')
   const [collapsed, setCollapsed] = useState(() => new Set())
-  // Mirrors the real portal's draft model: nothing is "sent" until שלח
-  // הזמנה is pressed, so the mock starting quantities begin flagged as
-  // unsent (as if suggested from last week), same as a real fresh week.
-  const [pendingKeys, setPendingKeys] = useState(() => new Set(Object.keys(MOCK_STARTING_QTY)))
+  // Mirrors the real portal: last week's quantities are already the real
+  // order (auto-copied, shown with the blue badge) — only a quantity the
+  // customer actually changes this session becomes `pending` (amber
+  // badge) until שלח הזמנה sends it.
+  const [pendingKeys, setPendingKeys] = useState(() => new Set())
   const [justSent, setJustSent] = useState(false)
 
   const grouped = MOCK_ITEMS.reduce((acc, item) => {
@@ -81,7 +82,11 @@ export default function CustomerPortalDemo() {
 
   const orderLines = useMemo(() => {
     const map = {}
-    for (const key in qty) map[key] = { quantity: qty[key], pending: pendingKeys.has(key) }
+    for (const key in qty) {
+      map[key] = pendingKeys.has(key)
+        ? { quantity: qty[key], pending: true }
+        : { quantity: qty[key], change_reason: 'auto_copy' }
+    }
     return map
   }, [qty, pendingKeys])
 
@@ -207,6 +212,7 @@ export default function CustomerPortalDemo() {
                           <div className="day-list-item">
                             <div className="day-list-item-name">
                               {item.name_he}
+                              {orderLines[key]?.change_reason === 'auto_copy' && <span className="badge-autocopy">הועתק משבוע שעבר</span>}
                               {orderLines[key]?.pending && <span className="badge-pending">טרם נשלח</span>}
                             </div>
                             <div className="day-list-item-unit">{item.unit}</div>
