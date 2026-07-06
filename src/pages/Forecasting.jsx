@@ -294,7 +294,7 @@ export default function Forecasting() {
                         return (
                           <>
                             <tr key={`cat-${cat}`}>
-                              <td colSpan={8} style={{ padding: '8px 16px', background: 'var(--surf2)', fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                              <td colSpan={9} style={{ padding: '8px 16px', background: 'var(--surf2)', fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
                                 {cat}
                               </td>
                             </tr>

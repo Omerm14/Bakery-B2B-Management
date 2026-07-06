@@ -5,6 +5,7 @@ export const WEEK_DAYS = [
   { key: 3, label: 'רביעי', short: 'ד׳' },
   { key: 4, label: 'חמישי', short: 'ה׳' },
   { key: 5, label: 'שישי',  short: 'ו׳' },
+  { key: 6, label: 'שבת',   short: 'ש׳' },
 ]
 
 // Returns Sunday of the week containing `date`
@@ -25,7 +26,7 @@ export function dayDate(weekStartDate, dayOffset) {
 export function formatWeekLabel(weekStartDate) {
   const d = new Date(weekStartDate)
   const end = new Date(d)
-  end.setDate(d.getDate() + 5)
+  end.setDate(d.getDate() + 6)
   const fmt = (dt) => dt.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })
   const fmtEnd = (dt) => dt.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric', year: '2-digit' })
   return `${fmt(d)} – ${fmtEnd(end)}`
