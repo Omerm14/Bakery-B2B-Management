@@ -101,7 +101,13 @@ export default function Settings() {
   }
 
   const [settingPin, setSettingPin] = useState(null)
-  const [pinModal, setPinModal] = useState(null) // { customer, pin } | null
+  // The PIN itself is stored server-side (customers.portal_pin), kept in
+  // sync with the real auth password by set-customer-pin — so we only need
+  // to remember *which* customer's modal is open, not the PIN value. This
+  // way the modal always reflects the actual current PIN, including across
+  // reloads/other staff members, not just what was generated this session.
+  const [pinModalCustomerId, setPinModalCustomerId] = useState(null)
+  const pinModalCustomer = customers.find(c => c.id === pinModalCustomerId) || null
 
   function generatePin() {
     return String(Math.floor(100000 + Math.random() * 900000)) // 6 random digits
@@ -121,8 +127,8 @@ export default function Settings() {
         toast.error(data?.error || 'הגדרת הקוד נכשלה')
         return
       }
-      setCustomers(prev => prev.map(c => c.id === customer.id ? { ...c, auth_user_id: c.auth_user_id || 'pending' } : c))
-      setPinModal({ customer, pin })
+      setCustomers(prev => prev.map(c => c.id === customer.id ? { ...c, auth_user_id: c.auth_user_id || 'pending', portal_pin: pin } : c))
+      setPinModalCustomerId(customer.id)
     } finally {
       setSettingPin(null)
     }
@@ -402,11 +408,13 @@ function AuditLogTab({ filterText }) {
                     <td>
                       <button
                         className="btn btn-ghost btn-sm"
-                        onClick={() => generateAndSetPin(c)}
-                        disabled={settingPin === c.id}
-                        title="מגדיר קוד גישה שהלקוח ישתמש בו כדי להיכנס לפורטל ההזמנות"
+                        onClick={() => {
+                          if (!c.phone) { toast.error('יש להזין מספר טלפון לפני הגדרת קוד גישה'); return }
+                          setPinModalCustomerId(c.id)
+                        }}
+                        title="מציג את קישור הכניסה ואת קוד הגישה של הלקוח"
                       >
-                        {settingPin === c.id ? 'מגדיר...' : c.auth_user_id ? 'אפס קוד' : 'הגדר קוד גישה'}
+                        {c.auth_user_id ? 'קוד גישה' : 'הגדר קוד גישה'}
                       </button>
                     </td>
                     <td>
@@ -434,31 +442,39 @@ function AuditLogTab({ filterText }) {
       )}
 
       {/* Customer Access PIN Modal */}
-      {pinModal && (
-        <div className="overlay" onClick={() => setPinModal(null)}>
+      {pinModalCustomer && (
+        <div className="overlay" onClick={() => setPinModalCustomerId(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-title">קוד גישה — {pinModal.customer.name}</div>
+            <div className="modal-title">קוד גישה — {pinModalCustomer.name}</div>
 
             <label className="lbl">קישור לשליחה ללקוח</label>
             <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-              <input className="input" dir="ltr" readOnly value={portalUrlFor(pinModal.customer)} onFocus={e => e.target.select()} style={{ fontSize: 12 }} />
-              <button className="btn btn-ghost btn-sm" onClick={() => copyToClipboard(portalUrlFor(pinModal.customer))}>העתק</button>
+              <input className="input" dir="ltr" readOnly value={portalUrlFor(pinModalCustomer)} onFocus={e => e.target.select()} style={{ fontSize: 12 }} />
+              <button className="btn btn-ghost btn-sm" onClick={() => copyToClipboard(portalUrlFor(pinModalCustomer))}>העתק</button>
             </div>
 
-            <label className="lbl">קוד גישה</label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input className="input" dir="ltr" readOnly value={pinModal.pin} onFocus={e => e.target.select()} style={{ fontSize: 20, fontWeight: 700, textAlign: 'center', letterSpacing: '.1em' }} />
-              <button className="btn btn-ghost btn-sm" onClick={() => copyToClipboard(pinModal.pin)}>העתק</button>
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 8 }}>
-              יש למסור את הקישור והקוד ללקוח (וואטסאפ, טלפון וכו׳). ניתן ליצור קוד חדש בכל עת מכאן.
-            </div>
+            {pinModalCustomer.portal_pin ? (
+              <>
+                <label className="lbl">קוד גישה</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input className="input" dir="ltr" readOnly value={pinModalCustomer.portal_pin} onFocus={e => e.target.select()} style={{ fontSize: 20, fontWeight: 700, textAlign: 'center', letterSpacing: '.1em' }} />
+                  <button className="btn btn-ghost btn-sm" onClick={() => copyToClipboard(pinModalCustomer.portal_pin)}>העתק</button>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 8 }}>
+                  יש למסור את הקישור והקוד ללקוח (וואטסאפ, טלפון וכו׳). זהו קוד הגישה הנוכחי של הלקוח — ניתן לחזור למסך זה בכל עת כדי לראות אותו שוב, או ליצור קוד חדש שיחליף אותו.
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: 13, color: 'var(--t3)', marginTop: 4 }}>
+                עדיין לא הוגדר קוד גישה ללקוח זה. לחצו על "צור קוד חדש" כדי ליצור אחד.
+              </div>
+            )}
 
             <div className="modal-footer">
-              <button className="btn btn-ghost" onClick={() => generateAndSetPin(pinModal.customer)} disabled={settingPin === pinModal.customer.id}>
-                {settingPin === pinModal.customer.id ? 'מייצר...' : 'צור קוד חדש'}
+              <button className="btn btn-ghost" onClick={() => generateAndSetPin(pinModalCustomer)} disabled={settingPin === pinModalCustomer.id}>
+                {settingPin === pinModalCustomer.id ? 'מייצר...' : 'צור קוד חדש'}
               </button>
-              <button className="btn btn-primary" onClick={() => setPinModal(null)}>סגור</button>
+              <button className="btn btn-primary" onClick={() => setPinModalCustomerId(null)}>סגור</button>
             </div>
           </div>
         </div>
