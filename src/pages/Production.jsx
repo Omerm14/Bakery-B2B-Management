@@ -64,7 +64,7 @@ export default function Production() {
       const map = {}
       for (const line of data) {
         const mi = line.menu_items
-        if (!mi) continue
+        if (!mi || mi.name_he === 'תאריך') continue
         const id = line.menu_item_id
         if (!map[id]) {
           map[id] = {

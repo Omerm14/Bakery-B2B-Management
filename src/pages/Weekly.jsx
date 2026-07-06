@@ -54,7 +54,7 @@ export default function Weekly() {
     const map = {}
     for (const line of data) {
       const mi = line.menu_items
-      if (!mi) continue
+      if (!mi || mi.name_he === 'תאריך') continue
       const id = line.menu_item_id
       if (!map[id]) {
         map[id] = {
@@ -123,6 +123,10 @@ export default function Weekly() {
   const grandTotal = rows.reduce((s, r) => s + r.total, 0)
   const prevTotal = Object.values(prevRows).reduce((s, v) => s + v, 0)
   const weekChange = prevTotal > 0 ? Math.round(((grandTotal - prevTotal) / prevTotal) * 100) : null
+  const dayTotals = WEEK_DAYS.map(d => {
+    const date = week.dayDate(d.key)
+    return rows.reduce((s, r) => s + (r.days[date] || 0), 0)
+  })
 
   return (
     <div className="page">
@@ -192,6 +196,22 @@ export default function Weekly() {
                 </tr>
               </thead>
               <tbody>
+                <tr>
+                  <td className="sticky-col" style={{ fontWeight: 700, background: 'var(--accent-tint)' }}>סה״כ כללי</td>
+                  <td style={{ background: 'var(--accent-tint)' }} />
+                  <td style={{ background: 'var(--accent-tint)' }} />
+                  {dayTotals.map((total, i) => (
+                    <td key={WEEK_DAYS[i].key} style={{ textAlign: 'center', fontWeight: 700, background: 'var(--accent-tint)' }}>
+                      {total ? (total % 1 === 0 ? total : total.toFixed(1)) : '—'}
+                    </td>
+                  ))}
+                  <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-tint)' }}>
+                    {grandTotal % 1 === 0 ? grandTotal : grandTotal.toFixed(1)}
+                  </td>
+                  <td style={{ textAlign: 'center', fontSize: 12, background: 'var(--accent-tint)', color: weekChange === null ? 'var(--t3)' : weekChange >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                    {weekChange === null ? '—' : `${weekChange > 0 ? '+' : ''}${weekChange}%`}
+                  </td>
+                </tr>
                 {Object.entries(grouped).map(([group, items]) => {
                   const groupTotal = items.reduce((s, r) => s + r.total, 0)
                   const groupPrev = items.reduce((s, r) => s + (prevRows[r.menu_item_id] || 0), 0)
