@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { ChevronRight, ChevronLeft } from 'lucide-react'
-import { WEEK_DAYS, weekStart, dayDate, formatWeekLabel } from '../../constants/days'
+import { WEEK_DAYS, weekStart, dayDate, formatWeekLabel, formatShortDate } from '../../constants/days'
 import QtyStepper from './QtyStepper'
 import CutoffCountdown from './CutoffCountdown'
 import WeekSummaryView from './WeekSummaryView'
@@ -139,7 +139,7 @@ export default function CustomerPortalDemo() {
             <button className="btn btn-ghost btn-sm day-nav-btn" onClick={prevDay} aria-label="יום קודם"><ChevronRight size={18} /></button>
             <div className="day-nav-label">
               <div className="day-nav-day">{WEEK_DAYS[dayOffset].label}</div>
-              <div className="day-nav-date">{selectedDate.slice(5).replace('-', '/')}</div>
+              <div className="day-nav-date">{formatShortDate(selectedDate)}</div>
             </div>
             <button className="btn btn-ghost btn-sm day-nav-btn" onClick={nextDay} aria-label="יום הבא"><ChevronLeft size={18} /></button>
           </div>

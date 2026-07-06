@@ -3,7 +3,7 @@ import { ChevronRight, ChevronLeft, Download } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useWeek } from '../hooks/useWeek'
-import { WEEK_DAYS } from '../constants/days'
+import { WEEK_DAYS, formatShortDate } from '../constants/days'
 
 export default function Weekly() {
   const week = useWeek()
@@ -207,7 +207,7 @@ export default function Weekly() {
                   {WEEK_DAYS.map(d => (
                     <th key={d.key} style={{ textAlign: 'center', minWidth: 64 }}>
                       <div>{d.short}</div>
-                      <div style={{ fontSize: 10, color: 'var(--t3)' }}>{week.dayDate(d.key).slice(5).replace('-', '/')}</div>
+                      <div style={{ fontSize: 10, color: 'var(--t3)' }}>{formatShortDate(week.dayDate(d.key))}</div>
                     </th>
                   ))}
                   <th style={{ textAlign: 'center' }}>סה״כ</th>

@@ -276,7 +276,13 @@ body {
 
 /* ─── WEEK NAV ─── */
 .week-nav { display: flex; align-items: center; gap: 12px; background: var(--surf); border: 1px solid var(--bdr); border-radius: var(--r); padding: 10px 16px; margin-bottom: 20px; }
-.week-label { font-size: 15px; font-weight: 700; flex: 1; text-align: center; }
+/* dir: ltr — this is a "D.M – D.M.YY" range. Left as plain text inside the
+   page's RTL direction, the browser's bidi algorithm visually reorders the
+   two date segments around the en dash (renders "END – START" instead of
+   "START – END") even though the underlying digits/order are correct.
+   Forcing ltr here (the numbers were always meant to read left-to-right
+   anyway) makes it render in the intended order. */
+.week-label { font-size: 15px; font-weight: 700; flex: 1; text-align: center; direction: ltr; }
 
 /* ─── DAY TABS ─── */
 .day-tabs { display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; }

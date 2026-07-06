@@ -1,4 +1,4 @@
-import { WEEK_DAYS } from '../../constants/days'
+import { WEEK_DAYS, formatShortDate } from '../../constants/days'
 
 // Read-only weekly overview — a stack of day cards, not an editable grid.
 // A 7-column table never reads well on a phone (small touch targets,
@@ -21,7 +21,7 @@ export default function WeekSummaryView({ dayDate, grouped, orderLines, canEdit,
             <div className="week-day-card-hdr">
               <div>
                 <div className="week-day-card-label">{d.label}{locked && ' 🔒'}</div>
-                <div className="week-day-card-date">{date.slice(5).replace('-', '/')}</div>
+                <div className="week-day-card-date">{formatShortDate(date)}</div>
               </div>
               {total > 0 && <div className="week-day-card-total">{total}</div>}
             </div>

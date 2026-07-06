@@ -5,7 +5,7 @@ import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useToast } from '../context/ToastContext'
-import { WEEK_DAYS } from '../constants/days'
+import { WEEK_DAYS, formatShortDate } from '../constants/days'
 import { ChevronRight, ChevronLeft, Lock } from 'lucide-react'
 
 export default function Forecasting() {
@@ -275,7 +275,7 @@ export default function Forecasting() {
                           <th key={d.key}>
                             <div>{d.short}</div>
                             <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>
-                              {week.dayDate(d.key).slice(5).replace('-', '/')}
+                              {formatShortDate(week.dayDate(d.key))}
                             </div>
                           </th>
                         ))}

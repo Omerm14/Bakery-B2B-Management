@@ -48,3 +48,11 @@ export function formatWeekLabel(weekStartDate) {
 export function isoToday() {
   return toLocalISODate(new Date())
 }
+
+// Formats a YYYY-MM-DD string as DD/MM — deliberately day-first: Israeli/
+// Hebrew convention reads dates as DD/MM, not the US-style MM/DD. Slicing
+// the string directly (no Date object) avoids any timezone risk entirely.
+export function formatShortDate(isoDate) {
+  const [, m, d] = isoDate.split('-')
+  return `${d}/${m}`
+}
