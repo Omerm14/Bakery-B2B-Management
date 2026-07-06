@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { ChevronRight, ChevronLeft, LogOut } from 'lucide-react'
+import { ChevronRight, ChevronLeft, LogOut, Copy } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useCustomerWeek } from '../../hooks/useCustomerWeek'
 import { useCustomerMenuItems } from '../../hooks/useCustomerMenuItems'
@@ -7,7 +7,6 @@ import { useToast } from '../../context/ToastContext'
 import { WEEK_DAYS } from '../../constants/days'
 import DayOrderView from './DayOrderView'
 import WeekSummaryView from './WeekSummaryView'
-import CutoffBlockedNotice from './CutoffBlockedNotice'
 
 const AUTOSAVE_DEBOUNCE_MS = 450
 const SAVED_INDICATOR_MS = 1500
@@ -21,16 +20,36 @@ export default function CustomerOrders() {
   const [orderLines, setOrderLines] = useState({}) // `${menuItemId}_${date}` -> line
   const [lockAtByDate, setLockAtByDate] = useState({}) // date -> timestamptz string
   const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const [saveStates, setSaveStates] = useState({}) // key -> 'saving' | 'saved'
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('floory_portal_view') || 'day')
   const [dayOffset, setDayOffset] = useState(() => new Date().getDay())
   const [nowTick, setNowTick] = useState(() => Date.now())
+  const [copying, setCopying] = useState(false)
   const pendingTimers = useRef({})
+  const pendingArgs = useRef({}) // key -> { menuItemId, date, qty } for any not-yet-committed debounced edit
+  // upsertOrderLine (defined below) closes over weekId/customer, both of
+  // which start out null on the very first render — an effect with a `[]`
+  // dependency array only ever sees that first render's closure. Routing
+  // the unmount flush through a ref that's reassigned every render (below)
+  // ensures it always calls the version with the latest weekId/customer.
+  const upsertOrderLineRef = useRef(null)
 
   useEffect(() => { localStorage.setItem('floory_portal_view', viewMode) }, [viewMode])
 
+  // Flush (not just cancel) any edit still waiting out its debounce when
+  // this unmounts — e.g. a customer types a quantity then immediately
+  // taps יציאה. Without this, that last edit would silently vanish: the
+  // pending timer never fires because the component (and its closures)
+  // are gone. Calls the raw write directly, skipping the React state
+  // updates commitQty would otherwise do, since there's no component left
+  // to show them.
   useEffect(() => () => {
-    Object.values(pendingTimers.current).forEach(clearTimeout)
+    Object.entries(pendingTimers.current).forEach(([key, timerId]) => {
+      clearTimeout(timerId)
+      const args = pendingArgs.current[key]
+      if (args) upsertOrderLineRef.current?.(args.menuItemId, args.date, args.qty)
+    })
   }, [])
 
   // Ticks every minute so a day that's currently editable locks itself in
@@ -56,8 +75,14 @@ export default function CustomerOrders() {
   const loadWeek = useCallback(async () => {
     if (!customer) return
     setLoading(true)
+    setLoadError(false)
     try {
-      const wid = await week.getWeekId()
+      const { id: wid, error: weekIdError } = await week.getWeekId()
+      if (weekIdError) {
+        setLoadError(true)
+        toast.error('טעינת השבוע נכשלה — נסו שוב')
+        return
+      }
       setWeekId(wid)
 
       const lockAts = {}
@@ -69,7 +94,7 @@ export default function CustomerOrders() {
         lockAts[date] = data
       }))
       setLockAtByDate(lockAts)
-      if (lockAtFailed) toast.error('בדיקת מועדי העדכון נכשלה — רעננו ונסו שוב')
+      if (lockAtFailed) { setLoadError(true); toast.error('בדיקת מועדי העדכון נכשלה — נסו שוב') }
 
       if (!wid) { setOrderLines({}); return }
 
@@ -78,7 +103,7 @@ export default function CustomerOrders() {
         .select('id, menu_item_id, delivery_date, quantity, change_reason')
         .eq('week_id', wid)
         .eq('customer_id', customer.id)
-      if (linesError) toast.error('טעינת ההזמנה נכשלה — רעננו ונסו שוב')
+      if (linesError) { setLoadError(true); toast.error('טעינת ההזמנה נכשלה — נסו שוב') }
 
       const map = {}
       for (const l of lines || []) map[`${l.menu_item_id}_${l.delivery_date}`] = l
@@ -100,27 +125,34 @@ export default function CustomerOrders() {
     return map
   }, [lockAtByDate, nowTick, week.weekStartISO])
 
+  // Pure write, no React state touched — safe to call from the unmount
+  // cleanup above, where there's no component left to update.
+  function upsertOrderLine(menuItemId, date, qty) {
+    if (!weekId || !customer) return Promise.resolve({ data: null, error: null })
+    return supabase
+      .from('order_lines')
+      .upsert({
+        week_id: weekId,
+        customer_id: customer.id,
+        menu_item_id: menuItemId,
+        delivery_date: date,
+        quantity: qty,
+        source: 'manual',
+        status: 'ok',
+        change_reason: 'customer_request',
+        changed_by: customer.phone || customer.name,
+        changed_via: 'customer_portal',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'week_id,customer_id,menu_item_id,delivery_date' })
+      .select('id')
+      .single()
+  }
+  upsertOrderLineRef.current = upsertOrderLine
+
   async function commitQty(menuItemId, date, qty, key) {
-    if (!weekId || !customer) return
     setSaveStates(prev => ({ ...prev, [key]: 'saving' }))
     try {
-      const { data, error } = await supabase
-        .from('order_lines')
-        .upsert({
-          week_id: weekId,
-          customer_id: customer.id,
-          menu_item_id: menuItemId,
-          delivery_date: date,
-          quantity: qty,
-          source: 'manual',
-          status: 'ok',
-          change_reason: 'customer_request',
-          changed_by: customer.phone || customer.name,
-          changed_via: 'customer_portal',
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'week_id,customer_id,menu_item_id,delivery_date' })
-        .select('id')
-        .single()
+      const { data, error } = await upsertOrderLine(menuItemId, date, qty)
       if (error) throw error
       setOrderLines(prev => ({ ...prev, [key]: { ...prev[key], id: data?.id } }))
       setSaveStates(prev => ({ ...prev, [key]: 'saved' }))
@@ -146,8 +178,80 @@ export default function CustomerOrders() {
 
     setOrderLines(prev => ({ ...prev, [key]: { ...prev[key], quantity: qty, change_reason: 'customer_request' } }))
 
+    pendingArgs.current[key] = { menuItemId, date, qty }
     if (pendingTimers.current[key]) clearTimeout(pendingTimers.current[key])
-    pendingTimers.current[key] = setTimeout(() => commitQty(menuItemId, date, qty, key), AUTOSAVE_DEBOUNCE_MS)
+    pendingTimers.current[key] = setTimeout(() => {
+      delete pendingTimers.current[key]
+      delete pendingArgs.current[key]
+      commitQty(menuItemId, date, qty, key)
+    }, AUTOSAVE_DEBOUNCE_MS)
+  }
+
+  // Lets a customer pull last week's quantities into the currently viewed
+  // week on demand — on top of the automatic Wednesday rollover, in case
+  // they want to reset back to last week's order, or are looking at a
+  // week further out that auto-copy hasn't reached yet. Skips any day
+  // that's already past its own cutoff rather than failing the whole
+  // action (the RLS policy would reject those writes anyway).
+  async function copyFromPreviousWeek() {
+    if (!customer || !weekId || copying) return
+    if (!window.confirm('הפעולה תחליף את הכמויות בימים שניתן עוד לערוך בשבוע זה בכמויות מהשבוע הקודם. להמשיך?')) return
+
+    setCopying(true)
+    try {
+      const prevStart = new Date(week.weekStartISO)
+      prevStart.setDate(prevStart.getDate() - 7)
+      const { data: prevWeekRow } = await supabase
+        .from('weeks').select('id').eq('start_date', prevStart.toISOString().slice(0, 10)).maybeSingle()
+      if (!prevWeekRow) { toast.info('אין הזמנה בשבוע הקודם להעתקה'); return }
+
+      const { data: prevLines, error: prevErr } = await supabase
+        .from('order_lines')
+        .select('menu_item_id, delivery_date, quantity')
+        .eq('week_id', prevWeekRow.id)
+        .eq('customer_id', customer.id)
+        .gt('quantity', 0)
+      if (prevErr) { toast.error('טעינת השבוע הקודם נכשלה'); return }
+      if (!prevLines?.length) { toast.info('אין הזמנה בשבוע הקודם להעתקה'); return }
+
+      let skippedLocked = 0
+      const upserts = []
+      for (const l of prevLines) {
+        const d = new Date(l.delivery_date)
+        d.setDate(d.getDate() + 7)
+        const newDate = d.toISOString().slice(0, 10)
+        if (canEdit[newDate] === false) { skippedLocked++; continue }
+        upserts.push({
+          week_id: weekId,
+          customer_id: customer.id,
+          menu_item_id: l.menu_item_id,
+          delivery_date: newDate,
+          quantity: l.quantity,
+          source: 'manual',
+          status: 'ok',
+          change_reason: 'customer_request',
+          change_note: 'הועתק מהשבוע הקודם על ידי הלקוח',
+          changed_by: customer.phone || customer.name,
+          changed_via: 'copy_prev_week',
+          updated_at: new Date().toISOString(),
+        })
+      }
+
+      if (!upserts.length) { toast.info('כל הימים הרלוונטיים נעולים לעדכון'); return }
+
+      const { error } = await supabase
+        .from('order_lines')
+        .upsert(upserts, { onConflict: 'week_id,customer_id,menu_item_id,delivery_date' })
+      if (error) throw error
+
+      await loadWeek()
+      toast.success(skippedLocked > 0 ? `הועתק — ${skippedLocked} ימים נעולים לא עודכנו` : 'הועתק בהצלחה מהשבוע הקודם')
+    } catch (err) {
+      console.error('[CustomerOrders.copyFromPreviousWeek]', err)
+      toast.error('ההעתקה נכשלה — נסו שוב')
+    } finally {
+      setCopying(false)
+    }
   }
 
   function dayTotal(date) {
@@ -189,7 +293,6 @@ export default function CustomerOrders() {
   }, {})
 
   const selectedDate = week.dayDate(dayOffset)
-  const allDaysLocked = WEEK_DAYS.every(d => canEdit[week.dayDate(d.key)] === false)
 
   return (
     <div className="page portal-page" style={{ maxWidth: 900, margin: '0 auto' }}>
@@ -216,9 +319,23 @@ export default function CustomerOrders() {
         <button className="btn btn-ghost btn-sm" onClick={goToToday} style={{ fontSize: 12 }}>השבוע</button>
       </div>
 
+      {weekId && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <button className="btn btn-ghost btn-sm" onClick={copyFromPreviousWeek} disabled={copying}>
+            <Copy size={14} /> {copying ? 'מעתיק...' : 'העתק מהשבוע שעבר'}
+          </button>
+        </div>
+      )}
+
       {loading || itemsLoading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
           {[...Array(6)].map((_, i) => <div key={i} className="shimmer" style={{ height: 48 }} />)}
+        </div>
+      ) : loadError ? (
+        <div className="empty">
+          <div className="empty-icon">⚠️</div>
+          <div className="empty-text">משהו השתבש בטעינת ההזמנה</div>
+          <button className="btn btn-secondary btn-sm" style={{ marginTop: 12 }} onClick={loadWeek}>נסה שוב</button>
         </div>
       ) : !weekId ? (
         <div className="empty"><div className="empty-icon">📋</div><div className="empty-text">ההזמנות לשבוע זה עדיין לא נפתחו</div></div>
@@ -238,16 +355,13 @@ export default function CustomerOrders() {
           dayTotal={dayTotal(selectedDate)}
         />
       ) : (
-        <>
-          <WeekSummaryView
-            dayDate={week.dayDate}
-            grouped={grouped}
-            orderLines={orderLines}
-            canEdit={canEdit}
-            onQtyChange={handleQtyChange}
-          />
-          {allDaysLocked && <div style={{ marginTop: 12 }}><CutoffBlockedNotice /></div>}
-        </>
+        <WeekSummaryView
+          dayDate={week.dayDate}
+          grouped={grouped}
+          orderLines={orderLines}
+          canEdit={canEdit}
+          onSelectDay={offset => { setDayOffset(offset); setViewMode('day') }}
+        />
       )}
     </div>
   )

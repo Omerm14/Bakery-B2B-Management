@@ -181,7 +181,7 @@ export default function CustomerPortalDemo() {
           grouped={grouped}
           orderLines={orderLines}
           canEdit={canEdit}
-          onQtyChange={handleQtyChange}
+          onSelectDay={offset => { setDayOffset(offset); setViewMode('day') }}
         />
       )}
     </div>
