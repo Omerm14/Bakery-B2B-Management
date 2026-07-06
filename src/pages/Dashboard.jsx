@@ -48,9 +48,35 @@ function formatWeekShort(iso) {
 // Aggregation happens server-side (see migration 029_dashboard_week_data_function.sql)
 // via the dashboard_week_data RPC — it returns one row per (week, item) with
 // that week's active-customer count attached, instead of raw per-customer,
-// per-day order_lines rows. That result set is orders of magnitude smaller,
-// so it fits in a single response regardless of how much order history
-// accumulates, without needing client-side pagination at all.
+// per-day order_lines rows. That's orders of magnitude smaller per week, but
+// spanning up to 104 weeks the TOTAL row count can still cross Supabase's
+// 1000-row response cap — so this still needs pagination, just far fewer
+// pages than the raw-row approach needed (aggregated rows, not raw lines).
+const PAGE_SIZE = 1000
+
+async function fetchWeekData(weekIds) {
+  const baseQuery = () => supabase.rpc('dashboard_week_data', { p_week_ids: weekIds }, { count: 'exact' })
+
+  const first = await baseQuery().range(0, PAGE_SIZE - 1)
+  if (first.error) { console.error('[Dashboard] dashboard_week_data', first.error); return [] }
+  const all = [...(first.data || [])]
+
+  const total = first.count ?? all.length
+  const pageCount = Math.ceil(total / PAGE_SIZE)
+  if (pageCount > 1) {
+    const rest = await Promise.all(
+      Array.from({ length: pageCount - 1 }, (_, i) => {
+        const from = (i + 1) * PAGE_SIZE
+        return baseQuery().range(from, from + PAGE_SIZE - 1)
+      })
+    )
+    for (const page of rest) {
+      if (page.error) { console.error('[Dashboard] dashboard_week_data page', page.error); continue }
+      all.push(...(page.data || []))
+    }
+  }
+  return all
+}
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(true)
@@ -83,10 +109,7 @@ export default function Dashboard() {
         .limit(104)
 
       const candidateIds = (candidateWeeksDesc || []).map(w => w.id)
-      const { data: weekRows, error: weekDataError } = candidateIds.length
-        ? await supabase.rpc('dashboard_week_data', { p_week_ids: candidateIds })
-        : { data: [] }
-      if (weekDataError) console.error('[Dashboard] dashboard_week_data', weekDataError)
+      const weekRows = candidateIds.length ? await fetchWeekData(candidateIds) : []
 
       const itemsByWeek = new Map() // week_id → [{name, qty}]
       const activeCustomersByWeek = new Map() // week_id → count
