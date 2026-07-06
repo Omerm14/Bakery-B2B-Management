@@ -5,9 +5,19 @@ import { supabase } from '../lib/supabase'
 import { useWeek } from '../hooks/useWeek'
 import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
+import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useToast } from '../context/ToastContext'
 import { WEEK_DAYS } from '../constants/days'
 import SearchInput from '../components/SearchInput'
+
+const REASON_LABELS = {
+  customer_request: '📞 לקוח / וואטסאפ',
+  internal_decision: '🏭 החלטה פנימית',
+  correction: '✏️ תיקון טעות',
+  other: 'אחר',
+  import: 'ייבוא',
+  forecast: 'תחזית',
+}
 
 export default function Orders() {
   const toast = useToast()
@@ -16,6 +26,7 @@ export default function Orders() {
   const week = useWeek()
   const { customers, setCustomers } = useCustomers()
   const { menuItems } = useMenuItems()
+  const userEmail = useCurrentUser()
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [customerFilter, setCustomerFilter] = useState('')
   const [orderLines, setOrderLines] = useState({}) // key: `${menuItemId}_${date}` => line
@@ -28,6 +39,9 @@ export default function Orders() {
   const [bulkFillItem, setBulkFillItem] = useState(null)
   const [bulkFillQty, setBulkFillQty] = useState('')
   const [bulkFilling, setBulkFilling] = useState(false)
+  const [changeReason, setChangeReason] = useState(() => localStorage.getItem('floory_change_reason') || 'customer_request')
+  const [changeNote, setChangeNote] = useState('')
+  const [showNoteInput, setShowNoteInput] = useState(false)
   const gridRef = useRef(null)
 
   const filteredCustomers = customers.filter(c => c.name.includes(customerFilter.trim()))
@@ -47,6 +61,8 @@ export default function Orders() {
   useEffect(() => {
     if (selectedCustomer) loadOrders()
     else setOrderLines({})
+    setChangeNote('')
+    setShowNoteInput(false)
   }, [selectedCustomer, week.weekStartISO])
 
   async function loadOrders() {
@@ -57,7 +73,7 @@ export default function Orders() {
 
       const { data: lines } = await supabase
         .from('order_lines')
-        .select('id, menu_item_id, delivery_date, quantity, source, status')
+        .select('id, menu_item_id, delivery_date, quantity, source, status, change_reason, change_note, changed_by')
         .eq('week_id', wid)
         .eq('customer_id', selectedCustomer.id)
 
@@ -71,51 +87,42 @@ export default function Orders() {
     }
   }
 
-  async function handleQtyChange(menuItemId, date, value) {
+  async function handleQtyChange(menuItemId, date, value, via = 'orders_grid') {
     const qty = parseFloat(value) || 0
     const key = `${menuItemId}_${date}`
 
     // Optimistic update
     setOrderLines(prev => ({
       ...prev,
-      [key]: { ...prev[key], quantity: qty, source: 'manual', status: 'ok' }
+      [key]: { ...prev[key], quantity: qty, source: 'manual', status: 'ok', change_reason: changeReason, change_note: changeNote || null, changed_by: userEmail }
     }))
 
     const prevLine = orderLines[key]
     setSaving(true)
     try {
-      if (qty === 0) {
-        // Delete the line if quantity is zero
-        const existing = prevLine
-        if (existing?.id) {
-          const { error } = await supabase.from('order_lines').delete().eq('id', existing.id)
-          if (error) throw error
-          setOrderLines(prev => {
-            const next = { ...prev }
-            delete next[key]
-            return next
-          })
-        }
-      } else {
-        const wid = weekId || await week.getOrCreateWeek()
-        const { data, error } = await supabase
-          .from('order_lines')
-          .upsert({
-            week_id: wid,
-            customer_id: selectedCustomer.id,
-            menu_item_id: menuItemId,
-            delivery_date: date,
-            quantity: qty,
-            source: 'manual',
-            status: 'ok',
-          }, { onConflict: 'week_id,customer_id,menu_item_id,delivery_date' })
-          .select('id')
-          .single()
+      const wid = weekId || await week.getOrCreateWeek()
+      const { data, error } = await supabase
+        .from('order_lines')
+        .upsert({
+          week_id: wid,
+          customer_id: selectedCustomer.id,
+          menu_item_id: menuItemId,
+          delivery_date: date,
+          quantity: qty,
+          source: 'manual',
+          status: 'ok',
+          change_reason: changeReason,
+          change_note: changeNote || null,
+          changed_by: userEmail,
+          changed_via: via,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'week_id,customer_id,menu_item_id,delivery_date' })
+        .select('id')
+        .single()
 
-        if (error) throw error
-        if (data) {
-          setOrderLines(prev => ({ ...prev, [key]: { ...prev[key], id: data.id } }))
-        }
+      if (error) throw error
+      if (data) {
+        setOrderLines(prev => ({ ...prev, [key]: { ...prev[key], id: data.id } }))
       }
     } catch (err) {
       console.error('[handleQtyChange]', err)
@@ -181,6 +188,11 @@ export default function Orders() {
           quantity: l.quantity,
           source: 'manual',
           status: 'ok',
+          change_reason: 'internal_decision',
+          change_note: 'הועתק אוטומטית משבוע קודם',
+          changed_by: userEmail,
+          changed_via: 'copy_prev_week',
+          updated_at: new Date().toISOString(),
         }
       })
 
@@ -210,7 +222,7 @@ export default function Orders() {
       // duplicate-week-creation race if weekId weren't resolved yet.
       for (const d of WEEK_DAYS) {
         const date = week.dayDate(d.key)
-        await handleQtyChange(bulkFillItem.id, date, bulkFillQty)
+        await handleQtyChange(bulkFillItem.id, date, bulkFillQty, 'bulk_fill')
       }
       toast.success(`מולא: ${qty} על כל השבוע — ${bulkFillItem.name_he}`)
       setBulkFillItem(null)
@@ -304,9 +316,21 @@ export default function Orders() {
             </div>
           ) : (
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--bdr)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--bdr)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
                 <span style={{ fontWeight: 700, fontSize: 16 }}>{selectedCustomer.name}</span>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <select
+                    value={changeReason}
+                    onChange={e => { setChangeReason(e.target.value); localStorage.setItem('floory_change_reason', e.target.value) }}
+                    title="סיבת השינוי — חלה על כל עריכה בגריד עד שתשונה"
+                    style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--bdr)', background: 'var(--surf2)', color: 'var(--t1)' }}
+                  >
+                    <option value="customer_request">{REASON_LABELS.customer_request}</option>
+                    <option value="internal_decision">{REASON_LABELS.internal_decision}</option>
+                    <option value="correction">{REASON_LABELS.correction}</option>
+                    <option value="other">{REASON_LABELS.other}</option>
+                  </select>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setShowNoteInput(v => !v)} title="הערה לשינוי הנוכחי">📝</button>
                   <button
                     className="btn btn-ghost btn-sm"
                     onClick={copyPrevWeek}
@@ -318,6 +342,15 @@ export default function Orders() {
                   <span className="badge badge-noga">נוגה</span>
                   <span style={{ fontSize: 12, color: 'var(--t3)' }}>= הוזן אוטומטית</span>
                 </div>
+                {showNoteInput && (
+                  <input
+                    className="input"
+                    style={{ width: '100%', fontSize: 13 }}
+                    placeholder="הערה אופציונלית לשינוי הנוכחי..."
+                    value={changeNote}
+                    onChange={e => setChangeNote(e.target.value)}
+                  />
+                )}
               </div>
               <div className="order-grid-wrap" ref={gridRef}>
                 <table className="order-grid">
@@ -368,7 +401,13 @@ export default function Orders() {
                                     placeholder="—"
                                     onChange={e => handleQtyChange(item.id, date, e.target.value)}
                                     onKeyDown={e => handleKeyDown(e, item.id, d.key, date)}
-                                    title={line?.source === 'noga' ? 'הוזן ע"י נוגה' : line?.status === 'needs_review' ? 'דורש בדיקה' : ''}
+                                    title={[
+                                      line?.source === 'noga' ? 'הוזן ע"י נוגה' : '',
+                                      line?.status === 'needs_review' ? 'דורש בדיקה' : '',
+                                      line?.change_reason ? `סיבה: ${REASON_LABELS[line.change_reason] || line.change_reason}` : '',
+                                      line?.change_note ? `הערה: ${line.change_note}` : '',
+                                      line?.changed_by ? `ע"י ${line.changed_by}` : '',
+                                    ].filter(Boolean).join(' · ')}
                                   />
                                 </td>
                               )

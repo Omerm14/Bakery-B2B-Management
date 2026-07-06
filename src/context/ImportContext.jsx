@@ -201,6 +201,8 @@ export function ImportProvider({ children }) {
     }
 
     log(`📂 קובץ: ${fileName}`)
+    const { data: sessionData } = await supabase.auth.getSession()
+    const changedBy = sessionData.session?.user?.email || null
     const parsed = parseExcelWorkbook(wb)
     if (!parsed) { log('❌ לא ניתן לזהות תאריכי שבוע בקובץ'); log('──────────'); return }
     const { wsIso, weekStart, customers, items, orderLines } = parsed
@@ -242,8 +244,13 @@ export function ImportProvider({ children }) {
         menu_item_id: itemMap[iname],
         delivery_date: ddate,
         quantity: qty,
-        source: 'manual',
+        source: 'import',
         status: 'ok',
+        change_reason: 'import',
+        change_note: fileName,
+        changed_by: changedBy,
+        changed_via: 'import',
+        updated_at: new Date().toISOString(),
       }))
       .filter(r => r.customer_id && r.menu_item_id)
 

@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useWeek } from '../hooks/useWeek'
 import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
+import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useToast } from '../context/ToastContext'
 import { WEEK_DAYS } from '../constants/days'
 import { ChevronRight, ChevronLeft, Lock } from 'lucide-react'
@@ -12,6 +13,7 @@ export default function Forecasting() {
   const week = useWeek()
   const { customers } = useCustomers()
   const { menuItems } = useMenuItems()
+  const userEmail = useCurrentUser()
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [forecast, setForecast] = useState({}) // key: `${itemId}_${date}` => qty
   const [overrides, setOverrides] = useState({}) // same key => qty (user edits)
@@ -143,6 +145,11 @@ export default function Forecasting() {
               quantity: qty,
               source: 'forecast',
               status: 'ok',
+              change_reason: 'forecast',
+              change_note: 'נעל כתוכנית ייצור מתחזית',
+              changed_by: userEmail,
+              changed_via: 'forecast_lock',
+              updated_at: new Date().toISOString(),
             })
           }
         }
