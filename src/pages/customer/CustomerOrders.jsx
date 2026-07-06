@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { ChevronRight, ChevronLeft, LogOut } from 'lucide-react'
+import { ChevronRight, ChevronLeft, LogOut, Copy } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useCustomerWeek } from '../../hooks/useCustomerWeek'
 import { useCustomerMenuItems } from '../../hooks/useCustomerMenuItems'
@@ -7,7 +7,6 @@ import { useToast } from '../../context/ToastContext'
 import { WEEK_DAYS } from '../../constants/days'
 import DayOrderView from './DayOrderView'
 import WeekSummaryView from './WeekSummaryView'
-import CutoffBlockedNotice from './CutoffBlockedNotice'
 
 const AUTOSAVE_DEBOUNCE_MS = 450
 const SAVED_INDICATOR_MS = 1500
@@ -25,6 +24,7 @@ export default function CustomerOrders() {
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('floory_portal_view') || 'day')
   const [dayOffset, setDayOffset] = useState(() => new Date().getDay())
   const [nowTick, setNowTick] = useState(() => Date.now())
+  const [copying, setCopying] = useState(false)
   const pendingTimers = useRef({})
 
   useEffect(() => { localStorage.setItem('floory_portal_view', viewMode) }, [viewMode])
@@ -150,6 +150,73 @@ export default function CustomerOrders() {
     pendingTimers.current[key] = setTimeout(() => commitQty(menuItemId, date, qty, key), AUTOSAVE_DEBOUNCE_MS)
   }
 
+  // Lets a customer pull last week's quantities into the currently viewed
+  // week on demand — on top of the automatic Wednesday rollover, in case
+  // they want to reset back to last week's order, or are looking at a
+  // week further out that auto-copy hasn't reached yet. Skips any day
+  // that's already past its own cutoff rather than failing the whole
+  // action (the RLS policy would reject those writes anyway).
+  async function copyFromPreviousWeek() {
+    if (!customer || !weekId || copying) return
+    if (!window.confirm('הפעולה תחליף את הכמויות בימים שניתן עוד לערוך בשבוע זה בכמויות מהשבוע הקודם. להמשיך?')) return
+
+    setCopying(true)
+    try {
+      const prevStart = new Date(week.weekStartISO)
+      prevStart.setDate(prevStart.getDate() - 7)
+      const { data: prevWeekRow } = await supabase
+        .from('weeks').select('id').eq('start_date', prevStart.toISOString().slice(0, 10)).maybeSingle()
+      if (!prevWeekRow) { toast.info('אין הזמנה בשבוע הקודם להעתקה'); return }
+
+      const { data: prevLines, error: prevErr } = await supabase
+        .from('order_lines')
+        .select('menu_item_id, delivery_date, quantity')
+        .eq('week_id', prevWeekRow.id)
+        .eq('customer_id', customer.id)
+        .gt('quantity', 0)
+      if (prevErr) { toast.error('טעינת השבוע הקודם נכשלה'); return }
+      if (!prevLines?.length) { toast.info('אין הזמנה בשבוע הקודם להעתקה'); return }
+
+      let skippedLocked = 0
+      const upserts = []
+      for (const l of prevLines) {
+        const d = new Date(l.delivery_date)
+        d.setDate(d.getDate() + 7)
+        const newDate = d.toISOString().slice(0, 10)
+        if (canEdit[newDate] === false) { skippedLocked++; continue }
+        upserts.push({
+          week_id: weekId,
+          customer_id: customer.id,
+          menu_item_id: l.menu_item_id,
+          delivery_date: newDate,
+          quantity: l.quantity,
+          source: 'manual',
+          status: 'ok',
+          change_reason: 'customer_request',
+          change_note: 'הועתק מהשבוע הקודם על ידי הלקוח',
+          changed_by: customer.phone || customer.name,
+          changed_via: 'copy_prev_week',
+          updated_at: new Date().toISOString(),
+        })
+      }
+
+      if (!upserts.length) { toast.info('כל הימים הרלוונטיים נעולים לעדכון'); return }
+
+      const { error } = await supabase
+        .from('order_lines')
+        .upsert(upserts, { onConflict: 'week_id,customer_id,menu_item_id,delivery_date' })
+      if (error) throw error
+
+      await loadWeek()
+      toast.success(skippedLocked > 0 ? `הועתק — ${skippedLocked} ימים נעולים לא עודכנו` : 'הועתק בהצלחה מהשבוע הקודם')
+    } catch (err) {
+      console.error('[CustomerOrders.copyFromPreviousWeek]', err)
+      toast.error('ההעתקה נכשלה — נסו שוב')
+    } finally {
+      setCopying(false)
+    }
+  }
+
   function dayTotal(date) {
     let total = 0
     for (const key in orderLines) {
@@ -189,7 +256,6 @@ export default function CustomerOrders() {
   }, {})
 
   const selectedDate = week.dayDate(dayOffset)
-  const allDaysLocked = WEEK_DAYS.every(d => canEdit[week.dayDate(d.key)] === false)
 
   return (
     <div className="page portal-page" style={{ maxWidth: 900, margin: '0 auto' }}>
@@ -216,6 +282,14 @@ export default function CustomerOrders() {
         <button className="btn btn-ghost btn-sm" onClick={goToToday} style={{ fontSize: 12 }}>השבוע</button>
       </div>
 
+      {weekId && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+          <button className="btn btn-ghost btn-sm" onClick={copyFromPreviousWeek} disabled={copying}>
+            <Copy size={14} /> {copying ? 'מעתיק...' : 'העתק מהשבוע שעבר'}
+          </button>
+        </div>
+      )}
+
       {loading || itemsLoading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
           {[...Array(6)].map((_, i) => <div key={i} className="shimmer" style={{ height: 48 }} />)}
@@ -238,16 +312,13 @@ export default function CustomerOrders() {
           dayTotal={dayTotal(selectedDate)}
         />
       ) : (
-        <>
-          <WeekSummaryView
-            dayDate={week.dayDate}
-            grouped={grouped}
-            orderLines={orderLines}
-            canEdit={canEdit}
-            onQtyChange={handleQtyChange}
-          />
-          {allDaysLocked && <div style={{ marginTop: 12 }}><CutoffBlockedNotice /></div>}
-        </>
+        <WeekSummaryView
+          dayDate={week.dayDate}
+          grouped={grouped}
+          orderLines={orderLines}
+          canEdit={canEdit}
+          onSelectDay={offset => { setDayOffset(offset); setViewMode('day') }}
+        />
       )}
     </div>
   )
