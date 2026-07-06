@@ -27,15 +27,16 @@ export default function Weekly() {
           ? supabase.from('order_lines').select('menu_item_id, delivery_date, quantity, menu_items(name_he, unit, category, suppliers(name))').eq('week_id', weekRow.id).gt('quantity', 0)
           : Promise.resolve({ data: [] }),
         prevWeekRow
-          ? supabase.from('order_lines').select('menu_item_id, quantity').eq('week_id', prevWeekRow.id).gt('quantity', 0)
+          ? supabase.from('order_lines').select('menu_item_id, quantity, menu_items(name_he)').eq('week_id', prevWeekRow.id).gt('quantity', 0)
           : Promise.resolve({ data: [] }),
       ])
 
       setRows(aggregate(current.data || []))
 
-      // Prev week totals by item
+      // Prev week totals by item — same corrupted-item exclusion as aggregate()
       const prevMap = {}
       for (const l of previous.data || []) {
+        if (!l.menu_items || l.menu_items.name_he === 'תאריך') continue
         prevMap[l.menu_item_id] = (prevMap[l.menu_item_id] || 0) + parseFloat(l.quantity)
       }
       setPrevRows(prevMap)

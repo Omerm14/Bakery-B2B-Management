@@ -81,9 +81,13 @@ export default function Dashboard() {
 
       // Fetch order lines for all 8 weeks
       const weekIds = Object.values(weekMap)
-      const { data: allLines } = weekIds.length
+      const { data: rawLines } = weekIds.length
         ? await supabase.from('order_lines').select('week_id, customer_id, menu_item_id, quantity, menu_items(name_he)').in('week_id', weekIds).gt('quantity', 0)
         : { data: [] }
+      // Exclude a corrupted historical menu item ("תאריך") whose bogus
+      // quantities (leftover date-serial values from an old import bug) would
+      // otherwise blow up every total that includes it.
+      const allLines = (rawLines || []).filter(l => l.menu_items && l.menu_items.name_he !== 'תאריך')
 
       // Build trend data: total quantity per week
       const trendMap = {}
