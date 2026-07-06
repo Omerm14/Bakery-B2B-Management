@@ -177,7 +177,6 @@ body {
 /* ─── BADGES ─── */
 .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
 .badge-ok     { background: var(--green-tint); color: var(--green); }
-.badge-noga   { background: var(--accent-tint); color: var(--accent); }
 .badge-review { background: var(--amber-tint); color: var(--amber); }
 .badge-manual { background: var(--blue-tint); color: var(--blue); }
 
@@ -239,7 +238,7 @@ body {
 .itbl tr:hover td.sticky-col { background: var(--surf2); }
 .qty-cell { width: 68px; text-align: center; padding: 6px 4px; background: var(--surf2); border: 1px solid var(--bdr); border-radius: 6px; color: var(--t1); font-size: 14px; font-weight: 600; outline: none; transition: border-color .15s; font-family: var(--font-mono); }
 .qty-cell:focus { border-color: var(--accent-bdr); box-shadow: 0 0 0 2px var(--accent-tint); }
-.qty-cell.source-noga { border-color: var(--accent-bdr); background: var(--accent-tint); }
+.qty-cell.qty-cell-locked { border-color: var(--accent-bdr); background: var(--accent-tint); }
 .qty-cell.needs-review { border-color: var(--amber-bdr); background: var(--amber-tint); animation: amberPulse 2s infinite; }
 .qty-cell::-webkit-inner-spin-button, .qty-cell::-webkit-outer-spin-button { -webkit-appearance: none; }
 

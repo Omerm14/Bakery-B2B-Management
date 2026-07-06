@@ -320,7 +320,7 @@ export default function Forecasting() {
                                       <td key={d.key} style={{ textAlign: 'center' }}>
                                         <input
                                           type="number"
-                                          className={'qty-cell' + (isLocked ? ' source-noga' : '')}
+                                          className={'qty-cell' + (isLocked ? ' qty-cell-locked' : '')}
                                           min="0"
                                           step="0.5"
                                           value={displayVal}
