@@ -8,6 +8,19 @@ export const WEEK_DAYS = [
   { key: 6, label: 'שבת',   short: 'ש׳' },
 ]
 
+// Formats a Date's LOCAL calendar day as YYYY-MM-DD — deliberately not
+// `.toISOString().slice(0, 10)`, which renders in UTC. For any timezone
+// ahead of UTC (Israel is always +2/+3), a Date pinned to local midnight
+// converts to the *previous* UTC calendar day, silently shifting every
+// week/day computed this way back by one. Every "what's today's/this
+// day's date" helper in the app must go through this, not toISOString().
+export function toLocalISODate(d) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 // Returns Sunday of the week containing `date`
 export function weekStart(date = new Date()) {
   const d = new Date(date)
@@ -20,7 +33,7 @@ export function weekStart(date = new Date()) {
 export function dayDate(weekStartDate, dayOffset) {
   const d = new Date(weekStartDate)
   d.setDate(d.getDate() + dayOffset)
-  return d.toISOString().slice(0, 10)
+  return toLocalISODate(d)
 }
 
 export function formatWeekLabel(weekStartDate) {
@@ -33,5 +46,5 @@ export function formatWeekLabel(weekStartDate) {
 }
 
 export function isoToday() {
-  return new Date().toISOString().slice(0, 10)
+  return toLocalISODate(new Date())
 }

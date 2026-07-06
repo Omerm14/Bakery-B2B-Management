@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { weekStart, dayDate, formatWeekLabel } from '../constants/days'
+import { weekStart, dayDate, formatWeekLabel, toLocalISODate } from '../constants/days'
 import { supabase } from '../lib/supabase'
 
 // Read-only sibling of useWeek — customers only have SELECT access to
@@ -35,7 +35,7 @@ export function useCustomerWeek() {
   // e.g. next week before Wednesday's auto-copy) or the query itself
   // failed (a real problem worth surfacing, not a quiet empty state).
   async function getWeekId() {
-    const isoStart = currentWeekStart.toISOString().slice(0, 10)
+    const isoStart = toLocalISODate(currentWeekStart)
     const { data, error } = await supabase.from('weeks').select('id').eq('start_date', isoStart).maybeSingle()
     return { id: data?.id ?? null, error }
   }
@@ -43,7 +43,7 @@ export function useCustomerWeek() {
   return {
     currentWeekStart,
     weekLabel: formatWeekLabel(currentWeekStart),
-    weekStartISO: currentWeekStart.toISOString().slice(0, 10),
+    weekStartISO: toLocalISODate(currentWeekStart),
     prevWeek,
     nextWeek,
     goToToday,
