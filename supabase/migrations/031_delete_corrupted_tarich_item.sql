@@ -1,0 +1,11 @@
+-- Delete the corrupted historical "תאריך" menu item entirely — a leftover
+-- from an old import bug where a date header got misparsed as an item name,
+-- with quantities that are actually Excel date-serial numbers rather than
+-- real orders. order_lines.menu_item_id is ON DELETE CASCADE, so this also
+-- removes every order_line row tied to it (equally bogus).
+--
+-- The defensive "exclude תאריך" filters left in Weekly.jsx, Production.jsx,
+-- and dashboard_week_data() are harmless no-ops once this row is gone —
+-- left in place as a defense-in-depth guard in case anything ever
+-- reintroduces a menu item with this exact name.
+DELETE FROM menu_items WHERE name_he = 'תאריך';
