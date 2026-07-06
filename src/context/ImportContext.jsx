@@ -235,7 +235,7 @@ export function ImportProvider({ children }) {
     const weekId = weekRows?.[0]?.id
     if (!weekId) { log('❌ לא ניתן לאחזר מזהה שבוע'); log('──────────'); return }
 
-    const lines = orderLines
+    const rawLines = orderLines
       .map(({ cname, iname, ddate, qty }) => ({
         week_id: weekId,
         customer_id: custMap[cname],
@@ -246,6 +246,18 @@ export function ImportProvider({ children }) {
         status: 'ok',
       }))
       .filter(r => r.customer_id && r.menu_item_id)
+
+    // Collapse rows sharing the same upsert key (e.g. duplicate item rows or
+    // duplicate date columns in the sheet) — last occurrence wins. A single
+    // upsert cannot affect the same row twice, so duplicates must be merged
+    // before batching.
+    const lineByKey = new Map()
+    for (const line of rawLines) {
+      lineByKey.set(`${line.customer_id}_${line.menu_item_id}_${line.delivery_date}`, line)
+    }
+    const lines = [...lineByKey.values()]
+    const inFileDupCount = rawLines.length - lines.length
+    if (inFileDupCount > 0) log(`⚠️ נמצאו ${inFileDupCount} שורות כפולות בקובץ (אותו לקוח/פריט/תאריך) — נלקחה הערך האחרון`)
 
     // Check how many already exist to report dup stats
     const existingKeys = new Set()
