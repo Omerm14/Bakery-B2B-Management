@@ -24,10 +24,10 @@ export default function Weekly() {
 
       const [current, previous] = await Promise.all([
         weekRow
-          ? supabase.from('order_lines').select('menu_item_id, delivery_date, quantity, menu_items(name_he, unit, category, suppliers(name))').eq('week_id', weekRow.id).gt('quantity', 0)
+          ? supabase.from('order_lines').select('menu_item_id, delivery_date, quantity, menu_items(name_he, unit, category, suppliers(name)), customers!inner(active)').eq('week_id', weekRow.id).eq('customers.active', true).gt('quantity', 0)
           : Promise.resolve({ data: [] }),
         prevWeekRow
-          ? supabase.from('order_lines').select('menu_item_id, quantity, menu_items(name_he)').eq('week_id', prevWeekRow.id).gt('quantity', 0)
+          ? supabase.from('order_lines').select('menu_item_id, quantity, menu_items(name_he), customers!inner(active)').eq('week_id', prevWeekRow.id).eq('customers.active', true).gt('quantity', 0)
           : Promise.resolve({ data: [] }),
       ])
 

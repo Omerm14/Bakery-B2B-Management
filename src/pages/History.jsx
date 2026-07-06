@@ -114,8 +114,9 @@ export default function History() {
     try {
       const { data: lines } = await supabase
         .from('order_lines')
-        .select('week_id, customer_id, quantity, weeks(start_date), customers(name)')
+        .select('week_id, customer_id, quantity, weeks(start_date), customers!inner(name, active)')
         .eq('menu_item_id', selectedItem.id)
+        .eq('customers.active', true)
         .gt('quantity', 0)
 
       if (!lines?.length) { setTableData(null); return }

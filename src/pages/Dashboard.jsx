@@ -65,7 +65,7 @@ export default function Dashboard() {
 
       const candidateIds = (candidateWeeksDesc || []).map(w => w.id)
       const { data: rawLines } = candidateIds.length
-        ? await supabase.from('order_lines').select('week_id, customer_id, menu_item_id, quantity, menu_items(name_he)').in('week_id', candidateIds).gt('quantity', 0)
+        ? await supabase.from('order_lines').select('week_id, customer_id, menu_item_id, quantity, menu_items(name_he), customers!inner(active)').in('week_id', candidateIds).eq('customers.active', true).gt('quantity', 0)
         : { data: [] }
 
       const linesByWeek = new Map()

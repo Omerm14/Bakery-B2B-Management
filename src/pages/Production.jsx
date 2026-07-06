@@ -47,9 +47,10 @@ export default function Production() {
       const [{ data }, { data: checks }] = await Promise.all([
         supabase
           .from('order_lines')
-          .select('quantity, menu_item_id, menu_items(id, name_he, unit, category, suppliers(name)), customers(name)')
+          .select('quantity, menu_item_id, menu_items(id, name_he, unit, category, suppliers(name)), customers!inner(name, active)')
           .eq('delivery_date', selectedDate)
           .eq('status', 'ok')
+          .eq('customers.active', true)
           .gt('quantity', 0),
         supabase
           .from('production_checks')
