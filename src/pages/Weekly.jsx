@@ -24,20 +24,19 @@ export default function Weekly() {
 
       const [current, previous] = await Promise.all([
         weekRow
-          ? supabase.from('order_lines').select('menu_item_id, delivery_date, quantity, menu_items(name_he, unit, category, suppliers(name)), customers!inner(active)').eq('week_id', weekRow.id).eq('customers.active', true).gt('quantity', 0)
+          ? supabase.rpc('week_item_day_totals', { p_week_id: weekRow.id })
           : Promise.resolve({ data: [] }),
         prevWeekRow
-          ? supabase.from('order_lines').select('menu_item_id, quantity, menu_items(name_he), customers!inner(active)').eq('week_id', prevWeekRow.id).eq('customers.active', true).gt('quantity', 0)
+          ? supabase.rpc('week_item_day_totals', { p_week_id: prevWeekRow.id })
           : Promise.resolve({ data: [] }),
       ])
 
       setRows(aggregate(current.data || []))
 
-      // Prev week totals by item — same corrupted-item exclusion as aggregate()
+      // Prev week totals by item
       const prevMap = {}
-      for (const l of previous.data || []) {
-        if (!l.menu_items || l.menu_items.name_he === 'תאריך') continue
-        prevMap[l.menu_item_id] = (prevMap[l.menu_item_id] || 0) + parseFloat(l.quantity)
+      for (const r of previous.data || []) {
+        prevMap[r.menu_item_id] = (prevMap[r.menu_item_id] || 0) + parseFloat(r.qty)
       }
       setPrevRows(prevMap)
     } finally {
@@ -53,23 +52,22 @@ export default function Weekly() {
 
   function aggregate(data) {
     const map = {}
-    for (const line of data) {
-      const mi = line.menu_items
-      if (!mi || mi.name_he === 'תאריך') continue
-      const id = line.menu_item_id
+    for (const row of data) {
+      const id = row.menu_item_id
       if (!map[id]) {
         map[id] = {
           menu_item_id: id,
-          name_he: mi.name_he,
-          unit: mi.unit,
-          category: mi.category || 'כללי',
-          supplier: mi.suppliers?.name || 'לא ידוע',
+          name_he: row.name_he,
+          unit: row.unit,
+          category: row.category || 'כללי',
+          supplier: row.supplier_name || 'לא ידוע',
           days: {},
           total: 0,
         }
       }
-      map[id].days[line.delivery_date] = (map[id].days[line.delivery_date] || 0) + parseFloat(line.quantity)
-      map[id].total += parseFloat(line.quantity)
+      const qty = parseFloat(row.qty)
+      map[id].days[row.delivery_date] = (map[id].days[row.delivery_date] || 0) + qty
+      map[id].total += qty
     }
     return Object.values(map).sort((a, b) => {
       const gA = a.supplier, gB = b.supplier
