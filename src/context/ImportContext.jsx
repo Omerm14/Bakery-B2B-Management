@@ -199,21 +199,35 @@ export function ImportProvider({ children }) {
 
   function log(msg) { setLogs(prev => [...prev, msg]) }
 
+  async function categorizeItems(items, itemCategories) {
+    const categorized = items.filter(name => itemCategories[name])
+    if (!categorized.length) return 0
+    const err = await upsertBatch('menu_items', categorized.map(name_he => ({ name_he, category: itemCategories[name_he] })), 'name_he')
+    if (err) { log(`⚠️ שגיאה בסיווג קטגוריות: ${err.message}`); return 0 }
+    return categorized.length
+  }
+
   async function importWorkbook(wb, fileName) {
-    // Dedup by content hash
+    log(`📂 קובץ: ${fileName}`)
+
     const hash = workbookHash(wb)
+    const parsed = parseExcelWorkbook(wb)
+    if (!parsed) { log('❌ לא ניתן לזהות תאריכי שבוע בקובץ'); log('──────────'); return }
+    const { wsIso, weekStart, customers, items, orderLines, itemCategories } = parsed
+
+    // Dedup by content hash — order lines were already imported, but a
+    // previously-imported file may predate category detection, so still
+    // backfill categories for it instead of skipping outright.
     if (await isHashSeen(hash)) {
-      log(`⏭️ ${fileName} — קובץ זה כבר יובא בעבר, מדלג`)
+      log('⏭️ קובץ זה כבר יובא בעבר — מעדכן קטגוריות בלבד')
+      const n = await categorizeItems(items, itemCategories)
+      log(n ? `🏷️ סווגו ${n} פריטים לפי קטגוריה` : 'ℹ️ לא זוהו כותרות קטגוריה בקובץ זה')
       log('──────────')
       return
     }
 
-    log(`📂 קובץ: ${fileName}`)
     const { data: sessionData } = await supabase.auth.getSession()
     const changedBy = sessionData.session?.user?.email || null
-    const parsed = parseExcelWorkbook(wb)
-    if (!parsed) { log('❌ לא ניתן לזהות תאריכי שבוע בקובץ'); log('──────────'); return }
-    const { wsIso, weekStart, customers, items, orderLines, itemCategories } = parsed
 
     const label = `שבוע ${weekStart.getDate().toString().padStart(2, '0')}/${(weekStart.getMonth() + 1).toString().padStart(2, '0')}/${weekStart.getFullYear()}`
     log(`📅 שבוע: ${label} (${wsIso})`)
@@ -231,12 +245,8 @@ export function ImportProvider({ children }) {
 
     // Categorize items found under a section header — leaves category untouched
     // for items where no header was detected this time (e.g. manual edits).
-    const categorized = items.filter(name => itemCategories[name])
-    if (categorized.length) {
-      const err = await upsertBatch('menu_items', categorized.map(name_he => ({ name_he, category: itemCategories[name_he] })), 'name_he')
-      if (err) log(`⚠️ שגיאה בסיווג קטגוריות: ${err.message}`)
-      else log(`🏷️ סווגו ${categorized.length} פריטים לפי קטגוריה`)
-    }
+    const categorizedCount = await categorizeItems(items, itemCategories)
+    if (categorizedCount) log(`🏷️ סווגו ${categorizedCount} פריטים לפי קטגוריה`)
 
     {
       const err = await upsertBatch('weeks', [{ start_date: wsIso, label }], 'start_date')
