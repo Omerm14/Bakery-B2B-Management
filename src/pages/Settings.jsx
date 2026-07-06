@@ -114,22 +114,39 @@ export default function Settings() {
   }
 
   const [settingPin, setSettingPin] = useState(null)
-  async function setCustomerPin(customer) {
+  const [pinModal, setPinModal] = useState(null) // { customer, pin } | null
+
+  function generatePin() {
+    return String(Math.floor(100000 + Math.random() * 900000)) // 6 random digits
+  }
+
+  function portalUrlFor(customer) {
+    return `${window.location.origin}/portal/login?phone=${encodeURIComponent(customer.phone)}`
+  }
+
+  async function generateAndSetPin(customer) {
     if (!customer.phone) { toast.error('יש להזין מספר טלפון לפני הגדרת קוד גישה'); return }
-    const pin = window.prompt(`קוד גישה עבור ${customer.name} (לפחות 6 תווים):`)
-    if (!pin || !pin.trim()) return
-    if (pin.trim().length < 6) { toast.error('הקוד חייב להכיל לפחות 6 תווים'); return }
     setSettingPin(customer.id)
     try {
-      const { data, error } = await supabase.functions.invoke('set-customer-pin', { body: { customer_id: customer.id, pin: pin.trim() } })
+      const pin = generatePin()
+      const { data, error } = await supabase.functions.invoke('set-customer-pin', { body: { customer_id: customer.id, pin } })
       if (error || !data?.ok) {
         toast.error(data?.error || 'הגדרת הקוד נכשלה')
         return
       }
       setCustomers(prev => prev.map(c => c.id === customer.id ? { ...c, auth_user_id: c.auth_user_id || 'pending' } : c))
-      window.alert(`קוד הגישה עבור ${customer.name}: ${pin.trim()}\n\nיש למסור קוד זה ללקוח.`)
+      setPinModal({ customer, pin })
     } finally {
       setSettingPin(null)
+    }
+  }
+
+  async function copyToClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success('הועתק')
+    } catch {
+      toast.error('ההעתקה נכשלה')
     }
   }
 
@@ -417,7 +434,7 @@ function AuditLogTab({ filterText }) {
                     <td>
                       <button
                         className="btn btn-ghost btn-sm"
-                        onClick={() => setCustomerPin(c)}
+                        onClick={() => generateAndSetPin(c)}
                         disabled={settingPin === c.id}
                         title="מגדיר קוד גישה שהלקוח ישתמש בו כדי להיכנס לפורטל ההזמנות"
                       >
@@ -445,6 +462,37 @@ function AuditLogTab({ filterText }) {
         <div>
           <SearchInput value={filterText} onChange={setFilterText} placeholder="חיפוש לפי לקוח או פריט..." />
           <AuditLogTab filterText={filterText} />
+        </div>
+      )}
+
+      {/* Customer Access PIN Modal */}
+      {pinModal && (
+        <div className="overlay" onClick={() => setPinModal(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-title">קוד גישה — {pinModal.customer.name}</div>
+
+            <label className="lbl">קישור לשליחה ללקוח</label>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <input className="input" dir="ltr" readOnly value={portalUrlFor(pinModal.customer)} onFocus={e => e.target.select()} style={{ fontSize: 12 }} />
+              <button className="btn btn-ghost btn-sm" onClick={() => copyToClipboard(portalUrlFor(pinModal.customer))}>העתק</button>
+            </div>
+
+            <label className="lbl">קוד גישה</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input className="input" dir="ltr" readOnly value={pinModal.pin} onFocus={e => e.target.select()} style={{ fontSize: 20, fontWeight: 700, textAlign: 'center', letterSpacing: '.1em' }} />
+              <button className="btn btn-ghost btn-sm" onClick={() => copyToClipboard(pinModal.pin)}>העתק</button>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 8 }}>
+              יש למסור את הקישור והקוד ללקוח (וואטסאפ, טלפון וכו׳). ניתן ליצור קוד חדש בכל עת מכאן.
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => generateAndSetPin(pinModal.customer)} disabled={settingPin === pinModal.customer.id}>
+                {settingPin === pinModal.customer.id ? 'מייצר...' : 'צור קוד חדש'}
+              </button>
+              <button className="btn btn-primary" onClick={() => setPinModal(null)}>סגור</button>
+            </div>
+          </div>
         </div>
       )}
 

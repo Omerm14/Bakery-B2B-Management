@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 
 // Single-screen phone + PIN login. No OTP, no messaging service of any
@@ -8,7 +9,10 @@ import { supabase } from '../../lib/supabase'
 // picked up automatically by App.jsx's existing onAuthStateChange
 // listener, same as the staff Google-OAuth flow.
 export default function CustomerLogin() {
-  const [phone, setPhone] = useState('')
+  const [searchParams] = useSearchParams()
+  // The link staff shares (Settings -> customer -> "set/reset PIN") embeds
+  // the customer's own phone number, so they only need to type the PIN.
+  const [phone, setPhone] = useState(() => searchParams.get('phone') || '')
   const [pin, setPin] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -46,7 +50,7 @@ export default function CustomerLogin() {
           value={phone}
           onChange={e => setPhone(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && login()}
-          autoFocus
+          autoFocus={!phone}
         />
 
         <label className="lbl" style={{ marginTop: 12 }}>קוד גישה</label>
@@ -58,6 +62,7 @@ export default function CustomerLogin() {
           value={pin}
           onChange={e => setPin(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && login()}
+          autoFocus={!!phone}
         />
 
         {error && <div className="alert alert-err" style={{ marginTop: 12 }}>{error}</div>}
