@@ -8,8 +8,13 @@ const SKIP_SHEETS = new Set(['כמויות', 'כפתורי', 'גיליון', 'ל
 const NON_ITEM = new Set(['', 'סה"כ', 'Total', 'total', 'תאריך', 'Date', 'date'])
 
 // Section-header rows inside each customer sheet — mark the category of the
-// item rows below them until the next header (or end of sheet).
-const CATEGORY_HEADERS = new Set(['מאפים', 'מתוקים', 'קפואים', 'שונות', 'עוגות ועוגיות', 'קפואים ושונות - קונדי'])
+// item rows below them until the next header (or end of sheet). Some sheets
+// prefix the header with a colon (e.g. ":עוגות ועוגיות") — stripped before matching.
+const CATEGORY_HEADERS = new Set(['מאפים', 'מתוקים', 'קפואים', 'שונות', 'עוגות ועוגיות', 'קפואים ושונות - קונדי', 'לחם ולחמניות'])
+
+function normalizeCategoryLabel(s) {
+  return s.trim().replace(/^[:：]\s*/, '').replace(/\s*[:：]$/, '')
+}
 
 const HE_DAYS = { 'ראשון': 0, 'שני': 1, 'שלישי': 2, 'רביעי': 3, 'חמישי': 4, 'שישי': 5 }
 
@@ -135,7 +140,8 @@ function parseExcelWorkbook(wb) {
       if (!itemCell) continue
       const iname = (itemCell.v ?? '').toString().trim()
       if (!iname || iname.length < 2) continue
-      if (CATEGORY_HEADERS.has(iname)) { currentCategory = iname; continue }
+      const normalized = normalizeCategoryLabel(iname)
+      if (CATEGORY_HEADERS.has(normalized)) { currentCategory = normalized; continue }
       if (iname.startsWith('סה') || NON_ITEM.has(iname)) continue
 
       for (let col = 0; col < dates.length; col++) {
