@@ -23,7 +23,7 @@
 -- compared against now(). So "10:30" here means 10:30 in the database's
 -- configured timezone, not necessarily 10:30 Israel time -- confirm this
 -- matches expectations (see the DST caveat on the pg_cron schedule in
--- migration 013) before relying on it for real customers.
+-- migration 027) before relying on it for real customers.
 CREATE OR REPLACE FUNCTION order_edit_lock_at(p_delivery_date date) RETURNS timestamptz
 LANGUAGE sql STABLE AS $$
   SELECT (

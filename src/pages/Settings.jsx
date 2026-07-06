@@ -113,20 +113,23 @@ export default function Settings() {
     }
   }
 
-  const [provisioning, setProvisioning] = useState(null)
-  async function provisionCustomer(customer) {
-    if (!customer.phone) { toast.error('יש להזין מספר טלפון לפני הפעלת גישה'); return }
-    setProvisioning(customer.id)
+  const [settingPin, setSettingPin] = useState(null)
+  async function setCustomerPin(customer) {
+    if (!customer.phone) { toast.error('יש להזין מספר טלפון לפני הגדרת קוד גישה'); return }
+    const pin = window.prompt(`קוד גישה עבור ${customer.name} (לפחות 6 תווים):`)
+    if (!pin || !pin.trim()) return
+    if (pin.trim().length < 6) { toast.error('הקוד חייב להכיל לפחות 6 תווים'); return }
+    setSettingPin(customer.id)
     try {
-      const { data, error } = await supabase.functions.invoke('provision-and-welcome-customer', { body: { customer_id: customer.id } })
+      const { data, error } = await supabase.functions.invoke('set-customer-pin', { body: { customer_id: customer.id, pin: pin.trim() } })
       if (error || !data?.ok) {
-        toast.error(data?.error || 'הפעלת הגישה נכשלה')
+        toast.error(data?.error || 'הגדרת הקוד נכשלה')
         return
       }
       setCustomers(prev => prev.map(c => c.id === customer.id ? { ...c, auth_user_id: c.auth_user_id || 'pending' } : c))
-      toast.success(`נשלחה הודעת ברוכים הבאים ל${customer.name}`)
+      window.alert(`קוד הגישה עבור ${customer.name}: ${pin.trim()}\n\nיש למסור קוד זה ללקוח.`)
     } finally {
-      setProvisioning(null)
+      setSettingPin(null)
     }
   }
 
@@ -414,11 +417,11 @@ function AuditLogTab({ filterText }) {
                     <td>
                       <button
                         className="btn btn-ghost btn-sm"
-                        onClick={() => provisionCustomer(c)}
-                        disabled={provisioning === c.id}
-                        title="שולח הודעת ברוכים הבאים בוואטסאפ עם קישור לפורטל ההזמנות"
+                        onClick={() => setCustomerPin(c)}
+                        disabled={settingPin === c.id}
+                        title="מגדיר קוד גישה שהלקוח ישתמש בו כדי להיכנס לפורטל ההזמנות"
                       >
-                        {provisioning === c.id ? 'שולח...' : c.auth_user_id ? 'שלח שוב' : 'הפעל גישה'}
+                        {settingPin === c.id ? 'מגדיר...' : c.auth_user_id ? 'אפס קוד' : 'הגדר קוד גישה'}
                       </button>
                     </td>
                     <td>
