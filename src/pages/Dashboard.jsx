@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+
+const TREND_WINDOW = 8
 
 function AnimatedNumber({ value, loading, prefix = '', suffix = '' }) {
   const [display, setDisplay] = useState(0)
@@ -39,7 +42,8 @@ const CustomTooltip = ({ active, payload, label }) => {
 export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({ thisWeekLines: 0, activeCustomers: 0, topItem: null, topItemQty: 0, wowChange: null })
-  const [trendData, setTrendData] = useState([])
+  const [weekHistory, setWeekHistory] = useState([]) // ascending, weeks with data only
+  const [chartEnd, setChartEnd] = useState(-1) // index into weekHistory of the trend chart's rightmost week
   const [topItems, setTopItems] = useState([])
   const [latestWeekLabel, setLatestWeekLabel] = useState(null)
 
@@ -57,7 +61,7 @@ export default function Dashboard() {
         .from('weeks')
         .select('id, start_date')
         .order('start_date', { ascending: false })
-        .limit(60)
+        .limit(104)
 
       const candidateIds = (candidateWeeksDesc || []).map(w => w.id)
       const { data: rawLines } = candidateIds.length
@@ -74,19 +78,25 @@ export default function Dashboard() {
         linesByWeek.get(l.week_id).push(l)
       }
 
-      const weeksWithData = (candidateWeeksDesc || []).filter(w => linesByWeek.has(w.id))
-      const weeksAsc = weeksWithData.slice(0, 8).reverse() // most recent 8 with data, oldest first
-      const thisWeek = weeksAsc[weeksAsc.length - 1] || null
-      const prevWeek = weeksAsc[weeksAsc.length - 2] || null
-      setLatestWeekLabel(thisWeek ? formatWeekShort(thisWeek.start_date) : null)
+      // Full history of weeks that actually have data, oldest first — kept in
+      // state so the trend chart can be paged through client-side with no
+      // extra queries. KPI cards below always reflect the true latest week,
+      // independent of whatever range the chart is currently showing.
+      const historyAsc = (candidateWeeksDesc || [])
+        .filter(w => linesByWeek.has(w.id))
+        .reverse()
+        .map(w => ({
+          id: w.id,
+          start_date: w.start_date,
+          label: formatWeekShort(w.start_date),
+          qty: (linesByWeek.get(w.id) || []).reduce((s, l) => s + parseFloat(l.quantity), 0),
+        }))
+      setWeekHistory(historyAsc)
+      setChartEnd(historyAsc.length - 1)
 
-      // Build trend data: total quantity per week
-      const trendMap = {}
-      for (const w of weeksAsc) {
-        const qty = (linesByWeek.get(w.id) || []).reduce((s, l) => s + parseFloat(l.quantity), 0)
-        trendMap[w.start_date] = { label: formatWeekShort(w.start_date), qty, iso: w.start_date }
-      }
-      setTrendData(Object.values(trendMap))
+      const thisWeek = historyAsc[historyAsc.length - 1] || null
+      const prevWeek = historyAsc[historyAsc.length - 2] || null
+      setLatestWeekLabel(thisWeek ? thisWeek.label : null)
 
       // This week stats
       const thisWeekLines = thisWeek ? (linesByWeek.get(thisWeek.id) || []) : []
@@ -126,6 +136,9 @@ export default function Dashboard() {
   }
 
   const maxBar = topItems[0]?.qty || 1
+  const trendData = weekHistory.slice(Math.max(0, chartEnd - (TREND_WINDOW - 1)), chartEnd + 1)
+  const atLatest = chartEnd >= weekHistory.length - 1
+  const atOldest = chartEnd <= 0
 
   return (
     <div className="page">
@@ -166,7 +179,22 @@ export default function Dashboard() {
       <div className="dash-layout">
         {/* Area chart — 8 week trend */}
         <div className="card">
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>מגמת כמויות — 8 שבועות אחרונים</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>מגמת כמויות — 8 שבועות</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {!atLatest && (
+                <button className="btn btn-ghost btn-sm" onClick={() => setChartEnd(weekHistory.length - 1)} style={{ fontSize: 12 }}>
+                  לשבוע האחרון
+                </button>
+              )}
+              <button className="btn btn-ghost btn-sm" disabled={atOldest} onClick={() => setChartEnd(i => Math.max(0, i - 1))}>
+                <ChevronRight size={16} />
+              </button>
+              <button className="btn btn-ghost btn-sm" disabled={atLatest} onClick={() => setChartEnd(i => Math.min(weekHistory.length - 1, i + 1))}>
+                <ChevronLeft size={16} />
+              </button>
+            </div>
+          </div>
           {loading ? (
             <div className="shimmer" style={{ height: 220 }} />
           ) : (
