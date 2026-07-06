@@ -48,100 +48,172 @@ function formatWeekShort(iso) {
 // Aggregation happens server-side (see migration 029_dashboard_week_data_function.sql)
 // via the dashboard_week_data RPC — it returns one row per (week, item) with
 // that week's active-customer count attached, instead of raw per-customer,
-// per-day order_lines rows. That's orders of magnitude smaller per week, but
-// spanning up to 104 weeks the TOTAL row count can still cross Supabase's
-// 1000-row response cap — so this still needs pagination, just far fewer
-// pages than the raw-row approach needed (aggregated rows, not raw lines).
+// per-day order_lines rows. That's orders of magnitude smaller per week, so
+// with HISTORY_BATCH capped at 20 weeks this almost always fits in a single
+// page — but still paginates defensively in case it doesn't. Deliberately
+// NOT using count: 'exact' here: PostgREST computes an exact count by running
+// the whole (expensive, aggregating) query a second time, which was pushing
+// this past Supabase's statement timeout. Plain sequential range() paging
+// costs nothing extra in the (typical) single-page case.
 const PAGE_SIZE = 1000
 
 async function fetchWeekData(weekIds) {
-  const baseQuery = () => supabase.rpc('dashboard_week_data', { p_week_ids: weekIds }, { count: 'exact' })
-
-  const first = await baseQuery().range(0, PAGE_SIZE - 1)
-  if (first.error) { console.error('[Dashboard] dashboard_week_data', first.error); return [] }
-  const all = [...(first.data || [])]
-
-  const total = first.count ?? all.length
-  const pageCount = Math.ceil(total / PAGE_SIZE)
-  if (pageCount > 1) {
-    const rest = await Promise.all(
-      Array.from({ length: pageCount - 1 }, (_, i) => {
-        const from = (i + 1) * PAGE_SIZE
-        return baseQuery().range(from, from + PAGE_SIZE - 1)
-      })
-    )
-    for (const page of rest) {
-      if (page.error) { console.error('[Dashboard] dashboard_week_data page', page.error); continue }
-      all.push(...(page.data || []))
-    }
+  const all = []
+  let from = 0
+  while (true) {
+    const { data, error } = await supabase
+      .rpc('dashboard_week_data', { p_week_ids: weekIds })
+      .range(from, from + PAGE_SIZE - 1)
+    if (error) { console.error('[Dashboard] dashboard_week_data', error); break }
+    all.push(...(data || []))
+    if (!data || data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
   }
   return all
 }
 
+// Only 8 weeks are ever shown at once (TREND_WINDOW) — fetching a batch of
+// HISTORY_BATCH gives comfortable headroom for a few "prev" clicks without
+// eagerly pulling much more than the page will actually render. Loading
+// further back happens on demand (see loadMoreHistory) instead of loading
+// everything up front.
+const HISTORY_BATCH = 20
+
+// Turns a page of `weeks` rows (descending) + their aggregated order rows
+// into the ascending, pre-computed history entries the UI navigates over.
+function buildHistorySegment(weeksDesc, weekRows) {
+  const itemsByWeek = new Map() // week_id → [{name, qty}]
+  const activeCustomersByWeek = new Map() // week_id → count
+  for (const row of weekRows || []) {
+    if (!itemsByWeek.has(row.week_id)) itemsByWeek.set(row.week_id, [])
+    itemsByWeek.get(row.week_id).push({ name: row.item_name, qty: parseFloat(row.item_qty) })
+    activeCustomersByWeek.set(row.week_id, row.active_customers)
+  }
+
+  return (weeksDesc || [])
+    .filter(w => itemsByWeek.has(w.id))
+    .reverse()
+    .map(w => {
+      const items = itemsByWeek.get(w.id) || []
+      const qty = items.reduce((s, i) => s + i.qty, 0)
+      const activeCustomers = activeCustomersByWeek.get(w.id) || 0
+
+      const sortedItems = [...items].sort((a, b) => b.qty - a.qty)
+      const top10 = sortedItems.slice(0, 10).map(i => ({ name: i.name, qty: Math.round(i.qty * 10) / 10 }))
+      const topItem = sortedItems[0] ? { name: sortedItems[0].name, qty: Math.round(sortedItems[0].qty * 10) / 10 } : null
+
+      return { id: w.id, start_date: w.start_date, label: formatWeekShort(w.start_date), qty, activeCustomers, top10, topItem }
+    })
+}
+
+const CACHE_KEY = 'dashboard_cache_v1'
+
+function readCache() {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function writeCache(weekHistory, viewedIndex, hasMoreHistory) {
+  try {
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ weekHistory, viewedIndex, hasMoreHistory }))
+  } catch {
+    // sessionStorage full/unavailable — caching is a nice-to-have, safe to skip
+  }
+}
+
 export default function Dashboard() {
-  const [loading, setLoading] = useState(true)
+  const cached = useRef(readCache()).current
+  const [loading, setLoading] = useState(!cached)
   // Ascending list of weeks that actually have order data, each pre-computed
   // with its own qty/active-customers/top-items — lets every part of the
   // page (KPI cards, top-items panel, trend chart) navigate together off a
   // single index with zero additional queries per click.
-  const [weekHistory, setWeekHistory] = useState([])
-  const [viewedIndex, setViewedIndex] = useState(-1)
+  const [weekHistory, setWeekHistory] = useState(cached?.weekHistory || [])
+  const [viewedIndex, setViewedIndex] = useState(cached?.viewedIndex ?? -1)
+  // Whether older weeks might still exist further back than what's loaded —
+  // starts optimistic; loadMoreHistory sets it false once a fetch comes back
+  // short (or empty), meaning we've reached the actual beginning.
+  const [hasMoreHistory, setHasMoreHistory] = useState(cached?.hasMoreHistory ?? true)
+  const [loadingMore, setLoadingMore] = useState(false)
 
-  useEffect(() => { loadDashboard() }, [])
+  useEffect(() => { loadDashboard(!!cached) }, [])
 
-  async function loadDashboard() {
-    setLoading(true)
+  // Base "current week" on the most recent week, no later than today, that
+  // actually has order data — calendar navigation and the customer ordering
+  // portal can both pre-create a blank week row (before any order exists in
+  // it) and let a customer place a standing/advance order for a week far in
+  // the future. Neither should be mistaken for "this week": a blank stub
+  // would show zero everywhere despite real recent data, and a future week
+  // with one pre-order would hide the real current week's much larger
+  // activity behind it.
+  async function loadDashboard(isBackgroundRefresh) {
+    if (!isBackgroundRefresh) setLoading(true)
     try {
-      // Base "current week" on the most recent week, no later than today,
-      // that actually has order data — calendar navigation and the customer
-      // ordering portal can both pre-create a blank week row (before any
-      // order exists in it) and let a customer place a standing/advance
-      // order for a week far in the future. Neither should be mistaken for
-      // "this week": a blank stub would show zero everywhere despite real
-      // recent data, and a future week with one pre-order would hide the
-      // real current week's much larger activity behind it.
       const todayIso = weekStart().toISOString().slice(0, 10)
       const { data: candidateWeeksDesc } = await supabase
         .from('weeks')
         .select('id, start_date')
         .lte('start_date', todayIso)
         .order('start_date', { ascending: false })
-        .limit(104)
+        .limit(HISTORY_BATCH)
 
       const candidateIds = (candidateWeeksDesc || []).map(w => w.id)
       const weekRows = candidateIds.length ? await fetchWeekData(candidateIds) : []
-
-      const itemsByWeek = new Map() // week_id → [{name, qty}]
-      const activeCustomersByWeek = new Map() // week_id → count
-      for (const row of weekRows || []) {
-        if (!itemsByWeek.has(row.week_id)) itemsByWeek.set(row.week_id, [])
-        itemsByWeek.get(row.week_id).push({ name: row.item_name, qty: parseFloat(row.item_qty) })
-        activeCustomersByWeek.set(row.week_id, row.active_customers)
-      }
-
-      // Full history of weeks that actually have data, oldest first, each
-      // pre-aggregated (qty, active customers, top items) so navigating
-      // between weeks afterward is just an index change — no re-fetching.
-      const historyAsc = (candidateWeeksDesc || [])
-        .filter(w => itemsByWeek.has(w.id))
-        .reverse()
-        .map(w => {
-          const items = itemsByWeek.get(w.id) || []
-          const qty = items.reduce((s, i) => s + i.qty, 0)
-          const activeCustomers = activeCustomersByWeek.get(w.id) || 0
-
-          const sortedItems = [...items].sort((a, b) => b.qty - a.qty)
-          const top10 = sortedItems.slice(0, 10).map(i => ({ name: i.name, qty: Math.round(i.qty * 10) / 10 }))
-          const topItem = sortedItems[0] ? { name: sortedItems[0].name, qty: Math.round(sortedItems[0].qty * 10) / 10 } : null
-
-          return { id: w.id, start_date: w.start_date, label: formatWeekShort(w.start_date), qty, activeCustomers, top10, topItem }
-        })
+      const historyAsc = buildHistorySegment(candidateWeeksDesc, weekRows)
+      const moreLikely = (candidateWeeksDesc || []).length >= HISTORY_BATCH
 
       setWeekHistory(historyAsc)
       setViewedIndex(historyAsc.length - 1)
+      setHasMoreHistory(moreLikely)
+      writeCache(historyAsc, historyAsc.length - 1, moreLikely)
     } finally {
       setLoading(false)
     }
+  }
+
+  // Fetches the next batch of weeks older than whatever's currently loaded,
+  // and prepends them — used when the user pages back past the oldest
+  // week already in memory, instead of loading everything up front.
+  async function loadMoreHistory() {
+    if (loadingMore || !hasMoreHistory || weekHistory.length === 0) return
+    setLoadingMore(true)
+    try {
+      const oldestLoadedDate = weekHistory[0].start_date
+      const { data: olderWeeksDesc } = await supabase
+        .from('weeks')
+        .select('id, start_date')
+        .lt('start_date', oldestLoadedDate)
+        .order('start_date', { ascending: false })
+        .limit(HISTORY_BATCH)
+
+      const olderIds = (olderWeeksDesc || []).map(w => w.id)
+      const olderRows = olderIds.length ? await fetchWeekData(olderIds) : []
+      const olderHistoryAsc = buildHistorySegment(olderWeeksDesc, olderRows)
+      const moreLikely = (olderWeeksDesc || []).length >= HISTORY_BATCH && olderHistoryAsc.length > 0
+
+      if (olderHistoryAsc.length === 0) {
+        setHasMoreHistory(false)
+        return
+      }
+
+      const merged = [...olderHistoryAsc, ...weekHistory]
+      const newIndex = olderHistoryAsc.length - 1
+      setWeekHistory(merged)
+      setViewedIndex(newIndex)
+      setHasMoreHistory(moreLikely)
+      writeCache(merged, newIndex, moreLikely)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
+  function goOlder() {
+    if (viewedIndex > 0) setViewedIndex(i => i - 1)
+    else loadMoreHistory()
   }
 
   const viewedWeek = weekHistory[viewedIndex] || null
@@ -155,7 +227,7 @@ export default function Dashboard() {
   const maxBar = topItems[0]?.qty || 1
   const trendData = weekHistory.slice(Math.max(0, viewedIndex - (TREND_WINDOW - 1)), viewedIndex + 1)
   const atLatest = viewedIndex >= weekHistory.length - 1
-  const atOldest = viewedIndex <= 0
+  const atOldest = viewedIndex <= 0 && !hasMoreHistory
 
   return (
     <div className="page">
@@ -164,7 +236,9 @@ export default function Dashboard() {
       </div>
 
       <div className="week-nav">
-        <button className="btn btn-ghost btn-sm" disabled={atOldest} onClick={() => setViewedIndex(i => Math.max(0, i - 1))}><ChevronRight size={16} /></button>
+        <button className="btn btn-ghost btn-sm" disabled={atOldest || loadingMore} onClick={goOlder}>
+          {loadingMore ? <span className="shimmer" style={{ width: 16, height: 16, borderRadius: 4 }} /> : <ChevronRight size={16} />}
+        </button>
         <span className="week-label">{viewedWeek ? viewedWeek.label : '—'}</span>
         <button className="btn btn-ghost btn-sm" disabled={atLatest} onClick={() => setViewedIndex(i => Math.min(weekHistory.length - 1, i + 1))}><ChevronLeft size={16} /></button>
         <button className="btn btn-ghost btn-sm" disabled={atLatest} onClick={() => setViewedIndex(weekHistory.length - 1)} style={{ fontSize: 12 }}>שבוע אחרון עם נתונים</button>
