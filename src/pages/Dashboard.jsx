@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { useWeek } from '../hooks/useWeek'
 
 function AnimatedNumber({ value, loading, prefix = '', suffix = '' }) {
   const [display, setDisplay] = useState(0)
@@ -37,22 +39,19 @@ const CustomTooltip = ({ active, payload, label }) => {
 }
 
 export default function Dashboard() {
+  const week = useWeek()
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({ thisWeekLines: 0, activeCustomers: 0, topItem: null, topItemQty: 0, wowChange: null })
   const [trendData, setTrendData] = useState([])
   const [topItems, setTopItems] = useState([])
 
-  useEffect(() => { loadDashboard() }, [])
+  useEffect(() => { loadDashboard() }, [week.weekStartISO])
 
   async function loadDashboard() {
     setLoading(true)
     try {
-      // Get last 8 weeks of data
-      const today = new Date()
-      const sunOffset = today.getDay() === 0 ? 0 : -today.getDay()
-      const thisSunday = new Date(today)
-      thisSunday.setDate(today.getDate() + sunOffset)
-      thisSunday.setHours(0, 0, 0, 0)
+      // Get 8 weeks of data ending at the currently viewed week
+      const thisSunday = week.currentWeekStart
 
       const weeks = []
       for (let i = 0; i < 8; i++) {
@@ -137,7 +136,13 @@ export default function Dashboard() {
     <div className="page">
       <div className="page-header">
         <h1 className="page-title">דשבורד</h1>
-        <span style={{ fontSize: 13, color: 'var(--t3)' }}>שבוע נוכחי</span>
+      </div>
+
+      <div className="week-nav">
+        <button className="btn btn-ghost btn-sm" onClick={week.prevWeek}><ChevronRight size={16} /></button>
+        <span className="week-label">{week.weekLabel}</span>
+        <button className="btn btn-ghost btn-sm" onClick={week.nextWeek}><ChevronLeft size={16} /></button>
+        <button className="btn btn-ghost btn-sm" onClick={week.goToToday} style={{ fontSize: 12 }}>השבוע</button>
       </div>
 
       {/* KPI Cards */}
@@ -194,7 +199,7 @@ export default function Dashboard() {
 
         {/* Top 10 items */}
         <div className="card">
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>10 פריטים מובילים השבוע</div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>10 פריטים מובילים — {week.weekLabel}</div>
           {loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[...Array(6)].map((_, i) => <div key={i} className="shimmer" style={{ height: 28 }} />)}
@@ -229,7 +234,7 @@ export default function Dashboard() {
       {/* Full bar chart */}
       {!loading && topItems.length > 0 && (
         <div className="card" style={{ marginTop: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>כמויות לפי פריט — שבוע נוכחי</div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>כמויות לפי פריט — {week.weekLabel}</div>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={topItems} margin={{ top: 4, right: 8, left: -20, bottom: 60 }}>
               <CartesianGrid stroke="var(--bdr)" strokeDasharray="3 3" vertical={false} />
