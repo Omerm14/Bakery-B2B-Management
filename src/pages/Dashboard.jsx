@@ -39,13 +39,19 @@ const CustomTooltip = ({ active, payload, label }) => {
   )
 }
 
+function formatWeekShort(iso) {
+  const d = new Date(iso + 'T00:00:00')
+  return `${d.getDate()}/${d.getMonth() + 1}/${String(d.getFullYear()).slice(2)}`
+}
+
 export default function Dashboard() {
   const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState({ thisWeekLines: 0, activeCustomers: 0, topItem: null, topItemQty: 0, wowChange: null })
-  const [weekHistory, setWeekHistory] = useState([]) // ascending, weeks with data only
-  const [chartEnd, setChartEnd] = useState(-1) // index into weekHistory of the trend chart's rightmost week
-  const [topItems, setTopItems] = useState([])
-  const [latestWeekLabel, setLatestWeekLabel] = useState(null)
+  // Ascending list of weeks that actually have order data, each pre-computed
+  // with its own qty/active-customers/top-items — lets every part of the
+  // page (KPI cards, top-items panel, trend chart) navigate together off a
+  // single index with zero additional queries per click.
+  const [weekHistory, setWeekHistory] = useState([])
+  const [viewedIndex, setViewedIndex] = useState(-1)
 
   useEffect(() => { loadDashboard() }, [])
 
@@ -78,123 +84,93 @@ export default function Dashboard() {
         linesByWeek.get(l.week_id).push(l)
       }
 
-      // Full history of weeks that actually have data, oldest first — kept in
-      // state so the trend chart can be paged through client-side with no
-      // extra queries. KPI cards below always reflect the true latest week,
-      // independent of whatever range the chart is currently showing.
+      // Full history of weeks that actually have data, oldest first, each
+      // pre-aggregated (qty, active customers, top items) so navigating
+      // between weeks afterward is just an index change — no re-fetching.
       const historyAsc = (candidateWeeksDesc || [])
         .filter(w => linesByWeek.has(w.id))
         .reverse()
-        .map(w => ({
-          id: w.id,
-          start_date: w.start_date,
-          label: formatWeekShort(w.start_date),
-          qty: (linesByWeek.get(w.id) || []).reduce((s, l) => s + parseFloat(l.quantity), 0),
-        }))
+        .map(w => {
+          const lines = linesByWeek.get(w.id) || []
+          const qty = lines.reduce((s, l) => s + parseFloat(l.quantity), 0)
+          const activeCustomers = new Set(lines.map(l => l.customer_id)).size
+
+          const itemTotals = {}
+          for (const l of lines) {
+            if (!itemTotals[l.menu_item_id]) itemTotals[l.menu_item_id] = { name: l.menu_items?.name_he, qty: 0 }
+            itemTotals[l.menu_item_id].qty += parseFloat(l.quantity)
+          }
+          const sortedItems = Object.entries(itemTotals).sort((a, b) => b[1].qty - a[1].qty)
+          const top10 = sortedItems.slice(0, 10).map(([, v]) => ({ name: v.name, qty: Math.round(v.qty * 10) / 10 }))
+          const topItem = sortedItems[0] ? { name: sortedItems[0][1].name, qty: Math.round(sortedItems[0][1].qty * 10) / 10 } : null
+
+          return { id: w.id, start_date: w.start_date, label: formatWeekShort(w.start_date), qty, activeCustomers, top10, topItem }
+        })
+
       setWeekHistory(historyAsc)
-      setChartEnd(historyAsc.length - 1)
-
-      const thisWeek = historyAsc[historyAsc.length - 1] || null
-      const prevWeek = historyAsc[historyAsc.length - 2] || null
-      setLatestWeekLabel(thisWeek ? thisWeek.label : null)
-
-      // This week stats
-      const thisWeekLines = thisWeek ? (linesByWeek.get(thisWeek.id) || []) : []
-      const prevWeekLines = prevWeek ? (linesByWeek.get(prevWeek.id) || []) : []
-      const thisTotal = thisWeekLines.reduce((s, l) => s + parseFloat(l.quantity), 0)
-      const prevTotal = prevWeekLines.reduce((s, l) => s + parseFloat(l.quantity), 0)
-      const wowChange = prevTotal > 0 ? Math.round(((thisTotal - prevTotal) / prevTotal) * 100) : null
-
-      const activeCustomers = new Set(thisWeekLines.map(l => l.customer_id)).size
-
-      // Top items this week
-      const itemTotals = {}
-      for (const l of thisWeekLines) {
-        if (!itemTotals[l.menu_item_id]) itemTotals[l.menu_item_id] = { name: l.menu_items?.name_he, qty: 0 }
-        itemTotals[l.menu_item_id].qty += parseFloat(l.quantity)
-      }
-      const sortedItems = Object.entries(itemTotals).sort((a, b) => b[1].qty - a[1].qty)
-      const top10 = sortedItems.slice(0, 10).map(([, v]) => ({ name: v.name, qty: Math.round(v.qty * 10) / 10 }))
-      setTopItems(top10)
-
-      const topItem = sortedItems[0]
-      setStats({
-        thisWeekLines: Math.round(thisTotal),
-        activeCustomers,
-        topItem: topItem ? topItem[1].name : null,
-        topItemQty: topItem ? Math.round(topItem[1].qty * 10) / 10 : 0,
-        wowChange,
-      })
+      setViewedIndex(historyAsc.length - 1)
     } finally {
       setLoading(false)
     }
   }
 
-  function formatWeekShort(iso) {
-    const d = new Date(iso + 'T00:00:00')
-    return `${d.getDate()}/${d.getMonth() + 1}/${String(d.getFullYear()).slice(2)}`
-  }
-
+  const viewedWeek = weekHistory[viewedIndex] || null
+  const prevWeek = weekHistory[viewedIndex - 1] || null
+  const thisTotal = viewedWeek?.qty || 0
+  const prevTotal = prevWeek?.qty || 0
+  const wowChange = prevTotal > 0 ? Math.round(((thisTotal - prevTotal) / prevTotal) * 100) : null
+  const activeCustomers = viewedWeek?.activeCustomers || 0
+  const topItem = viewedWeek?.topItem || null
+  const topItems = viewedWeek?.top10 || []
   const maxBar = topItems[0]?.qty || 1
-  const trendData = weekHistory.slice(Math.max(0, chartEnd - (TREND_WINDOW - 1)), chartEnd + 1)
-  const atLatest = chartEnd >= weekHistory.length - 1
-  const atOldest = chartEnd <= 0
+  const trendData = weekHistory.slice(Math.max(0, viewedIndex - (TREND_WINDOW - 1)), viewedIndex + 1)
+  const atLatest = viewedIndex >= weekHistory.length - 1
+  const atOldest = viewedIndex <= 0
 
   return (
     <div className="page">
       <div className="page-header">
         <h1 className="page-title">דשבורד</h1>
-        <span style={{ fontSize: 13, color: 'var(--t3)' }}>
-          {latestWeekLabel ? `שבוע אחרון עם נתונים: ${latestWeekLabel}` : 'שבוע נוכחי'}
-        </span>
+      </div>
+
+      <div className="week-nav">
+        <button className="btn btn-ghost btn-sm" disabled={atOldest} onClick={() => setViewedIndex(i => Math.max(0, i - 1))}><ChevronRight size={16} /></button>
+        <span className="week-label">{viewedWeek ? viewedWeek.label : '—'}</span>
+        <button className="btn btn-ghost btn-sm" disabled={atLatest} onClick={() => setViewedIndex(i => Math.min(weekHistory.length - 1, i + 1))}><ChevronLeft size={16} /></button>
+        <button className="btn btn-ghost btn-sm" disabled={atLatest} onClick={() => setViewedIndex(weekHistory.length - 1)} style={{ fontSize: 12 }}>שבוע אחרון עם נתונים</button>
       </div>
 
       {/* KPI Cards */}
       <div className="stat-grid" style={{ marginBottom: 28 }}>
         <div className="card stat-card stat-cyan">
           <div className="stat-lbl">כמות שבועית</div>
-          <div className="stat-val"><AnimatedNumber value={stats.thisWeekLines} loading={loading} /></div>
+          <div className="stat-val"><AnimatedNumber value={Math.round(thisTotal)} loading={loading} /></div>
         </div>
         <div className="card stat-card stat-blue">
           <div className="stat-lbl">לקוחות פעילים</div>
-          <div className="stat-val"><AnimatedNumber value={stats.activeCustomers} loading={loading} /></div>
+          <div className="stat-val"><AnimatedNumber value={activeCustomers} loading={loading} /></div>
         </div>
         <div className="card stat-card stat-amber">
           <div className="stat-lbl">פריט מוביל</div>
           <div className="stat-val" style={{ fontSize: 15, fontWeight: 700 }}>
-            {loading ? '—' : (stats.topItem || '—')}
+            {loading ? '—' : (topItem?.name || '—')}
           </div>
-          {!loading && stats.topItem && (
-            <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 4 }}>{stats.topItemQty.toLocaleString('he-IL')} יח׳</div>
+          {!loading && topItem && (
+            <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 4 }}>{topItem.qty.toLocaleString('he-IL')} יח׳</div>
           )}
         </div>
-        <div className="card stat-card" style={{ borderBottom: `3px solid ${stats.wowChange === null ? 'var(--bdr2)' : stats.wowChange >= 0 ? 'var(--green)' : 'var(--red)'}` }}>
+        <div className="card stat-card" style={{ borderBottom: `3px solid ${wowChange === null ? 'var(--bdr2)' : wowChange >= 0 ? 'var(--green)' : 'var(--red)'}` }}>
           <div className="stat-lbl">שינוי שבועי</div>
-          <div className="stat-val" style={{ fontSize: 22, color: stats.wowChange === null ? 'var(--t3)' : stats.wowChange >= 0 ? 'var(--green)' : 'var(--red)' }}>
-            {loading || stats.wowChange === null ? '—' : `${stats.wowChange > 0 ? '+' : ''}${stats.wowChange}%`}
+          <div className="stat-val" style={{ fontSize: 22, color: wowChange === null ? 'var(--t3)' : wowChange >= 0 ? 'var(--green)' : 'var(--red)' }}>
+            {loading || wowChange === null ? '—' : `${wowChange > 0 ? '+' : ''}${wowChange}%`}
           </div>
         </div>
       </div>
 
       <div className="dash-layout">
-        {/* Area chart — 8 week trend */}
+        {/* Area chart — trend */}
         <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>מגמת כמויות — 8 שבועות</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {!atLatest && (
-                <button className="btn btn-ghost btn-sm" onClick={() => setChartEnd(weekHistory.length - 1)} style={{ fontSize: 12 }}>
-                  לשבוע האחרון
-                </button>
-              )}
-              <button className="btn btn-ghost btn-sm" disabled={atOldest} onClick={() => setChartEnd(i => Math.max(0, i - 1))}>
-                <ChevronRight size={16} />
-              </button>
-              <button className="btn btn-ghost btn-sm" disabled={atLatest} onClick={() => setChartEnd(i => Math.min(weekHistory.length - 1, i + 1))}>
-                <ChevronLeft size={16} />
-              </button>
-            </div>
-          </div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>מגמת כמויות — {TREND_WINDOW} שבועות</div>
           {loading ? (
             <div className="shimmer" style={{ height: 220 }} />
           ) : (
@@ -218,7 +194,7 @@ export default function Dashboard() {
 
         {/* Top 10 items */}
         <div className="card">
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>10 פריטים מובילים השבוע</div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>10 פריטים מובילים — {viewedWeek?.label || '—'}</div>
           {loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[...Array(6)].map((_, i) => <div key={i} className="shimmer" style={{ height: 28 }} />)}
@@ -253,7 +229,7 @@ export default function Dashboard() {
       {/* Full bar chart */}
       {!loading && topItems.length > 0 && (
         <div className="card" style={{ marginTop: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>כמויות לפי פריט — שבוע נוכחי</div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>כמויות לפי פריט — {viewedWeek?.label || '—'}</div>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={topItems} margin={{ top: 4, right: 8, left: -20, bottom: 60 }}>
               <CartesianGrid stroke="var(--bdr)" strokeDasharray="3 3" vertical={false} />
