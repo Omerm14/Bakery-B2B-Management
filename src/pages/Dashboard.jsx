@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { weekStart } from '../constants/days'
 
 const TREND_WINDOW = 8
 
@@ -58,14 +59,19 @@ export default function Dashboard() {
   async function loadDashboard() {
     setLoading(true)
     try {
-      // Base "current week" on the most recent week that actually has order
-      // data, not just the most recent row in `weeks` — calendar navigation
-      // and the customer ordering portal can pre-create a blank week row
-      // before any order exists in it, which must not be mistaken for "this
-      // week" (it would show zero everywhere despite real recent data).
+      // Base "current week" on the most recent week, no later than today,
+      // that actually has order data — calendar navigation and the customer
+      // ordering portal can both pre-create a blank week row (before any
+      // order exists in it) and let a customer place a standing/advance
+      // order for a week far in the future. Neither should be mistaken for
+      // "this week": a blank stub would show zero everywhere despite real
+      // recent data, and a future week with one pre-order would hide the
+      // real current week's much larger activity behind it.
+      const todayIso = weekStart().toISOString().slice(0, 10)
       const { data: candidateWeeksDesc } = await supabase
         .from('weeks')
         .select('id, start_date')
+        .lte('start_date', todayIso)
         .order('start_date', { ascending: false })
         .limit(104)
 
