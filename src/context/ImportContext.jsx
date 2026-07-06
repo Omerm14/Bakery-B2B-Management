@@ -7,6 +7,10 @@ import { supabase } from '../lib/supabase'
 const SKIP_SHEETS = new Set(['כמויות', 'כפתורי', 'גיליון', 'לו"ז', 'ללא מיתוג', 'רשימת', 'Sheet1', 'לקוח חדש', 'דוגמאות', 'Template', 'template'])
 const NON_ITEM = new Set(['', 'סה"כ', 'Total', 'total', 'תאריך', 'Date', 'date'])
 
+// Section-header rows inside each customer sheet — mark the category of the
+// item rows below them until the next header (or end of sheet).
+const CATEGORY_HEADERS = new Set(['מאפים', 'מתוקים', 'קפואים', 'שונות', 'עוגות ועוגיות', 'קפואים ושונות - קונדי'])
+
 const HE_DAYS = { 'ראשון': 0, 'שני': 1, 'שלישי': 2, 'רביעי': 3, 'חמישי': 4, 'שישי': 5 }
 
 function parseQty(v) {
@@ -82,6 +86,7 @@ function parseExcelWorkbook(wb) {
   const customers = new Set()
   const items = new Set()
   const orderLines = []
+  const itemCategories = {}
 
   for (const sheetName of wb.SheetNames) {
     if (SKIP_SHEETS.has(sheetName)) continue
@@ -124,11 +129,13 @@ function parseExcelWorkbook(wb) {
     }
 
     // Read items from row 3+ (row index 2+)
+    let currentCategory = null
     for (let r = 2; r <= range.e.r; r++) {
       const itemCell = ws[XLSX.utils.encode_cell({ r, c: 0 })]
       if (!itemCell) continue
       const iname = (itemCell.v ?? '').toString().trim()
       if (!iname || iname.length < 2) continue
+      if (CATEGORY_HEADERS.has(iname)) { currentCategory = iname; continue }
       if (iname.startsWith('סה') || NON_ITEM.has(iname)) continue
 
       for (let col = 0; col < dates.length; col++) {
@@ -139,13 +146,14 @@ function parseExcelWorkbook(wb) {
         if (qty > 0) {
           items.add(iname)
           customers.add(cname)
+          if (currentCategory) itemCategories[iname] = currentCategory
           orderLines.push({ wsIso, cname, iname, ddate: toIso(deliveryDate), qty })
         }
       }
     }
   }
 
-  return { wsIso, weekStart, customers: [...customers], items: [...items], orderLines }
+  return { wsIso, weekStart, customers: [...customers], items: [...items], orderLines, itemCategories }
 }
 
 async function upsertBatch(table, rows, onConflict) {
@@ -205,7 +213,7 @@ export function ImportProvider({ children }) {
     const changedBy = sessionData.session?.user?.email || null
     const parsed = parseExcelWorkbook(wb)
     if (!parsed) { log('❌ לא ניתן לזהות תאריכי שבוע בקובץ'); log('──────────'); return }
-    const { wsIso, weekStart, customers, items, orderLines } = parsed
+    const { wsIso, weekStart, customers, items, orderLines, itemCategories } = parsed
 
     const label = `שבוע ${weekStart.getDate().toString().padStart(2, '0')}/${(weekStart.getMonth() + 1).toString().padStart(2, '0')}/${weekStart.getFullYear()}`
     log(`📅 שבוע: ${label} (${wsIso})`)
@@ -219,6 +227,15 @@ export function ImportProvider({ children }) {
     if (items.length) {
       const err = await upsertBatch('menu_items', items.map(name_he => ({ name_he, unit: 'יח׳', active: true })), 'name_he')
       if (err) { log(`❌ שגיאה בפריטי תפריט: ${err.message}`); log('──────────'); return }
+    }
+
+    // Categorize items found under a section header — leaves category untouched
+    // for items where no header was detected this time (e.g. manual edits).
+    const categorized = items.filter(name => itemCategories[name])
+    if (categorized.length) {
+      const err = await upsertBatch('menu_items', categorized.map(name_he => ({ name_he, category: itemCategories[name_he] })), 'name_he')
+      if (err) log(`⚠️ שגיאה בסיווג קטגוריות: ${err.message}`)
+      else log(`🏷️ סווגו ${categorized.length} פריטים לפי קטגוריה`)
     }
 
     {
