@@ -41,46 +41,31 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ thisWeekLines: 0, activeCustomers: 0, topItem: null, topItemQty: 0, wowChange: null })
   const [trendData, setTrendData] = useState([])
   const [topItems, setTopItems] = useState([])
+  const [latestWeekLabel, setLatestWeekLabel] = useState(null)
 
   useEffect(() => { loadDashboard() }, [])
 
   async function loadDashboard() {
     setLoading(true)
     try {
-      // Get last 8 weeks of data
-      const today = new Date()
-      const sunOffset = today.getDay() === 0 ? 0 : -today.getDay()
-      const thisSunday = new Date(today)
-      thisSunday.setDate(today.getDate() + sunOffset)
-      thisSunday.setHours(0, 0, 0, 0)
-
-      const weeks = []
-      for (let i = 0; i < 8; i++) {
-        const d = new Date(thisSunday)
-        d.setDate(d.getDate() - i * 7)
-        weeks.push(d.toISOString().slice(0, 10))
-      }
-      weeks.reverse() // oldest first
-
-      // Fetch week rows for these dates
-      const { data: weekRows } = await supabase
+      // Base "current week" on the most recent week that actually has data,
+      // not on the literal real-world calendar week — the latest Excel
+      // import may lag behind today by days or weeks, and a fixed calendar
+      // window would then show all-zero stats even though the platform has
+      // plenty of (slightly older) data.
+      const { data: recentWeeksDesc } = await supabase
         .from('weeks')
         .select('id, start_date')
-        .in('start_date', weeks)
+        .order('start_date', { ascending: false })
+        .limit(8)
 
-      const weekMap = {}
-      for (const w of weekRows || []) weekMap[w.start_date] = w.id
+      const weeksAsc = (recentWeeksDesc || []).slice().reverse() // oldest first
+      const weekIds = weeksAsc.map(w => w.id)
+      const thisWeek = weeksAsc[weeksAsc.length - 1] || null
+      const prevWeek = weeksAsc[weeksAsc.length - 2] || null
+      setLatestWeekLabel(thisWeek ? formatWeekShort(thisWeek.start_date) : null)
 
-      const thisWeekIso = thisSunday.toISOString().slice(0, 10)
-      const prevWeekDate = new Date(thisSunday)
-      prevWeekDate.setDate(prevWeekDate.getDate() - 7)
-      const prevWeekIso = prevWeekDate.toISOString().slice(0, 10)
-
-      const thisWeekId = weekMap[thisWeekIso]
-      const prevWeekId = weekMap[prevWeekIso]
-
-      // Fetch order lines for all 8 weeks
-      const weekIds = Object.values(weekMap)
+      // Fetch order lines for these weeks
       const { data: rawLines } = weekIds.length
         ? await supabase.from('order_lines').select('week_id, customer_id, menu_item_id, quantity, menu_items(name_he)').in('week_id', weekIds).gt('quantity', 0)
         : { data: [] }
@@ -91,16 +76,16 @@ export default function Dashboard() {
 
       // Build trend data: total quantity per week
       const trendMap = {}
-      for (const iso of weeks) trendMap[iso] = { label: formatWeekShort(iso), qty: 0, iso }
-      for (const line of allLines || []) {
-        const iso = Object.keys(weekMap).find(k => weekMap[k] === line.week_id)
-        if (iso && trendMap[iso]) trendMap[iso].qty += parseFloat(line.quantity)
+      for (const w of weeksAsc) trendMap[w.start_date] = { label: formatWeekShort(w.start_date), qty: 0, iso: w.start_date }
+      for (const line of allLines) {
+        const w = weeksAsc.find(w => w.id === line.week_id)
+        if (w) trendMap[w.start_date].qty += parseFloat(line.quantity)
       }
       setTrendData(Object.values(trendMap))
 
       // This week stats
-      const thisWeekLines = (allLines || []).filter(l => l.week_id === thisWeekId)
-      const prevWeekLines = (allLines || []).filter(l => l.week_id === prevWeekId)
+      const thisWeekLines = thisWeek ? allLines.filter(l => l.week_id === thisWeek.id) : []
+      const prevWeekLines = prevWeek ? allLines.filter(l => l.week_id === prevWeek.id) : []
       const thisTotal = thisWeekLines.reduce((s, l) => s + parseFloat(l.quantity), 0)
       const prevTotal = prevWeekLines.reduce((s, l) => s + parseFloat(l.quantity), 0)
       const wowChange = prevTotal > 0 ? Math.round(((thisTotal - prevTotal) / prevTotal) * 100) : null
@@ -141,7 +126,9 @@ export default function Dashboard() {
     <div className="page">
       <div className="page-header">
         <h1 className="page-title">דשבורד</h1>
-        <span style={{ fontSize: 13, color: 'var(--t3)' }}>שבוע נוכחי</span>
+        <span style={{ fontSize: 13, color: 'var(--t3)' }}>
+          {latestWeekLabel ? `שבוע אחרון עם נתונים: ${latestWeekLabel}` : 'שבוע נוכחי'}
+        </span>
       </div>
 
       {/* KPI Cards */}
