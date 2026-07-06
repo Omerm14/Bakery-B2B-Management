@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { useToast } from '../context/ToastContext'
 
 export function useMenuItems({ activeOnly = true } = {}) {
+  const toast = useToast()
   const [menuItems, setMenuItems] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -13,7 +15,7 @@ export function useMenuItems({ activeOnly = true } = {}) {
       .order('category').order('name_he')
     if (activeOnly) q = q.eq('active', true)
     const { data, error } = await q
-    if (error) console.error('[useMenuItems]', error)
+    if (error) { console.error('[useMenuItems]', error); toast.error('טעינת התפריט נכשלה') }
     setMenuItems(data || [])
     setLoading(false)
   }, [activeOnly])

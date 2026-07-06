@@ -20,6 +20,7 @@ import Landing from './pages/Landing'
 import CustomerLoginPhone from './pages/customer/CustomerLoginPhone'
 import CustomerLoginOtp from './pages/customer/CustomerLoginOtp'
 import CustomerOrders from './pages/customer/CustomerOrders'
+import CustomerPortalDemo from './pages/customer/CustomerPortalDemo'
 
 function ImportToast() {
   const { running, progress, logs } = useImport()
@@ -140,6 +141,7 @@ export default function App() {
             <Route path="/login" element={session ? <Navigate to={isCustomer ? '/portal/orders' : '/dashboard'} replace /> : <Login />} />
             <Route path="/portal/login" element={session ? <Navigate to={isCustomer ? '/portal/orders' : '/dashboard'} replace /> : <CustomerLoginPhone />} />
             <Route path="/portal/verify" element={session ? <Navigate to={isCustomer ? '/portal/orders' : '/dashboard'} replace /> : <CustomerLoginOtp />} />
+            <Route path="/portal/preview" element={<CustomerPortalDemo />} />
             {session && isCustomer ? (
               <>
                 <Route path="/portal/orders" element={<CustomerOrders />} />
