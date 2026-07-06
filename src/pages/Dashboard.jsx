@@ -45,6 +45,32 @@ function formatWeekShort(iso) {
   return `${d.getDate()}/${d.getMonth() + 1}/${String(d.getFullYear()).slice(2)}`
 }
 
+const PAGE_SIZE = 1000
+
+// Supabase/PostgREST caps a single response at PAGE_SIZE rows by default —
+// with enough historical order data across many weeks, that cap can be hit
+// before the response ever reaches the most recent (physically later in the
+// table) rows, silently dropping the current week from every aggregate.
+// Paginate with .range() until a page comes back short to fetch everything.
+async function fetchAllOrderLines(weekIds) {
+  const all = []
+  let from = 0
+  while (true) {
+    const { data, error } = await supabase
+      .from('order_lines')
+      .select('week_id, customer_id, menu_item_id, quantity, menu_items(name_he), customers!inner(active)')
+      .in('week_id', weekIds)
+      .eq('customers.active', true)
+      .gt('quantity', 0)
+      .range(from, from + PAGE_SIZE - 1)
+    if (error) { console.error('[Dashboard] fetchAllOrderLines', error); break }
+    all.push(...(data || []))
+    if (!data || data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return all
+}
+
 export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   // Ascending list of weeks that actually have order data, each pre-computed
@@ -76,9 +102,7 @@ export default function Dashboard() {
         .limit(104)
 
       const candidateIds = (candidateWeeksDesc || []).map(w => w.id)
-      const { data: rawLines } = candidateIds.length
-        ? await supabase.from('order_lines').select('week_id, customer_id, menu_item_id, quantity, menu_items(name_he), customers!inner(active)').in('week_id', candidateIds).eq('customers.active', true).gt('quantity', 0)
-        : { data: [] }
+      const rawLines = candidateIds.length ? await fetchAllOrderLines(candidateIds) : []
 
       const linesByWeek = new Map()
       for (const l of rawLines || []) {
