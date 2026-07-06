@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { weekStart } from '../constants/days'
+import { weekStart, formatWeekLabel } from '../constants/days'
 
 const TREND_WINDOW = 8
 
@@ -102,7 +102,11 @@ function buildHistorySegment(weeksDesc, weekRows) {
       const top10 = sortedItems.slice(0, 10).map(i => ({ name: i.name, qty: Math.round(i.qty * 10) / 10 }))
       const topItem = sortedItems[0] ? { name: sortedItems[0].name, qty: Math.round(sortedItems[0].qty * 10) / 10 } : null
 
-      return { id: w.id, start_date: w.start_date, label: formatWeekShort(w.start_date), qty, activeCustomers, top10, topItem }
+      // `label` is the compact single-date form used on the trend chart's
+      // x-axis (little room per tick); `rangeLabel` spells out the full
+      // week for the header and panel subtitles, where clarity matters
+      // more than space.
+      return { id: w.id, start_date: w.start_date, label: formatWeekShort(w.start_date), rangeLabel: formatWeekLabel(w.start_date), qty, activeCustomers, top10, topItem }
     })
 }
 
@@ -239,7 +243,7 @@ export default function Dashboard() {
         <button className="btn btn-ghost btn-sm" disabled={atOldest || loadingMore} onClick={goOlder}>
           {loadingMore ? <span className="shimmer" style={{ width: 16, height: 16, borderRadius: 4 }} /> : <ChevronRight size={16} />}
         </button>
-        <span className="week-label">{viewedWeek ? viewedWeek.label : '—'}</span>
+        <span className="week-label">{viewedWeek ? viewedWeek.rangeLabel : '—'}</span>
         <button className="btn btn-ghost btn-sm" disabled={atLatest} onClick={() => setViewedIndex(i => Math.min(weekHistory.length - 1, i + 1))}><ChevronLeft size={16} /></button>
         <button className="btn btn-ghost btn-sm" disabled={atLatest} onClick={() => setViewedIndex(weekHistory.length - 1)} style={{ fontSize: 12 }}>שבוע אחרון עם נתונים</button>
       </div>
@@ -298,7 +302,7 @@ export default function Dashboard() {
 
         {/* Top 10 items */}
         <div className="card">
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>10 פריטים מובילים — {viewedWeek?.label || '—'}</div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>10 פריטים מובילים — {viewedWeek?.rangeLabel || '—'}</div>
           {loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[...Array(6)].map((_, i) => <div key={i} className="shimmer" style={{ height: 28 }} />)}
@@ -333,7 +337,7 @@ export default function Dashboard() {
       {/* Full bar chart */}
       {!loading && topItems.length > 0 && (
         <div className="card" style={{ marginTop: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>כמויות לפי פריט — {viewedWeek?.label || '—'}</div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>כמויות לפי פריט — {viewedWeek?.rangeLabel || '—'}</div>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={topItems} margin={{ top: 4, right: 8, left: -20, bottom: 60 }}>
               <CartesianGrid stroke="var(--bdr)" strokeDasharray="3 3" vertical={false} />
