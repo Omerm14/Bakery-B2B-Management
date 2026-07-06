@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 // ── helpers (copied from Settings so they run in context, not component) ──────
 
 const SKIP_SHEETS = new Set(['כמויות', 'כפתורי', 'גיליון', 'לו"ז', 'ללא מיתוג', 'רשימת', 'Sheet1', 'לקוח חדש', 'דוגמאות', 'Template', 'template'])
-const NON_ITEM = new Set(['', 'סה"כ', 'Total', 'total'])
+const NON_ITEM = new Set(['', 'סה"כ', 'Total', 'total', 'תאריך', 'Date', 'date'])
 
 const HE_DAYS = { 'ראשון': 0, 'שני': 1, 'שלישי': 2, 'רביעי': 3, 'חמישי': 4, 'שישי': 5 }
 
