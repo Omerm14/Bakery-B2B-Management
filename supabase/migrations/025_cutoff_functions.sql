@@ -1,29 +1,24 @@
 -- Order-edit cutoff enforcement.
 --
--- ******************************************************************
--- ** PLACEHOLDER RULE — UNCONFIRMED, DO NOT ENABLE CUSTOMER ACCESS **
--- ** IN PRODUCTION UNTIL THIS IS SIGNED OFF.                       **
--- ******************************************************************
--- Interpretation of the client's own wording ("customer can change
--- tomorrow's order until 10:30am on days Sun-Thu" + "Friday/Saturday/
--- Sunday orders can be updated until Thursday 10:30am"): Mon-Fri delivery
--- dates lock at 10:30am the day before; Saturday and Sunday deliveries
--- both lock together at the *same* Thursday 10:30am (since there's no
--- edit window on Friday/Saturday to handle them separately). The client
--- flagged an earlier restatement of this as "close but not exact" without
--- finishing the correction — get this confirmed before going live.
+-- CONFIRMED rule (client's own wording): "customer can change tomorrow's
+-- order until 10:30am on days Sun-Thu" + "Friday/Saturday/Sunday orders
+-- can be updated until Thursday 10:30am" -> Mon-Fri delivery dates lock at
+-- 10:30am the day before; Saturday and Sunday deliveries both lock
+-- together at the *same* Thursday 10:30am (there's no edit window on
+-- Friday/Saturday to handle them separately).
 --
 -- The lock time itself (currently 10:30, from app_config.cutoff_rules) is
 -- easy to change without touching this function; only the day-mapping
--- logic below needs a code change if the rule itself is wrong.
-
--- Note: `date_arithmetic::timestamp + time` yields a timestamp *without*
--- time zone, which is then implicitly cast to timestamptz using the
--- database's session TimeZone setting (typically UTC on Supabase) when
--- compared against now(). So "10:30" here means 10:30 in the database's
--- configured timezone, not necessarily 10:30 Israel time -- confirm this
--- matches expectations (see the DST caveat on the pg_cron schedule in
--- migration 027) before relying on it for real customers.
+-- logic below needs a code change if the rule itself changes.
+--
+-- Superseded by migration 032: the original version of this function
+-- below builds a naive `timestamp` and lets it implicitly cast to
+-- timestamptz using the database's session TimeZone setting (UTC on
+-- Supabase) when compared against now() -- meaning "10:30" here meant
+-- 10:30 UTC, not 10:30 Israel time. Migration 032 replaces this with an
+-- explicit `AT TIME ZONE 'Asia/Jerusalem'` conversion so the cutoff is
+-- always 10:30 Israel wall-clock time regardless of server timezone or
+-- DST. Left as-is here for history; do not re-apply this version.
 CREATE OR REPLACE FUNCTION order_edit_lock_at(p_delivery_date date) RETURNS timestamptz
 LANGUAGE sql STABLE AS $$
   SELECT (

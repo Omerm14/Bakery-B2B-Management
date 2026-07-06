@@ -1,20 +1,44 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { ChevronRight, ChevronLeft, LogOut } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useCustomerWeek } from '../../hooks/useCustomerWeek'
 import { useCustomerMenuItems } from '../../hooks/useCustomerMenuItems'
+import { useToast } from '../../context/ToastContext'
 import { WEEK_DAYS } from '../../constants/days'
+import DayOrderView from './DayOrderView'
+import WeekSummaryView from './WeekSummaryView'
 import CutoffBlockedNotice from './CutoffBlockedNotice'
 
+const AUTOSAVE_DEBOUNCE_MS = 450
+const SAVED_INDICATOR_MS = 1500
+
 export default function CustomerOrders() {
+  const toast = useToast()
   const week = useCustomerWeek()
   const { menuItems, loading: itemsLoading } = useCustomerMenuItems()
   const [customer, setCustomer] = useState(null)
   const [weekId, setWeekId] = useState(null)
   const [orderLines, setOrderLines] = useState({}) // `${menuItemId}_${date}` -> line
-  const [canEdit, setCanEdit] = useState({}) // date -> boolean
+  const [lockAtByDate, setLockAtByDate] = useState({}) // date -> timestamptz string
   const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [saveStates, setSaveStates] = useState({}) // key -> 'saving' | 'saved'
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('floory_portal_view') || 'day')
+  const [dayOffset, setDayOffset] = useState(() => new Date().getDay())
+  const [nowTick, setNowTick] = useState(() => Date.now())
+  const pendingTimers = useRef({})
+
+  useEffect(() => { localStorage.setItem('floory_portal_view', viewMode) }, [viewMode])
+
+  useEffect(() => () => {
+    Object.values(pendingTimers.current).forEach(clearTimeout)
+  }, [])
+
+  // Ticks every minute so a day that's currently editable locks itself in
+  // the UI at the exact cutoff instant, without needing a page refresh.
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 60000)
+    return () => clearInterval(id)
+  }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -32,19 +56,19 @@ export default function CustomerOrders() {
       const wid = await week.getWeekId()
       setWeekId(wid)
 
-      const editability = {}
+      const lockAts = {}
       await Promise.all(WEEK_DAYS.map(async d => {
         const date = week.dayDate(d.key)
-        const { data } = await supabase.rpc('can_edit_delivery_date', { p_delivery_date: date })
-        editability[date] = !!data
+        const { data } = await supabase.rpc('get_delivery_date_lock_at', { p_delivery_date: date })
+        lockAts[date] = data
       }))
-      setCanEdit(editability)
+      setLockAtByDate(lockAts)
 
       if (!wid) { setOrderLines({}); return }
 
       const { data: lines } = await supabase
         .from('order_lines')
-        .select('id, menu_item_id, delivery_date, quantity')
+        .select('id, menu_item_id, delivery_date, quantity, change_reason')
         .eq('week_id', wid)
         .eq('customer_id', customer.id)
 
@@ -58,21 +82,24 @@ export default function CustomerOrders() {
 
   useEffect(() => { loadWeek() }, [loadWeek])
 
-  async function handleQtyChange(menuItemId, date, value) {
-    if (!canEdit[date] || !customer) return
-    const qty = parseFloat(value) || 0
-    const key = `${menuItemId}_${date}`
-    const prevLine = orderLines[key]
+  const canEdit = useMemo(() => {
+    const map = {}
+    for (const d of WEEK_DAYS) {
+      const date = week.dayDate(d.key)
+      const lockAt = lockAtByDate[date]
+      map[date] = lockAt ? nowTick < new Date(lockAt).getTime() : true
+    }
+    return map
+  }, [lockAtByDate, nowTick, week.weekStartISO])
 
-    setOrderLines(prev => ({ ...prev, [key]: { ...prev[key], quantity: qty } }))
-    setSaving(true)
+  async function commitQty(menuItemId, date, qty, key) {
+    if (!weekId || !customer) return
+    setSaveStates(prev => ({ ...prev, [key]: 'saving' }))
     try {
-      let wid = weekId
-      if (!wid) return // no week row yet -> nothing to save into (staff/cron creates weeks)
       const { data, error } = await supabase
         .from('order_lines')
         .upsert({
-          week_id: wid,
+          week_id: weekId,
           customer_id: customer.id,
           menu_item_id: menuItemId,
           delivery_date: date,
@@ -87,13 +114,59 @@ export default function CustomerOrders() {
         .select('id')
         .single()
       if (error) throw error
-      if (data) setOrderLines(prev => ({ ...prev, [key]: { ...prev[key], id: data.id } }))
+      setOrderLines(prev => ({ ...prev, [key]: { ...prev[key], id: data?.id } }))
+      setSaveStates(prev => ({ ...prev, [key]: 'saved' }))
+      setTimeout(() => {
+        setSaveStates(prev => {
+          if (prev[key] !== 'saved') return prev
+          const next = { ...prev }
+          delete next[key]
+          return next
+        })
+      }, SAVED_INDICATOR_MS)
     } catch (err) {
-      console.error('[CustomerOrders.handleQtyChange]', err)
-      setOrderLines(prev => ({ ...prev, [key]: prevLine }))
-    } finally {
-      setSaving(false)
+      console.error('[CustomerOrders.commitQty]', err)
+      toast.error('השמירה נכשלה — נסו שוב')
+      setSaveStates(prev => { const next = { ...prev }; delete next[key]; return next })
     }
+  }
+
+  function handleQtyChange(menuItemId, date, rawValue) {
+    if (!canEdit[date] || !customer) return
+    const qty = parseFloat(rawValue) || 0
+    const key = `${menuItemId}_${date}`
+
+    setOrderLines(prev => ({ ...prev, [key]: { ...prev[key], quantity: qty, change_reason: 'customer_request' } }))
+
+    if (pendingTimers.current[key]) clearTimeout(pendingTimers.current[key])
+    pendingTimers.current[key] = setTimeout(() => commitQty(menuItemId, date, qty, key), AUTOSAVE_DEBOUNCE_MS)
+  }
+
+  function dayTotal(date) {
+    let total = 0
+    for (const key in orderLines) {
+      if (key.endsWith(`_${date}`)) total += orderLines[key]?.quantity || 0
+    }
+    return total
+  }
+
+  function nextDay() {
+    setDayOffset(prev => {
+      if (prev >= 6) { week.nextWeek(); return 0 }
+      return prev + 1
+    })
+  }
+
+  function prevDay() {
+    setDayOffset(prev => {
+      if (prev <= 0) { week.prevWeek(); return 6 }
+      return prev - 1
+    })
+  }
+
+  function goToToday() {
+    week.goToToday()
+    setDayOffset(new Date().getDay())
   }
 
   function signOut() {
@@ -107,11 +180,11 @@ export default function CustomerOrders() {
     return acc
   }, {})
 
-  const anyDayLocked = WEEK_DAYS.some(d => canEdit[week.dayDate(d.key)] === false)
+  const selectedDate = week.dayDate(dayOffset)
   const allDaysLocked = WEEK_DAYS.every(d => canEdit[week.dayDate(d.key)] === false)
 
   return (
-    <div className="page" style={{ maxWidth: 900, margin: '0 auto' }}>
+    <div className="page portal-page" style={{ maxWidth: 900, margin: '0 auto' }}>
       <div className="page-header">
         <h1 className="page-title">{customer ? `הזמנות — ${customer.name}` : 'הזמנות'}</h1>
         <button className="btn btn-ghost btn-sm" onClick={signOut}>
@@ -119,89 +192,54 @@ export default function CustomerOrders() {
         </button>
       </div>
 
-      <div className="week-nav">
-        <button className="btn btn-ghost btn-sm" onClick={week.prevWeek}><ChevronRight size={16} /></button>
-        <span className="week-label">{week.weekLabel}</span>
-        <button className="btn btn-ghost btn-sm" onClick={week.nextWeek}><ChevronLeft size={16} /></button>
-        <button className="btn btn-ghost btn-sm" onClick={week.goToToday} style={{ fontSize: 12 }}>השבוע</button>
-        {saving && <span style={{ fontSize: 12, color: 'var(--t3)' }}>שומר...</span>}
+      <div className="view-toggle">
+        <button className={`view-toggle-btn${viewMode === 'day' ? ' active' : ''}`} onClick={() => setViewMode('day')}>יומי</button>
+        <button className={`view-toggle-btn${viewMode === 'week' ? ' active' : ''}`} onClick={() => setViewMode('week')}>שבועי</button>
       </div>
 
-      {allDaysLocked && <CutoffBlockedNotice />}
+      <div className="week-nav">
+        {viewMode === 'week' && (
+          <button className="btn btn-ghost btn-sm" onClick={week.prevWeek}><ChevronRight size={16} /></button>
+        )}
+        <span className="week-label">{week.weekLabel}</span>
+        {viewMode === 'week' && (
+          <button className="btn btn-ghost btn-sm" onClick={week.nextWeek}><ChevronLeft size={16} /></button>
+        )}
+        <button className="btn btn-ghost btn-sm" onClick={goToToday} style={{ fontSize: 12 }}>השבוע</button>
+      </div>
 
       {loading || itemsLoading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
-          {[...Array(6)].map((_, i) => <div key={i} className="shimmer" style={{ height: 40 }} />)}
+          {[...Array(6)].map((_, i) => <div key={i} className="shimmer" style={{ height: 48 }} />)}
         </div>
       ) : !weekId ? (
         <div className="empty"><div className="empty-icon">📋</div><div className="empty-text">ההזמנות לשבוע זה עדיין לא נפתחו</div></div>
+      ) : viewMode === 'day' ? (
+        <DayOrderView
+          dayLabel={WEEK_DAYS[dayOffset].label}
+          dateLabel={selectedDate.slice(5).replace('-', '/')}
+          date={selectedDate}
+          grouped={grouped}
+          orderLines={orderLines}
+          canEdit={canEdit[selectedDate]}
+          lockAt={lockAtByDate[selectedDate]}
+          saveStates={saveStates}
+          onQtyChange={handleQtyChange}
+          onPrevDay={prevDay}
+          onNextDay={nextDay}
+          dayTotal={dayTotal(selectedDate)}
+        />
       ) : (
-        <div className="card" style={{ padding: 0, overflow: 'hidden', marginTop: 16 }}>
-          <div className="order-grid-wrap">
-            <table className="order-grid">
-              <thead>
-                <tr>
-                  <th className="item-col sticky-col">פריט</th>
-                  {WEEK_DAYS.map(d => (
-                    <th key={d.key}>
-                      <div>{d.short}</div>
-                      <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>
-                        {week.dayDate(d.key).slice(5).replace('-', '/')}
-                      </div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(grouped).map(([cat, items]) => (
-                  <>
-                    <tr key={`cat-${cat}`}>
-                      <td colSpan={8} style={{ padding: '8px 16px', background: 'var(--surf2)', fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
-                        {cat}
-                      </td>
-                    </tr>
-                    {items.map(item => (
-                      <tr key={item.id}>
-                        <td className="item-name sticky-col">
-                          {item.name_he}
-                          {item.price != null && <span style={{ marginInlineStart: 6, fontSize: 11, color: 'var(--t3)' }}>{item.price}₪</span>}
-                        </td>
-                        {WEEK_DAYS.map(d => {
-                          const date = week.dayDate(d.key)
-                          const key = `${item.id}_${date}`
-                          const line = orderLines[key]
-                          const editable = canEdit[date]
-                          return (
-                            <td key={d.key} style={{ textAlign: 'center' }}>
-                              {editable ? (
-                                <input
-                                  type="number"
-                                  className="qty-cell"
-                                  min="0"
-                                  step="0.5"
-                                  value={line?.quantity || ''}
-                                  placeholder="—"
-                                  onChange={e => handleQtyChange(item.id, date, e.target.value)}
-                                />
-                              ) : (
-                                <span style={{ color: 'var(--t3)', fontSize: 13 }}>
-                                  {line?.quantity || '—'} <CutoffBlockedNotice compact />
-                                </span>
-                              )}
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    ))}
-                  </>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-      {!allDaysLocked && anyDayLocked && (
-        <div style={{ marginTop: 12 }}><CutoffBlockedNotice /></div>
+        <>
+          <WeekSummaryView
+            dayDate={week.dayDate}
+            grouped={grouped}
+            orderLines={orderLines}
+            canEdit={canEdit}
+            onQtyChange={handleQtyChange}
+          />
+          {allDaysLocked && <div style={{ marginTop: 12 }}><CutoffBlockedNotice /></div>}
+        </>
       )}
     </div>
   )
