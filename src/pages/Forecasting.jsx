@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useWeek } from '../hooks/useWeek'
+import { useCustomers } from '../hooks/useCustomers'
+import { useMenuItems } from '../hooks/useMenuItems'
+import { useToast } from '../context/ToastContext'
 import { WEEK_DAYS } from '../constants/days'
 import { ChevronRight, ChevronLeft, Lock } from 'lucide-react'
 
 export default function Forecasting() {
+  const toast = useToast()
   const week = useWeek()
-  const [customers, setCustomers] = useState([])
-  const [menuItems, setMenuItems] = useState([])
+  const { customers } = useCustomers()
+  const { menuItems } = useMenuItems()
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [forecast, setForecast] = useState({}) // key: `${itemId}_${date}` => qty
   const [overrides, setOverrides] = useState({}) // same key => qty (user edits)
@@ -15,22 +19,14 @@ export default function Forecasting() {
   const [locking, setLocking] = useState(false)
   const [locked, setLocked] = useState({}) // keys already locked this week
 
-  useEffect(() => { loadMaster() }, [])
+  useEffect(() => {
+    if (customers.length && !selectedCustomer) setSelectedCustomer(customers[0])
+  }, [customers])
 
   useEffect(() => {
     if (selectedCustomer) loadForecast()
     else { setForecast({}); setOverrides({}); setLocked({}) }
   }, [selectedCustomer, week.weekStartISO])
-
-  async function loadMaster() {
-    const [{ data: custs }, { data: items }] = await Promise.all([
-      supabase.from('customers').select('id, name').eq('active', true).order('name'),
-      supabase.from('menu_items').select('id, name_he, unit, category, suppliers(name)').eq('active', true).order('category').order('name_he'),
-    ])
-    setCustomers(custs || [])
-    setMenuItems(items || [])
-    if (custs?.length) setSelectedCustomer(custs[0])
-  }
 
   async function loadForecast() {
     if (!selectedCustomer) return
@@ -153,15 +149,20 @@ export default function Forecasting() {
       }
 
       if (upserts.length) {
-        await supabase.from('order_lines').upsert(upserts, {
+        const { error } = await supabase.from('order_lines').upsert(upserts, {
           onConflict: 'week_id,customer_id,menu_item_id,delivery_date',
         })
+        if (error) throw error
       }
 
       // Refresh locked state
       const newLocked = {}
       for (const u of upserts) newLocked[`${u.menu_item_id}_${u.delivery_date}`] = true
       setLocked(newLocked)
+      toast.success(upserts.length ? `נעלה תחזית — ${upserts.length} תאים` : 'אין תחזית לנעילה')
+    } catch (err) {
+      console.error('[lockForecast]', err)
+      toast.error('נעילת התחזית נכשלה')
     } finally {
       setLocking(false)
     }
@@ -261,7 +262,7 @@ export default function Forecasting() {
                   <table className="order-grid">
                     <thead>
                       <tr>
-                        <th className="item-col">פריט</th>
+                        <th className="item-col sticky-col">פריט</th>
                         <th style={{ fontSize: 10, color: 'var(--t3)' }}>ספק</th>
                         {WEEK_DAYS.map(d => (
                           <th key={d.key}>
@@ -299,7 +300,7 @@ export default function Forecasting() {
                               if (!hasAny) return null
                               return (
                                 <tr key={item.id}>
-                                  <td className="item-name">{item.name_he}</td>
+                                  <td className="item-name sticky-col">{item.name_he}</td>
                                   <td className="item-supplier">{item.suppliers?.name || '—'}</td>
                                   {WEEK_DAYS.map(d => {
                                     const date = week.dayDate(d.key)

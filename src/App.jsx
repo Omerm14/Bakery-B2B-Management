@@ -13,6 +13,9 @@ import Dashboard from './pages/Dashboard'
 import History from './pages/History'
 import Forecasting from './pages/Forecasting'
 import { ImportProvider, useImport } from './context/ImportContext'
+import { ToastProvider } from './context/ToastContext'
+import ToastHost from './components/ToastHost'
+import SearchOverlay from './components/search/SearchOverlay'
 import Landing from './pages/Landing'
 
 function ImportToast() {
@@ -72,14 +75,29 @@ function ImportToast() {
 
 function ProtectedLayout({ children, isDark, onToggleTheme }) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+
+  useEffect(() => {
+    const h = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setSearchOpen(true)
+      }
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [])
+
   return (
     <div className="app-shell">
       <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
       <div className="app-main">
-        <GlobalHeader isDark={isDark} onToggleTheme={onToggleTheme} onMenuOpen={() => setMobileOpen(true)} />
+        <GlobalHeader isDark={isDark} onToggleTheme={onToggleTheme} onMenuOpen={() => setMobileOpen(true)} onSearchOpen={() => setSearchOpen(true)} />
         {children}
       </div>
       <ImportToast />
+      <ToastHost />
+      <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   )
 }
@@ -110,28 +128,30 @@ export default function App() {
   }
 
   return (
-    <ImportProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={session ? <Navigate to="/dashboard" replace /> : <Landing />} />
-          <Route path="/login" element={session ? <Navigate to="/dashboard" replace /> : <Login />} />
-          {session ? (
-            <>
-              <Route path="/dashboard" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Dashboard /></ProtectedLayout>} />
-              <Route path="/orders" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Orders /></ProtectedLayout>} />
-              <Route path="/production" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Production /></ProtectedLayout>} />
-              <Route path="/packing" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Packing /></ProtectedLayout>} />
-              <Route path="/weekly" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Weekly /></ProtectedLayout>} />
-              <Route path="/history" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><History /></ProtectedLayout>} />
-              <Route path="/forecasting" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Forecasting /></ProtectedLayout>} />
-              <Route path="/settings" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Settings /></ProtectedLayout>} />
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
-            </>
-          ) : (
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          )}
-        </Routes>
-      </BrowserRouter>
-    </ImportProvider>
+    <ToastProvider>
+      <ImportProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={session ? <Navigate to="/dashboard" replace /> : <Landing />} />
+            <Route path="/login" element={session ? <Navigate to="/dashboard" replace /> : <Login />} />
+            {session ? (
+              <>
+                <Route path="/dashboard" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Dashboard /></ProtectedLayout>} />
+                <Route path="/orders" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Orders /></ProtectedLayout>} />
+                <Route path="/production" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Production /></ProtectedLayout>} />
+                <Route path="/packing" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Packing /></ProtectedLayout>} />
+                <Route path="/weekly" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Weekly /></ProtectedLayout>} />
+                <Route path="/history" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><History /></ProtectedLayout>} />
+                <Route path="/forecasting" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Forecasting /></ProtectedLayout>} />
+                <Route path="/settings" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Settings /></ProtectedLayout>} />
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              </>
+            ) : (
+              <Route path="*" element={<Navigate to="/login" replace />} />
+            )}
+          </Routes>
+        </BrowserRouter>
+      </ImportProvider>
+    </ToastProvider>
   )
 }

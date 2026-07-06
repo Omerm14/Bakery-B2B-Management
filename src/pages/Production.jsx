@@ -114,10 +114,6 @@ export default function Production() {
   }
 
   function printView() {
-    const url = `/production/print?date=${selectedDate}`
-    window.open(url, '_blank')
-    // Inline print fallback using window.print with a hidden iframe
-    // We'll use a print-specific CSS class instead
     window.print()
   }
 

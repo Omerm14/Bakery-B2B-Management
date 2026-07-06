@@ -121,6 +121,17 @@ body {
 @media (max-width: 1023px) {
   .hd-menu-btn { display: flex; }
 }
+.hd-search {
+  display: flex; align-items: center; gap: 8px; height: 34px;
+  padding-inline: 12px; background: var(--surf2); border: 1px solid var(--bdr);
+  border-radius: var(--rs); cursor: pointer; color: var(--t3);
+  font: 400 13px var(--font-ui); transition: border-color .12s; flex-shrink: 0;
+}
+.hd-search:hover { border-color: var(--bdr2); color: var(--t2); }
+.hd-search kbd { font: 500 10px var(--font-mono); color: var(--t3); background: var(--surf3); border: 1px solid var(--bdr); border-radius: 4px; padding: 2px 6px; }
+@media (max-width: 640px) {
+  .hd-search span, .hd-search kbd { display: none; }
+}
 
 /* ─── BUTTONS ─── */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 16px; border-radius: var(--rs); font: 600 14px var(--font-ui); border: none; cursor: pointer; transition: filter .15s, background .15s, border-color .15s, transform .15s; text-decoration: none; }
@@ -133,6 +144,8 @@ body {
 .btn-ghost:hover { color: var(--t1); border-color: var(--bdr2); }
 .btn-danger { background: var(--red-tint); color: var(--red); border: 1px solid var(--red-bdr); }
 .btn-danger:hover { filter: brightness(1.12); }
+.btn-success { background: var(--green-tint); color: var(--green); border: 1px solid var(--green-bdr); }
+.btn-success:hover { filter: brightness(1.12); }
 .btn-sm { padding: 4px 10px; font-size: 12px; border-radius: 6px; }
 
 /* ─── CARDS ─── */
@@ -151,6 +164,11 @@ body {
 .input:focus { outline: none; border-color: var(--accent-bdr); box-shadow: 0 0 0 3px var(--accent-tint); }
 .input::placeholder { color: var(--t3); }
 .lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--t3); margin-bottom: 6px; display: block; }
+
+/* ─── SEARCH INPUT ─── */
+.search-input-wrap { position: relative; margin-bottom: 10px; }
+.search-input-icon { position: absolute; inset-inline-start: 10px; top: 50%; transform: translateY(-50%); color: var(--t3); pointer-events: none; }
+.search-input { padding-inline-start: 32px; }
 
 /* ─── STAT CARDS ─── */
 .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
@@ -182,6 +200,21 @@ body {
 .order-grid td.item-name { padding: 8px 8px 8px 16px; font-size: 13px; font-weight: 500; color: var(--t1); white-space: nowrap; }
 .order-grid td.item-supplier { padding: 8px 8px; font-size: 11px; color: var(--t3); white-space: nowrap; }
 .order-grid tr:hover td { background: var(--surf2); }
+
+/* ─── STICKY FIRST COLUMN ─── */
+/* Pins the item-name column while the wide day/week grids scroll horizontally
+   on mobile/tablet. inset-inline-start (not left) pins to the correct edge in
+   this RTL-only app. Applied via an explicit class, not :first-child, since
+   .itbl is also used by tables (Settings, History) where sticky isn't wanted. */
+.sticky-col {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 2;
+  background: var(--surf);
+  border-inline-end: 1px solid var(--bdr2);
+}
+.order-grid tr:hover td.sticky-col,
+.itbl tr:hover td.sticky-col { background: var(--surf2); }
 .qty-cell { width: 68px; text-align: center; padding: 6px 4px; background: var(--surf2); border: 1px solid var(--bdr); border-radius: 6px; color: var(--t1); font-size: 14px; font-weight: 600; outline: none; transition: border-color .15s; font-family: var(--font-mono); }
 .qty-cell:focus { border-color: var(--accent-bdr); box-shadow: 0 0 0 2px var(--accent-tint); }
 .qty-cell.source-noga { border-color: var(--accent-bdr); background: var(--accent-tint); }
@@ -216,6 +249,24 @@ body {
 .modal { background: var(--surf); border: 1px solid var(--bdr2); border-radius: 16px; padding: 28px; width: 520px; max-width: 100%; max-height: 85vh; overflow-y: auto; animation: scaleIn .25s cubic-bezier(.16,1,.3,1); box-shadow: var(--shadow-modal); direction: rtl; }
 .modal-title { font-size: 18px; font-weight: 800; margin-bottom: 20px; }
 .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+
+/* ─── SEARCH OVERLAY (Cmd/Ctrl+K) ─── */
+.search-overlay { align-items: flex-start; padding-top: 12vh; }
+.search-modal { width: 480px; padding: 0; max-height: 60vh; display: flex; flex-direction: column; overflow: hidden; }
+.search-modal-input-row { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--bdr); flex-shrink: 0; }
+.search-modal-input { flex: 1; background: none; border: none; outline: none; color: var(--t1); font: 15px var(--font-ui); }
+.search-modal-input::placeholder { color: var(--t3); }
+.search-modal-kbd { font: 500 10px var(--font-mono); color: var(--t3); background: var(--surf3); border: 1px solid var(--bdr); border-radius: 4px; padding: 2px 6px; flex-shrink: 0; }
+.search-modal-hint { padding: 28px 18px; text-align: center; color: var(--t3); font-size: 13px; }
+.search-modal-results { overflow-y: auto; padding: 6px; }
+.search-result-item {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: var(--rs); border: none; cursor: pointer;
+  background: transparent; color: var(--t1); font: 500 13.5px var(--font-ui); text-align: start;
+}
+.search-result-item.active, .search-result-item:hover { background: var(--surf2); }
+.search-result-item span:first-of-type { flex: 1; }
+.search-result-kind { font-size: 11px; color: var(--t3); }
 
 /* ─── LAYOUT ─── */
 .page { padding: 24px; max-width: 1400px; margin: 0 auto; animation: slideUp .3s cubic-bezier(.16,1,.3,1); }
@@ -270,6 +321,34 @@ body {
 .alert-warn { background: var(--amber-tint); border: 1px solid var(--amber-bdr); color: var(--amber); }
 .alert-info { background: var(--blue-tint); border: 1px solid var(--blue-bdr); color: var(--blue); }
 .alert-err  { background: var(--red-tint);  border: 1px solid var(--red-bdr);  color: var(--red); }
+
+/* ─── TOASTS ─── */
+/* Fixed top-inset-inline-end, above the header (54px) and above modals/overlays
+   (z-index 300) so save-error feedback is visible even mid-modal. Positioned
+   opposite ImportToast (bottom-inset-inline-start) so the two never collide. */
+.toast-stack {
+  position: fixed; top: 66px; inset-inline-end: 16px; z-index: 500;
+  display: flex; flex-direction: column; gap: 8px; width: 320px; max-width: calc(100vw - 32px);
+}
+.toast {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: var(--surf); border: 1px solid var(--bdr2); border-radius: var(--rs);
+  padding: 12px 14px; box-shadow: var(--shadow-pop);
+  animation: scaleIn .2s cubic-bezier(.16,1,.3,1);
+  font: 400 13px var(--font-ui); color: var(--t1);
+}
+.toast-icon { flex-shrink: 0; margin-top: 1px; }
+.toast-success .toast-icon { color: var(--green); }
+.toast-error .toast-icon   { color: var(--red); }
+.toast-warning .toast-icon { color: var(--amber); }
+.toast-info .toast-icon    { color: var(--blue); }
+.toast-msg { flex: 1; line-height: 1.5; }
+.toast-close { background: none; border: none; color: var(--t3); cursor: pointer; padding: 2px; flex-shrink: 0; display: flex; }
+.toast-close:hover { color: var(--t1); }
+
+@media (max-width: 480px) {
+  .toast-stack { top: 60px; inset-inline-end: 8px; width: calc(100vw - 16px); }
+}
 
 /* ─── SHIMMER ─── */
 .shimmer { background: linear-gradient(90deg, var(--surf2) 25%, var(--surf3) 50%, var(--surf2) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 8px; }
