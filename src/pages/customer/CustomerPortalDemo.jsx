@@ -1,13 +1,19 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
+import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { WEEK_DAYS, weekStart, dayDate, formatWeekLabel } from '../../constants/days'
+import QtyStepper from './QtyStepper'
+import CutoffCountdown from './CutoffCountdown'
+import WeekSummaryView from './WeekSummaryView'
 
 // Standalone design preview of the customer portal — phone+PIN login ->
-// order grid — using only local component state and static mock data.
-// Makes zero Supabase/Edge Function calls, so it works today even before
-// any migrations are run. Intentionally NOT wired into the real
-// CustomerLogin/CustomerOrders components — this is a one-off preview,
-// kept fully isolated so it can be deleted later without touching any
-// real auth/session code.
+// day/week order views — using only local component state and static mock
+// data. Makes zero Supabase/Edge Function calls, so it works today even
+// before any migrations are run. Reuses the real QtyStepper/
+// CutoffCountdown/WeekSummaryView (all pure, prop-driven, no network calls
+// of their own) for visual parity with the live portal, but does NOT
+// reuse CustomerOrders/DayOrderView/CutoffBlockedNotice — those fetch
+// real session/config data from Supabase, which would break the
+// zero-network guarantee this preview depends on.
 
 const MOCK_ITEMS = [
   { id: 'm1', category: 'מאפים', name_he: 'קרואסון חמאה', unit: 'יח׳' },
@@ -17,10 +23,16 @@ const MOCK_ITEMS = [
   { id: 'm5', category: 'לחם', name_he: 'בגט צרפתי', unit: 'יח׳' },
 ]
 
-const MOCK_STARTING_QTY = { m1_0: 12, m1_1: 12, m4_0: 3 }
-
 const START = weekStart()
 const LOCKED_DAY_OFFSETS = new Set([5, 6]) // Fri/Sat locked, for the preview
+
+function dateKey(itemId, offset) { return `${itemId}_${dayDate(START, offset)}` }
+
+const MOCK_STARTING_QTY = {
+  [dateKey('m1', 0)]: 12,
+  [dateKey('m1', 1)]: 12,
+  [dateKey('m4', 0)]: 3,
+}
 
 function PreviewBanner() {
   return (
@@ -49,6 +61,8 @@ export default function CustomerPortalDemo() {
   const [step, setStep] = useState('login')
   const [phone, setPhone] = useState('')
   const [pin, setPin] = useState('')
+  const [viewMode, setViewMode] = useState('day')
+  const [dayOffset, setDayOffset] = useState(() => new Date().getDay())
   const [qty, setQty] = useState(MOCK_STARTING_QTY)
 
   const grouped = MOCK_ITEMS.reduce((acc, item) => {
@@ -57,9 +71,24 @@ export default function CustomerPortalDemo() {
     return acc
   }, {})
 
-  function setCell(itemId, offset, value) {
-    setQty(prev => ({ ...prev, [`${itemId}_${offset}`]: parseFloat(value) || 0 }))
+  const orderLines = useMemo(() => {
+    const map = {}
+    for (const key in qty) map[key] = { quantity: qty[key] }
+    return map
+  }, [qty])
+
+  const canEdit = useMemo(() => {
+    const map = {}
+    WEEK_DAYS.forEach(d => { map[dayDate(START, d.key)] = !LOCKED_DAY_OFFSETS.has(d.key) })
+    return map
+  }, [])
+
+  function handleQtyChange(itemId, date, rawValue) {
+    setQty(prev => ({ ...prev, [`${itemId}_${date}`]: parseFloat(rawValue) || 0 }))
   }
+
+  function nextDay() { setDayOffset(o => (o + 1) % 7) }
+  function prevDay() { setDayOffset(o => (o + 6) % 7) }
 
   if (step === 'login') {
     return (
@@ -82,74 +111,79 @@ export default function CustomerPortalDemo() {
     )
   }
 
+  const selectedDate = dayDate(START, dayOffset)
+  const dayEditable = canEdit[selectedDate]
+  const mockLockAt = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString()
+  const dayTotal = MOCK_ITEMS.reduce((sum, item) => sum + (orderLines[`${item.id}_${selectedDate}`]?.quantity || 0), 0)
+
   return (
-    <div className="page" style={{ maxWidth: 900, margin: '0 auto' }}>
+    <div className="page portal-page" style={{ maxWidth: 900, margin: '0 auto' }}>
       <PreviewBanner />
       <div className="page-header">
         <h1 className="page-title">הזמנות — קפה לואיז (דמו)</h1>
         <button className="btn btn-ghost btn-sm" onClick={() => setStep('login')}>יציאה</button>
       </div>
 
+      <div className="view-toggle">
+        <button className={`view-toggle-btn${viewMode === 'day' ? ' active' : ''}`} onClick={() => setViewMode('day')}>יומי</button>
+        <button className={`view-toggle-btn${viewMode === 'week' ? ' active' : ''}`} onClick={() => setViewMode('week')}>שבועי</button>
+      </div>
+
       <div className="week-nav">
         <span className="week-label">{formatWeekLabel(START)}</span>
       </div>
 
-      <div style={{ marginTop: 12, marginBottom: 12 }}><MockCutoffNotice /></div>
+      {viewMode === 'day' ? (
+        <div>
+          <div className="day-nav">
+            <button className="btn btn-ghost btn-sm day-nav-btn" onClick={prevDay} aria-label="יום קודם"><ChevronRight size={18} /></button>
+            <div className="day-nav-label">
+              <div className="day-nav-day">{WEEK_DAYS[dayOffset].label}</div>
+              <div className="day-nav-date">{selectedDate.slice(5).replace('-', '/')}</div>
+            </div>
+            <button className="btn btn-ghost btn-sm day-nav-btn" onClick={nextDay} aria-label="יום הבא"><ChevronLeft size={18} /></button>
+          </div>
 
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div className="order-grid-wrap">
-          <table className="order-grid">
-            <thead>
-              <tr>
-                <th className="item-col sticky-col">פריט</th>
-                {WEEK_DAYS.map(d => (
-                  <th key={d.key}>
-                    <div>{d.short}</div>
-                    <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>
-                      {dayDate(START, d.key).slice(5).replace('-', '/')}
+          <div className="day-status-row">
+            {dayEditable && <CutoffCountdown lockAt={mockLockAt} />}
+            {dayTotal > 0 && <span className="day-total-pill">סה״כ היום: {dayTotal}</span>}
+          </div>
+
+          {!dayEditable && <MockCutoffNotice />}
+
+          <div className="day-list">
+            {Object.entries(grouped).map(([cat, items]) => (
+              <div key={cat} className="day-list-group">
+                <div className="day-list-cat">{cat}</div>
+                {items.map(item => {
+                  const key = `${item.id}_${selectedDate}`
+                  return (
+                    <div key={item.id} className="day-list-row">
+                      <div className="day-list-item">
+                        <div className="day-list-item-name">{item.name_he}</div>
+                        <div className="day-list-item-unit">{item.unit}</div>
+                      </div>
+                      <QtyStepper
+                        value={orderLines[key]?.quantity || 0}
+                        onChange={v => handleQtyChange(item.id, selectedDate, v)}
+                        disabled={!dayEditable}
+                      />
                     </div>
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(grouped).map(([cat, items]) => (
-                <>
-                  <tr key={`cat-${cat}`}>
-                    <td colSpan={8} style={{ padding: '8px 16px', background: 'var(--surf2)', fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
-                      {cat}
-                    </td>
-                  </tr>
-                  {items.map(item => (
-                    <tr key={item.id}>
-                      <td className="item-name sticky-col">{item.name_he}</td>
-                      {WEEK_DAYS.map(d => {
-                        const key = `${item.id}_${d.key}`
-                        const locked = LOCKED_DAY_OFFSETS.has(d.key)
-                        return (
-                          <td key={d.key} style={{ textAlign: 'center' }}>
-                            {locked ? (
-                              <span style={{ color: 'var(--t3)', fontSize: 13 }} title="מועד השינוי חלף">
-                                {qty[key] || '—'} 🔒
-                              </span>
-                            ) : (
-                              <input
-                                type="number" className="qty-cell" min="0" step="0.5"
-                                value={qty[key] || ''} placeholder="—"
-                                onChange={e => setCell(item.id, d.key, e.target.value)}
-                              />
-                            )}
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  ))}
-                </>
-              ))}
-            </tbody>
-          </table>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : (
+        <WeekSummaryView
+          dayDate={offset => dayDate(START, offset)}
+          grouped={grouped}
+          orderLines={orderLines}
+          canEdit={canEdit}
+          onQtyChange={handleQtyChange}
+        />
+      )}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 
@@ -16,6 +16,13 @@ export default function CustomerLogin() {
   const [pin, setPin] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [contact, setContact] = useState(null)
+
+  useEffect(() => {
+    document.title = 'כניסה להזמנות'
+    supabase.from('app_config').select('value').eq('key', 'support_contact').maybeSingle()
+      .then(({ data }) => setContact(data?.value || null))
+  }, [])
 
   async function login() {
     if (!phone.trim() || !pin.trim()) return
@@ -46,11 +53,15 @@ export default function CustomerLogin() {
         <input
           className="input"
           dir="ltr"
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
           placeholder="050-1234567"
           value={phone}
           onChange={e => setPhone(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && login()}
           autoFocus={!phone}
+          style={{ fontSize: 16 }}
         />
 
         <label className="lbl" style={{ marginTop: 12 }}>קוד גישה</label>
@@ -58,11 +69,14 @@ export default function CustomerLogin() {
           className="input"
           dir="ltr"
           type="password"
+          inputMode="numeric"
+          autoComplete="current-password"
           placeholder="קוד הגישה שקיבלת"
           value={pin}
           onChange={e => setPin(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && login()}
           autoFocus={!!phone}
+          style={{ fontSize: 16 }}
         />
 
         {error && <div className="alert alert-err" style={{ marginTop: 12 }}>{error}</div>}
@@ -70,6 +84,19 @@ export default function CustomerLogin() {
         <button className="btn btn-primary" style={{ width: '100%', marginTop: 16 }} onClick={login} disabled={loading || !phone.trim() || !pin.trim()}>
           {loading ? 'נכנס...' : 'כניסה'}
         </button>
+
+        {contact && (contact.phone || contact.whatsapp_link) && (
+          <div style={{ fontSize: 12, color: 'var(--t3)', textAlign: 'center', marginTop: 16 }}>
+            לא זוכרים את הקוד או המספר לא מזוהה? יש לפנות ל{contact.name || 'הצוות'}
+            {contact.phone && <> בטלפון <span dir="ltr">{contact.phone}</span></>}
+            {contact.whatsapp_link && (
+              <>
+                {' '}או ב<a href={contact.whatsapp_link} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>וואטסאפ</a>
+              </>
+            )}
+            .
+          </div>
+        )}
       </div>
     </div>
   )
