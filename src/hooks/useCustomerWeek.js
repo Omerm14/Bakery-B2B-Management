@@ -30,10 +30,14 @@ export function useCustomerWeek() {
     setCurrentWeekStart(weekStart())
   }
 
+  // Returns { id, error } rather than just the id — null id alone can't
+  // tell the caller whether the week genuinely doesn't exist yet (normal,
+  // e.g. next week before Wednesday's auto-copy) or the query itself
+  // failed (a real problem worth surfacing, not a quiet empty state).
   async function getWeekId() {
     const isoStart = currentWeekStart.toISOString().slice(0, 10)
-    const { data } = await supabase.from('weeks').select('id').eq('start_date', isoStart).maybeSingle()
-    return data?.id ?? null
+    const { data, error } = await supabase.from('weeks').select('id').eq('start_date', isoStart).maybeSingle()
+    return { id: data?.id ?? null, error }
   }
 
   return {
