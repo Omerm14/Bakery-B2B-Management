@@ -19,6 +19,24 @@ const CustomTooltip = ({ active, payload, label }) => {
 }
 
 const MAX_WEEKS = 12
+const PAGE_SIZE = 1000
+
+// Supabase/PostgREST caps a single response at PAGE_SIZE rows by default —
+// a customer's or item's full order history can exceed that as more weeks
+// accumulate, silently dropping rows (usually the oldest) with no error.
+// Paginate with .range() until a page comes back short to fetch everything.
+async function fetchAllPages(buildQuery) {
+  const all = []
+  let from = 0
+  while (true) {
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1)
+    if (error) { console.error('[History] fetchAllPages', error); break }
+    all.push(...(data || []))
+    if (!data || data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return all
+}
 
 export default function History() {
   const location = useLocation()
@@ -57,13 +75,16 @@ export default function History() {
     if (!selectedCustomer) return
     setLoading(true)
     try {
-      const { data: lines } = await supabase
-        .from('order_lines')
-        .select('week_id, menu_item_id, quantity, weeks(start_date), menu_items(name_he, unit)')
-        .eq('customer_id', selectedCustomer.id)
-        .gt('quantity', 0)
+      const lines = await fetchAllPages((from, to) =>
+        supabase
+          .from('order_lines')
+          .select('week_id, menu_item_id, quantity, weeks(start_date), menu_items(name_he, unit)')
+          .eq('customer_id', selectedCustomer.id)
+          .gt('quantity', 0)
+          .range(from, to)
+      )
 
-      if (!lines?.length) { setTableData(null); return }
+      if (!lines.length) { setTableData(null); return }
 
       // Group by (menu_item_id, week)
       const itemWeekMap = {} // itemId → { name, unit, weekQtys: {iso: qty}, total }
@@ -112,14 +133,17 @@ export default function History() {
     if (!selectedItem) return
     setLoading(true)
     try {
-      const { data: lines } = await supabase
-        .from('order_lines')
-        .select('week_id, customer_id, quantity, weeks(start_date), customers!inner(name, active)')
-        .eq('menu_item_id', selectedItem.id)
-        .eq('customers.active', true)
-        .gt('quantity', 0)
+      const lines = await fetchAllPages((from, to) =>
+        supabase
+          .from('order_lines')
+          .select('week_id, customer_id, quantity, weeks(start_date), customers!inner(name, active)')
+          .eq('menu_item_id', selectedItem.id)
+          .eq('customers.active', true)
+          .gt('quantity', 0)
+          .range(from, to)
+      )
 
-      if (!lines?.length) { setTableData(null); return }
+      if (!lines.length) { setTableData(null); return }
 
       const custWeekMap = {}
       const weekSet = new Set()
