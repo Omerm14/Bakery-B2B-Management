@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { useToast } from '../context/ToastContext'
 
 // Customer-facing sibling of useMenuItems — customers have no direct
 // grant on menu_items (RLS can hide rows but not columns, and price needs
@@ -7,13 +8,14 @@ import { supabase } from '../lib/supabase'
 // RPC instead, which nulls out price unless price_visible_to_customers
 // is set for that item.
 export function useCustomerMenuItems() {
+  const toast = useToast()
   const [menuItems, setMenuItems] = useState([])
   const [loading, setLoading] = useState(true)
 
   const refetch = useCallback(async () => {
     setLoading(true)
     const { data, error } = await supabase.rpc('get_active_menu_items')
-    if (error) console.error('[useCustomerMenuItems]', error)
+    if (error) { console.error('[useCustomerMenuItems]', error); toast.error('טעינת התפריט נכשלה — נסו לרענן') }
     setMenuItems(data || [])
     setLoading(false)
   }, [])

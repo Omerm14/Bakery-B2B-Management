@@ -49,6 +49,10 @@ export default function CustomerOrders() {
     })
   }, [])
 
+  useEffect(() => {
+    document.title = customer ? `הזמנות — ${customer.name}` : 'הזמנות'
+  }, [customer])
+
   const loadWeek = useCallback(async () => {
     if (!customer) return
     setLoading(true)
@@ -57,20 +61,24 @@ export default function CustomerOrders() {
       setWeekId(wid)
 
       const lockAts = {}
+      let lockAtFailed = false
       await Promise.all(WEEK_DAYS.map(async d => {
         const date = week.dayDate(d.key)
-        const { data } = await supabase.rpc('get_delivery_date_lock_at', { p_delivery_date: date })
+        const { data, error } = await supabase.rpc('get_delivery_date_lock_at', { p_delivery_date: date })
+        if (error) lockAtFailed = true
         lockAts[date] = data
       }))
       setLockAtByDate(lockAts)
+      if (lockAtFailed) toast.error('בדיקת מועדי העדכון נכשלה — רעננו ונסו שוב')
 
       if (!wid) { setOrderLines({}); return }
 
-      const { data: lines } = await supabase
+      const { data: lines, error: linesError } = await supabase
         .from('order_lines')
         .select('id, menu_item_id, delivery_date, quantity, change_reason')
         .eq('week_id', wid)
         .eq('customer_id', customer.id)
+      if (linesError) toast.error('טעינת ההזמנה נכשלה — רעננו ונסו שוב')
 
       const map = {}
       for (const l of lines || []) map[`${l.menu_item_id}_${l.delivery_date}`] = l
