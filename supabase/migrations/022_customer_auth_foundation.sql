@@ -1,10 +1,12 @@
 -- Foundation for Phase B: customer self-service portal login.
 --
--- Customers log in via WhatsApp OTP (verified in an Edge Function), not
--- Supabase's built-in phone/SMS auth. Each customer gets a real
--- auth.users row, keyed by a synthetic never-emailed address, so that a
--- normal Supabase session (magic-link token redemption) can be minted for
--- them after OTP verification. See supabase/functions/verify-customer-otp.
+-- Customers log in with a phone number + admin-set PIN, not email or
+-- WhatsApp/SMS OTP. Each customer gets a real auth.users row, keyed by a
+-- synthetic never-emailed address, whose PASSWORD is the customer's PIN —
+-- login is then a plain supabase.auth.signInWithPassword() call after
+-- looking up the synthetic email by phone (see get_customer_auth_email()
+-- and supabase/functions/set-customer-pin). No OTP, no messaging service
+-- of any kind.
 
 ALTER TABLE customers
   ADD COLUMN IF NOT EXISTS auth_user_id uuid UNIQUE REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -40,8 +42,21 @@ $$;
 
 -- current_customer_id(): null for staff sessions (no such claim), the
 -- customer's own id for a portal session (set via admin.createUser's
--- app_metadata at provisioning time — see provision-and-welcome-customer).
+-- app_metadata at PIN-provisioning time — see supabase/functions/set-customer-pin).
 CREATE OR REPLACE FUNCTION current_customer_id() RETURNS uuid
 LANGUAGE sql STABLE AS $$
   SELECT nullif(auth.jwt() -> 'app_metadata' ->> 'customer_id', '')::uuid
 $$;
+
+-- get_customer_auth_email(): public lookup (no session required) resolving
+-- an active customer's phone number to their synthetic auth email, so the
+-- login screen can turn "phone + PIN" into a standard
+-- supabase.auth.signInWithPassword({email, password}) call. Not sensitive —
+-- knowing this email reveals nothing usable without the PIN too, same as a
+-- username lookup on any login form. Returns null for an unknown/inactive
+-- phone or one that hasn't been provisioned with portal access yet.
+CREATE OR REPLACE FUNCTION get_customer_auth_email(p_phone text) RETURNS text
+LANGUAGE sql SECURITY DEFINER SET search_path = public STABLE AS $$
+  SELECT auth_email FROM customers WHERE phone = p_phone AND active = true AND auth_email IS NOT NULL
+$$;
+GRANT EXECUTE ON FUNCTION get_customer_auth_email(text) TO anon, authenticated;

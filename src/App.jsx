@@ -17,8 +17,7 @@ import { ToastProvider } from './context/ToastContext'
 import ToastHost from './components/ToastHost'
 import SearchOverlay from './components/search/SearchOverlay'
 import Landing from './pages/Landing'
-import CustomerLoginPhone from './pages/customer/CustomerLoginPhone'
-import CustomerLoginOtp from './pages/customer/CustomerLoginOtp'
+import CustomerLogin from './pages/customer/CustomerLogin'
 import CustomerOrders from './pages/customer/CustomerOrders'
 import CustomerPortalDemo from './pages/customer/CustomerPortalDemo'
 
@@ -139,8 +138,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={session ? <Navigate to={isCustomer ? '/portal/orders' : '/dashboard'} replace /> : <Landing />} />
             <Route path="/login" element={session ? <Navigate to={isCustomer ? '/portal/orders' : '/dashboard'} replace /> : <Login />} />
-            <Route path="/portal/login" element={session ? <Navigate to={isCustomer ? '/portal/orders' : '/dashboard'} replace /> : <CustomerLoginPhone />} />
-            <Route path="/portal/verify" element={session ? <Navigate to={isCustomer ? '/portal/orders' : '/dashboard'} replace /> : <CustomerLoginOtp />} />
+            <Route path="/portal/login" element={session ? <Navigate to={isCustomer ? '/portal/orders' : '/dashboard'} replace /> : <CustomerLogin />} />
             <Route path="/portal/preview" element={<CustomerPortalDemo />} />
             {session && isCustomer ? (
               <>

@@ -6,7 +6,7 @@
 -- `authenticated`, distinguished only by JWT app_metadata), that blanket
 -- policy would give every customer full read/write access to every other
 -- customer's data. Replace it everywhere with an is_staff()-gated policy
--- (see migration 007) plus narrow, explicit customer-scoped policies only
+-- (see migration 022) plus narrow, explicit customer-scoped policies only
 -- where customers need access.
 --
 -- is_staff() defaults to true for any session with no `role` app_metadata
@@ -52,7 +52,7 @@ CREATE POLICY "customer_select_weeks" ON weeks FOR SELECT TO authenticated USING
 
 -- order_lines: staff keep full access. Customers can only read their own
 -- rows here — write access (INSERT/UPDATE, cutoff-gated) is added in
--- migration 010 once the cutoff-check function exists; deletes are never
+-- migration 025 once the cutoff-check function exists; deletes are never
 -- granted to customers (order_lines.quantity=0 is how a "removed" line is
 -- represented, matching how the staff grid already works).
 DROP POLICY IF EXISTS "auth_all" ON order_lines;
