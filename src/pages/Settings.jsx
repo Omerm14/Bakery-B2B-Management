@@ -114,12 +114,13 @@ export default function Settings() {
   }
 
   const [settingPin, setSettingPin] = useState(null)
-  const [pinModalCustomer, setPinModalCustomer] = useState(null)
-  // Generated PINs are never stored anywhere (only their hash, as the
-  // customer's auth password) — this just remembers what was shown during
-  // this browser session, so reopening the modal for the same customer
-  // without regenerating still shows the last code you gave them.
-  const [pinByCustomer, setPinByCustomer] = useState({})
+  // The PIN itself is stored server-side (customers.portal_pin), kept in
+  // sync with the real auth password by set-customer-pin — so we only need
+  // to remember *which* customer's modal is open, not the PIN value. This
+  // way the modal always reflects the actual current PIN, including across
+  // reloads/other staff members, not just what was generated this session.
+  const [pinModalCustomerId, setPinModalCustomerId] = useState(null)
+  const pinModalCustomer = customers.find(c => c.id === pinModalCustomerId) || null
 
   function generatePin() {
     return String(Math.floor(100000 + Math.random() * 900000)) // 6 random digits
@@ -139,9 +140,8 @@ export default function Settings() {
         toast.error(data?.error || 'הגדרת הקוד נכשלה')
         return
       }
-      setCustomers(prev => prev.map(c => c.id === customer.id ? { ...c, auth_user_id: c.auth_user_id || 'pending' } : c))
-      setPinByCustomer(prev => ({ ...prev, [customer.id]: pin }))
-      setPinModalCustomer(customer)
+      setCustomers(prev => prev.map(c => c.id === customer.id ? { ...c, auth_user_id: c.auth_user_id || 'pending', portal_pin: pin } : c))
+      setPinModalCustomerId(customer.id)
     } finally {
       setSettingPin(null)
     }
@@ -442,7 +442,7 @@ function AuditLogTab({ filterText }) {
                         className="btn btn-ghost btn-sm"
                         onClick={() => {
                           if (!c.phone) { toast.error('יש להזין מספר טלפון לפני הגדרת קוד גישה'); return }
-                          setPinModalCustomer(c)
+                          setPinModalCustomerId(c.id)
                         }}
                         title="מציג את קישור הכניסה ואת קוד הגישה של הלקוח"
                       >
@@ -475,7 +475,7 @@ function AuditLogTab({ filterText }) {
 
       {/* Customer Access PIN Modal */}
       {pinModalCustomer && (
-        <div className="overlay" onClick={() => setPinModalCustomer(null)}>
+        <div className="overlay" onClick={() => setPinModalCustomerId(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-title">קוד גישה — {pinModalCustomer.name}</div>
 
@@ -485,22 +485,20 @@ function AuditLogTab({ filterText }) {
               <button className="btn btn-ghost btn-sm" onClick={() => copyToClipboard(portalUrlFor(pinModalCustomer))}>העתק</button>
             </div>
 
-            {pinByCustomer[pinModalCustomer.id] ? (
+            {pinModalCustomer.portal_pin ? (
               <>
                 <label className="lbl">קוד גישה</label>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <input className="input" dir="ltr" readOnly value={pinByCustomer[pinModalCustomer.id]} onFocus={e => e.target.select()} style={{ fontSize: 20, fontWeight: 700, textAlign: 'center', letterSpacing: '.1em' }} />
-                  <button className="btn btn-ghost btn-sm" onClick={() => copyToClipboard(pinByCustomer[pinModalCustomer.id])}>העתק</button>
+                  <input className="input" dir="ltr" readOnly value={pinModalCustomer.portal_pin} onFocus={e => e.target.select()} style={{ fontSize: 20, fontWeight: 700, textAlign: 'center', letterSpacing: '.1em' }} />
+                  <button className="btn btn-ghost btn-sm" onClick={() => copyToClipboard(pinModalCustomer.portal_pin)}>העתק</button>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 8 }}>
-                  יש למסור את הקישור והקוד ללקוח (וואטסאפ, טלפון וכו׳). הקוד מוצג כאן רק בסשן הנוכחי — ניתן ליצור קוד חדש בכל עת.
+                  יש למסור את הקישור והקוד ללקוח (וואטסאפ, טלפון וכו׳). זהו קוד הגישה הנוכחי של הלקוח — ניתן לחזור למסך זה בכל עת כדי לראות אותו שוב, או ליצור קוד חדש שיחליף אותו.
                 </div>
               </>
             ) : (
               <div style={{ fontSize: 13, color: 'var(--t3)', marginTop: 4 }}>
-                {pinModalCustomer.auth_user_id
-                  ? 'לא הוצג קוד גישה בסשן הנוכחי (הקוד עצמו לא נשמר, מסיבות אבטחה). לחצו על "צור קוד חדש" כדי לאפס ולקבל קוד להעברה ללקוח.'
-                  : 'עדיין לא הוגדר קוד גישה ללקוח זה. לחצו על "צור קוד חדש" כדי ליצור אחד.'}
+                עדיין לא הוגדר קוד גישה ללקוח זה. לחצו על "צור קוד חדש" כדי ליצור אחד.
               </div>
             )}
 
@@ -508,7 +506,7 @@ function AuditLogTab({ filterText }) {
               <button className="btn btn-ghost" onClick={() => generateAndSetPin(pinModalCustomer)} disabled={settingPin === pinModalCustomer.id}>
                 {settingPin === pinModalCustomer.id ? 'מייצר...' : 'צור קוד חדש'}
               </button>
-              <button className="btn btn-primary" onClick={() => setPinModalCustomer(null)}>סגור</button>
+              <button className="btn btn-primary" onClick={() => setPinModalCustomerId(null)}>סגור</button>
             </div>
           </div>
         </div>

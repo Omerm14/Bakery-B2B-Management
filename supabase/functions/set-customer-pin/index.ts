@@ -71,6 +71,7 @@ Deno.serve(async (req) => {
     if (updateErr) {
       return json({ ok: false, error: updateErr.message }, 500)
     }
+    await supabase.from('customers').update({ portal_pin: pin }).eq('id', customer.id)
   } else {
     const authEmail = customer.auth_email || syntheticEmail(customer.id)
     const { data: created, error: createErr } = await supabase.auth.admin.createUser({
@@ -82,8 +83,8 @@ Deno.serve(async (req) => {
     if (createErr || !created?.user) {
       return json({ ok: false, error: createErr?.message || 'failed to create auth user' }, 500)
     }
-    await supabase.from('customers').update({ auth_user_id: created.user.id, auth_email: authEmail }).eq('id', customer.id)
+    await supabase.from('customers').update({ auth_user_id: created.user.id, auth_email: authEmail, portal_pin: pin }).eq('id', customer.id)
   }
 
-  return json({ ok: true })
+  return json({ ok: true, pin })
 })
