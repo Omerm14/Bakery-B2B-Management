@@ -7,6 +7,15 @@ import { supabase } from '../lib/supabase'
 const SKIP_SHEETS = new Set(['כמויות', 'כפתורי', 'גיליון', 'לו"ז', 'ללא מיתוג', 'רשימת', 'Sheet1', 'לקוח חדש', 'דוגמאות', 'Template', 'template'])
 const NON_ITEM = new Set(['', 'סה"כ', 'Total', 'total', 'תאריך', 'Date', 'date'])
 
+// Section-header rows inside each customer sheet — mark the category of the
+// item rows below them until the next header (or end of sheet). Some sheets
+// prefix the header with a colon (e.g. ":עוגות ועוגיות") — stripped before matching.
+const CATEGORY_HEADERS = new Set(['מאפים', 'מתוקים', 'קפואים', 'שונות', 'עוגות ועוגיות', 'קפואים ושונות - קונדי', 'לחם ולחמניות'])
+
+function normalizeCategoryLabel(s) {
+  return s.trim().replace(/^[:：]\s*/, '').replace(/\s*[:：]$/, '')
+}
+
 const HE_DAYS = { 'ראשון': 0, 'שני': 1, 'שלישי': 2, 'רביעי': 3, 'חמישי': 4, 'שישי': 5 }
 
 function parseQty(v) {
@@ -82,6 +91,7 @@ function parseExcelWorkbook(wb) {
   const customers = new Set()
   const items = new Set()
   const orderLines = []
+  const itemCategories = {}
 
   for (const sheetName of wb.SheetNames) {
     if (SKIP_SHEETS.has(sheetName)) continue
@@ -124,11 +134,14 @@ function parseExcelWorkbook(wb) {
     }
 
     // Read items from row 3+ (row index 2+)
+    let currentCategory = null
     for (let r = 2; r <= range.e.r; r++) {
       const itemCell = ws[XLSX.utils.encode_cell({ r, c: 0 })]
       if (!itemCell) continue
       const iname = (itemCell.v ?? '').toString().trim()
       if (!iname || iname.length < 2) continue
+      const normalized = normalizeCategoryLabel(iname)
+      if (CATEGORY_HEADERS.has(normalized)) { currentCategory = normalized; continue }
       if (iname.startsWith('סה') || NON_ITEM.has(iname)) continue
 
       for (let col = 0; col < dates.length; col++) {
@@ -139,13 +152,14 @@ function parseExcelWorkbook(wb) {
         if (qty > 0) {
           items.add(iname)
           customers.add(cname)
+          if (currentCategory) itemCategories[iname] = currentCategory
           orderLines.push({ wsIso, cname, iname, ddate: toIso(deliveryDate), qty })
         }
       }
     }
   }
 
-  return { wsIso, weekStart, customers: [...customers], items: [...items], orderLines }
+  return { wsIso, weekStart, customers: [...customers], items: [...items], orderLines, itemCategories }
 }
 
 async function upsertBatch(table, rows, onConflict) {
@@ -191,21 +205,35 @@ export function ImportProvider({ children }) {
 
   function log(msg) { setLogs(prev => [...prev, msg]) }
 
+  async function categorizeItems(items, itemCategories) {
+    const categorized = items.filter(name => itemCategories[name])
+    if (!categorized.length) return 0
+    const err = await upsertBatch('menu_items', categorized.map(name_he => ({ name_he, category: itemCategories[name_he] })), 'name_he')
+    if (err) { log(`⚠️ שגיאה בסיווג קטגוריות: ${err.message}`); return 0 }
+    return categorized.length
+  }
+
   async function importWorkbook(wb, fileName) {
-    // Dedup by content hash
+    log(`📂 קובץ: ${fileName}`)
+
     const hash = workbookHash(wb)
+    const parsed = parseExcelWorkbook(wb)
+    if (!parsed) { log('❌ לא ניתן לזהות תאריכי שבוע בקובץ'); log('──────────'); return }
+    const { wsIso, weekStart, customers, items, orderLines, itemCategories } = parsed
+
+    // Dedup by content hash — order lines were already imported, but a
+    // previously-imported file may predate category detection, so still
+    // backfill categories for it instead of skipping outright.
     if (await isHashSeen(hash)) {
-      log(`⏭️ ${fileName} — קובץ זה כבר יובא בעבר, מדלג`)
+      log('⏭️ קובץ זה כבר יובא בעבר — מעדכן קטגוריות בלבד')
+      const n = await categorizeItems(items, itemCategories)
+      log(n ? `🏷️ סווגו ${n} פריטים לפי קטגוריה` : 'ℹ️ לא זוהו כותרות קטגוריה בקובץ זה')
       log('──────────')
       return
     }
 
-    log(`📂 קובץ: ${fileName}`)
     const { data: sessionData } = await supabase.auth.getSession()
     const changedBy = sessionData.session?.user?.email || null
-    const parsed = parseExcelWorkbook(wb)
-    if (!parsed) { log('❌ לא ניתן לזהות תאריכי שבוע בקובץ'); log('──────────'); return }
-    const { wsIso, weekStart, customers, items, orderLines } = parsed
 
     const label = `שבוע ${weekStart.getDate().toString().padStart(2, '0')}/${(weekStart.getMonth() + 1).toString().padStart(2, '0')}/${weekStart.getFullYear()}`
     log(`📅 שבוע: ${label} (${wsIso})`)
@@ -220,6 +248,11 @@ export function ImportProvider({ children }) {
       const err = await upsertBatch('menu_items', items.map(name_he => ({ name_he, unit: 'יח׳', active: true })), 'name_he')
       if (err) { log(`❌ שגיאה בפריטי תפריט: ${err.message}`); log('──────────'); return }
     }
+
+    // Categorize items found under a section header — leaves category untouched
+    // for items where no header was detected this time (e.g. manual edits).
+    const categorizedCount = await categorizeItems(items, itemCategories)
+    if (categorizedCount) log(`🏷️ סווגו ${categorizedCount} פריטים לפי קטגוריה`)
 
     {
       const err = await upsertBatch('weeks', [{ start_date: wsIso, label }], 'start_date')

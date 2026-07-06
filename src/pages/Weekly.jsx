@@ -10,7 +10,7 @@ export default function Weekly() {
   const [rows, setRows] = useState([])
   const [prevRows, setPrevRows] = useState([]) // previous week for comparison
   const [loading, setLoading] = useState(false)
-  const [viewMode, setViewMode] = useState('supplier')
+  const [viewMode, setViewMode] = useState('category')
 
   useEffect(() => { loadWeekly() }, [week.weekStartISO])
 
@@ -24,18 +24,19 @@ export default function Weekly() {
 
       const [current, previous] = await Promise.all([
         weekRow
-          ? supabase.from('order_lines').select('menu_item_id, delivery_date, quantity, menu_items(name_he, unit, category, suppliers(name))').eq('week_id', weekRow.id).gt('quantity', 0)
+          ? supabase.from('order_lines').select('menu_item_id, delivery_date, quantity, menu_items(name_he, unit, category, suppliers(name)), customers!inner(active)').eq('week_id', weekRow.id).eq('customers.active', true).gt('quantity', 0)
           : Promise.resolve({ data: [] }),
         prevWeekRow
-          ? supabase.from('order_lines').select('menu_item_id, quantity').eq('week_id', prevWeekRow.id).gt('quantity', 0)
+          ? supabase.from('order_lines').select('menu_item_id, quantity, menu_items(name_he), customers!inner(active)').eq('week_id', prevWeekRow.id).eq('customers.active', true).gt('quantity', 0)
           : Promise.resolve({ data: [] }),
       ])
 
       setRows(aggregate(current.data || []))
 
-      // Prev week totals by item
+      // Prev week totals by item — same corrupted-item exclusion as aggregate()
       const prevMap = {}
       for (const l of previous.data || []) {
+        if (!l.menu_items || l.menu_items.name_he === 'תאריך') continue
         prevMap[l.menu_item_id] = (prevMap[l.menu_item_id] || 0) + parseFloat(l.quantity)
       }
       setPrevRows(prevMap)
@@ -108,7 +109,26 @@ export default function Weekly() {
     return `${pct > 0 ? '+' : ''}${pct}%`
   }
 
+  const TREND_ORDER = ['חדש השבוע', 'עלייה חדה', 'ירידה חדה', 'יציב']
+  const TREND_ICONS = { 'חדש השבוע': '🆕', 'עלייה חדה': '📈', 'ירידה חדה': '📉', 'יציב': '➖' }
+
+  function trendBucket(row) {
+    const prev = prevRows[row.menu_item_id]
+    if (!(prev > 0)) return 'חדש השבוע'
+    const chg = ((row.total - prev) / prev) * 100
+    if (chg >= 15) return 'עלייה חדה'
+    if (chg <= -15) return 'ירידה חדה'
+    return 'יציב'
+  }
+
   function groupRows(rowList) {
+    if (viewMode === 'trend') {
+      const buckets = { 'חדש השבוע': [], 'עלייה חדה': [], 'ירידה חדה': [], 'יציב': [] }
+      for (const row of rowList) buckets[trendBucket(row)].push(row)
+      const result = {}
+      for (const k of TREND_ORDER) if (buckets[k].length) result[k] = buckets[k]
+      return result
+    }
     const key = viewMode === 'supplier' ? 'supplier' : 'category'
     return rowList.reduce((acc, row) => {
       const k = row[key]
@@ -133,8 +153,9 @@ export default function Weekly() {
       <div className="page-header">
         <h1 className="page-title">תוכנית שבועית</h1>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button className={'btn btn-sm ' + (viewMode === 'supplier' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('supplier')}>לפי ספק</button>
           <button className={'btn btn-sm ' + (viewMode === 'category' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('category')}>לפי קטגוריה</button>
+          <button className={'btn btn-sm ' + (viewMode === 'supplier' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('supplier')}>לפי ספק</button>
+          <button className={'btn btn-sm ' + (viewMode === 'trend' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('trend')}>לפי מגמה</button>
           {rows.length > 0 && (
             <button className="btn btn-ghost btn-sm" onClick={exportExcel} title="ייצוא Excel">
               <Download size={14} /> Excel
@@ -222,7 +243,7 @@ export default function Weekly() {
                         <td colSpan={12} style={{ background: 'var(--accent-tint)', padding: '8px 14px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span className="supplier-tag" style={{ marginBottom: 0 }}>
-                              {viewMode === 'supplier' ? '🏭' : '📦'} {group}
+                              {viewMode === 'trend' ? TREND_ICONS[group] : viewMode === 'supplier' ? '🏭' : '📦'} {group}
                             </span>
                             <span style={{ fontSize: 12, color: 'var(--t2)', fontWeight: 600 }}>
                               {groupTotal.toLocaleString('he-IL')}

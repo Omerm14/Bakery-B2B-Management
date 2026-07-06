@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { useWeek } from '../hooks/useWeek'
+
+const TREND_WINDOW = 8
 
 function AnimatedNumber({ value, loading, prefix = '', suffix = '' }) {
   const [display, setDisplay] = useState(0)
@@ -38,99 +39,93 @@ const CustomTooltip = ({ active, payload, label }) => {
   )
 }
 
-export default function Dashboard() {
-  const week = useWeek()
-  const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState({ thisWeekLines: 0, activeCustomers: 0, topItem: null, topItemQty: 0, wowChange: null })
-  const [trendData, setTrendData] = useState([])
-  const [topItems, setTopItems] = useState([])
+function formatWeekShort(iso) {
+  const d = new Date(iso + 'T00:00:00')
+  return `${d.getDate()}/${d.getMonth() + 1}/${String(d.getFullYear()).slice(2)}`
+}
 
-  useEffect(() => { loadDashboard() }, [week.weekStartISO])
+export default function Dashboard() {
+  const [loading, setLoading] = useState(true)
+  // Ascending list of weeks that actually have order data, each pre-computed
+  // with its own qty/active-customers/top-items — lets every part of the
+  // page (KPI cards, top-items panel, trend chart) navigate together off a
+  // single index with zero additional queries per click.
+  const [weekHistory, setWeekHistory] = useState([])
+  const [viewedIndex, setViewedIndex] = useState(-1)
+
+  useEffect(() => { loadDashboard() }, [])
 
   async function loadDashboard() {
     setLoading(true)
     try {
-      // Get 8 weeks of data ending at the currently viewed week
-      const thisSunday = week.currentWeekStart
-
-      const weeks = []
-      for (let i = 0; i < 8; i++) {
-        const d = new Date(thisSunday)
-        d.setDate(d.getDate() - i * 7)
-        weeks.push(d.toISOString().slice(0, 10))
-      }
-      weeks.reverse() // oldest first
-
-      // Fetch week rows for these dates
-      const { data: weekRows } = await supabase
+      // Base "current week" on the most recent week that actually has order
+      // data, not just the most recent row in `weeks` — calendar navigation
+      // and the customer ordering portal can pre-create a blank week row
+      // before any order exists in it, which must not be mistaken for "this
+      // week" (it would show zero everywhere despite real recent data).
+      const { data: candidateWeeksDesc } = await supabase
         .from('weeks')
         .select('id, start_date')
-        .in('start_date', weeks)
+        .order('start_date', { ascending: false })
+        .limit(104)
 
-      const weekMap = {}
-      for (const w of weekRows || []) weekMap[w.start_date] = w.id
-
-      const thisWeekIso = thisSunday.toISOString().slice(0, 10)
-      const prevWeekDate = new Date(thisSunday)
-      prevWeekDate.setDate(prevWeekDate.getDate() - 7)
-      const prevWeekIso = prevWeekDate.toISOString().slice(0, 10)
-
-      const thisWeekId = weekMap[thisWeekIso]
-      const prevWeekId = weekMap[prevWeekIso]
-
-      // Fetch order lines for all 8 weeks
-      const weekIds = Object.values(weekMap)
-      const { data: allLines } = weekIds.length
-        ? await supabase.from('order_lines').select('week_id, customer_id, menu_item_id, quantity, menu_items(name_he)').in('week_id', weekIds).gt('quantity', 0)
+      const candidateIds = (candidateWeeksDesc || []).map(w => w.id)
+      const { data: rawLines } = candidateIds.length
+        ? await supabase.from('order_lines').select('week_id, customer_id, menu_item_id, quantity, menu_items(name_he), customers!inner(active)').in('week_id', candidateIds).eq('customers.active', true).gt('quantity', 0)
         : { data: [] }
 
-      // Build trend data: total quantity per week
-      const trendMap = {}
-      for (const iso of weeks) trendMap[iso] = { label: formatWeekShort(iso), qty: 0, iso }
-      for (const line of allLines || []) {
-        const iso = Object.keys(weekMap).find(k => weekMap[k] === line.week_id)
-        if (iso && trendMap[iso]) trendMap[iso].qty += parseFloat(line.quantity)
+      const linesByWeek = new Map()
+      for (const l of rawLines || []) {
+        // Exclude a corrupted historical menu item ("תאריך") whose bogus
+        // quantities (leftover date-serial values from an old import bug)
+        // would otherwise blow up every total that includes it.
+        if (!l.menu_items || l.menu_items.name_he === 'תאריך') continue
+        if (!linesByWeek.has(l.week_id)) linesByWeek.set(l.week_id, [])
+        linesByWeek.get(l.week_id).push(l)
       }
-      setTrendData(Object.values(trendMap))
 
-      // This week stats
-      const thisWeekLines = (allLines || []).filter(l => l.week_id === thisWeekId)
-      const prevWeekLines = (allLines || []).filter(l => l.week_id === prevWeekId)
-      const thisTotal = thisWeekLines.reduce((s, l) => s + parseFloat(l.quantity), 0)
-      const prevTotal = prevWeekLines.reduce((s, l) => s + parseFloat(l.quantity), 0)
-      const wowChange = prevTotal > 0 ? Math.round(((thisTotal - prevTotal) / prevTotal) * 100) : null
+      // Full history of weeks that actually have data, oldest first, each
+      // pre-aggregated (qty, active customers, top items) so navigating
+      // between weeks afterward is just an index change — no re-fetching.
+      const historyAsc = (candidateWeeksDesc || [])
+        .filter(w => linesByWeek.has(w.id))
+        .reverse()
+        .map(w => {
+          const lines = linesByWeek.get(w.id) || []
+          const qty = lines.reduce((s, l) => s + parseFloat(l.quantity), 0)
+          const activeCustomers = new Set(lines.map(l => l.customer_id)).size
 
-      const activeCustomers = new Set(thisWeekLines.map(l => l.customer_id)).size
+          const itemTotals = {}
+          for (const l of lines) {
+            if (!itemTotals[l.menu_item_id]) itemTotals[l.menu_item_id] = { name: l.menu_items?.name_he, qty: 0 }
+            itemTotals[l.menu_item_id].qty += parseFloat(l.quantity)
+          }
+          const sortedItems = Object.entries(itemTotals).sort((a, b) => b[1].qty - a[1].qty)
+          const top10 = sortedItems.slice(0, 10).map(([, v]) => ({ name: v.name, qty: Math.round(v.qty * 10) / 10 }))
+          const topItem = sortedItems[0] ? { name: sortedItems[0][1].name, qty: Math.round(sortedItems[0][1].qty * 10) / 10 } : null
 
-      // Top items this week
-      const itemTotals = {}
-      for (const l of thisWeekLines) {
-        if (!itemTotals[l.menu_item_id]) itemTotals[l.menu_item_id] = { name: l.menu_items?.name_he, qty: 0 }
-        itemTotals[l.menu_item_id].qty += parseFloat(l.quantity)
-      }
-      const sortedItems = Object.entries(itemTotals).sort((a, b) => b[1].qty - a[1].qty)
-      const top10 = sortedItems.slice(0, 10).map(([, v]) => ({ name: v.name, qty: Math.round(v.qty * 10) / 10 }))
-      setTopItems(top10)
+          return { id: w.id, start_date: w.start_date, label: formatWeekShort(w.start_date), qty, activeCustomers, top10, topItem }
+        })
 
-      const topItem = sortedItems[0]
-      setStats({
-        thisWeekLines: Math.round(thisTotal),
-        activeCustomers,
-        topItem: topItem ? topItem[1].name : null,
-        topItemQty: topItem ? Math.round(topItem[1].qty * 10) / 10 : 0,
-        wowChange,
-      })
+      setWeekHistory(historyAsc)
+      setViewedIndex(historyAsc.length - 1)
     } finally {
       setLoading(false)
     }
   }
 
-  function formatWeekShort(iso) {
-    const d = new Date(iso + 'T00:00:00')
-    return `${d.getDate()}/${d.getMonth() + 1}/${String(d.getFullYear()).slice(2)}`
-  }
-
+  const viewedWeek = weekHistory[viewedIndex] || null
+  const prevWeek = weekHistory[viewedIndex - 1] || null
+  const thisTotal = viewedWeek?.qty || 0
+  const prevTotal = prevWeek?.qty || 0
+  const wowChange = prevTotal > 0 ? Math.round(((thisTotal - prevTotal) / prevTotal) * 100) : null
+  const activeCustomers = viewedWeek?.activeCustomers || 0
+  const topItem = viewedWeek?.topItem || null
+  const topItems = viewedWeek?.top10 || []
   const maxBar = topItems[0]?.qty || 1
+  const trendData = weekHistory.slice(Math.max(0, viewedIndex - (TREND_WINDOW - 1)), viewedIndex + 1)
+  const atLatest = viewedIndex >= weekHistory.length - 1
+  const atOldest = viewedIndex <= 0
 
   return (
     <div className="page">
@@ -139,43 +134,43 @@ export default function Dashboard() {
       </div>
 
       <div className="week-nav">
-        <button className="btn btn-ghost btn-sm" onClick={week.prevWeek}><ChevronRight size={16} /></button>
-        <span className="week-label">{week.weekLabel}</span>
-        <button className="btn btn-ghost btn-sm" onClick={week.nextWeek}><ChevronLeft size={16} /></button>
-        <button className="btn btn-ghost btn-sm" onClick={week.goToToday} style={{ fontSize: 12 }}>השבוע</button>
+        <button className="btn btn-ghost btn-sm" disabled={atOldest} onClick={() => setViewedIndex(i => Math.max(0, i - 1))}><ChevronRight size={16} /></button>
+        <span className="week-label">{viewedWeek ? viewedWeek.label : '—'}</span>
+        <button className="btn btn-ghost btn-sm" disabled={atLatest} onClick={() => setViewedIndex(i => Math.min(weekHistory.length - 1, i + 1))}><ChevronLeft size={16} /></button>
+        <button className="btn btn-ghost btn-sm" disabled={atLatest} onClick={() => setViewedIndex(weekHistory.length - 1)} style={{ fontSize: 12 }}>שבוע אחרון עם נתונים</button>
       </div>
 
       {/* KPI Cards */}
       <div className="stat-grid" style={{ marginBottom: 28 }}>
         <div className="card stat-card stat-cyan">
           <div className="stat-lbl">כמות שבועית</div>
-          <div className="stat-val"><AnimatedNumber value={stats.thisWeekLines} loading={loading} /></div>
+          <div className="stat-val"><AnimatedNumber value={Math.round(thisTotal)} loading={loading} /></div>
         </div>
         <div className="card stat-card stat-blue">
           <div className="stat-lbl">לקוחות פעילים</div>
-          <div className="stat-val"><AnimatedNumber value={stats.activeCustomers} loading={loading} /></div>
+          <div className="stat-val"><AnimatedNumber value={activeCustomers} loading={loading} /></div>
         </div>
         <div className="card stat-card stat-amber">
           <div className="stat-lbl">פריט מוביל</div>
           <div className="stat-val" style={{ fontSize: 15, fontWeight: 700 }}>
-            {loading ? '—' : (stats.topItem || '—')}
+            {loading ? '—' : (topItem?.name || '—')}
           </div>
-          {!loading && stats.topItem && (
-            <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 4 }}>{stats.topItemQty.toLocaleString('he-IL')} יח׳</div>
+          {!loading && topItem && (
+            <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 4 }}>{topItem.qty.toLocaleString('he-IL')} יח׳</div>
           )}
         </div>
-        <div className="card stat-card" style={{ borderBottom: `3px solid ${stats.wowChange === null ? 'var(--bdr2)' : stats.wowChange >= 0 ? 'var(--green)' : 'var(--red)'}` }}>
+        <div className="card stat-card" style={{ borderBottom: `3px solid ${wowChange === null ? 'var(--bdr2)' : wowChange >= 0 ? 'var(--green)' : 'var(--red)'}` }}>
           <div className="stat-lbl">שינוי שבועי</div>
-          <div className="stat-val" style={{ fontSize: 22, color: stats.wowChange === null ? 'var(--t3)' : stats.wowChange >= 0 ? 'var(--green)' : 'var(--red)' }}>
-            {loading || stats.wowChange === null ? '—' : `${stats.wowChange > 0 ? '+' : ''}${stats.wowChange}%`}
+          <div className="stat-val" style={{ fontSize: 22, color: wowChange === null ? 'var(--t3)' : wowChange >= 0 ? 'var(--green)' : 'var(--red)' }}>
+            {loading || wowChange === null ? '—' : `${wowChange > 0 ? '+' : ''}${wowChange}%`}
           </div>
         </div>
       </div>
 
       <div className="dash-layout">
-        {/* Area chart — 8 week trend */}
+        {/* Area chart — trend */}
         <div className="card">
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>מגמת כמויות — 8 שבועות אחרונים</div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>מגמת כמויות — {TREND_WINDOW} שבועות</div>
           {loading ? (
             <div className="shimmer" style={{ height: 220 }} />
           ) : (
@@ -199,7 +194,7 @@ export default function Dashboard() {
 
         {/* Top 10 items */}
         <div className="card">
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>10 פריטים מובילים — {week.weekLabel}</div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>10 פריטים מובילים — {viewedWeek?.label || '—'}</div>
           {loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[...Array(6)].map((_, i) => <div key={i} className="shimmer" style={{ height: 28 }} />)}
@@ -234,7 +229,7 @@ export default function Dashboard() {
       {/* Full bar chart */}
       {!loading && topItems.length > 0 && (
         <div className="card" style={{ marginTop: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>כמויות לפי פריט — {week.weekLabel}</div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>כמויות לפי פריט — {viewedWeek?.label || '—'}</div>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={topItems} margin={{ top: 4, right: 8, left: -20, bottom: 60 }}>
               <CartesianGrid stroke="var(--bdr)" strokeDasharray="3 3" vertical={false} />

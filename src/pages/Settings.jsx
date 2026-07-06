@@ -69,6 +69,17 @@ export default function Settings() {
     }
   }
 
+  async function updateItemCategory(id, category) {
+    const prevCategory = menuItems.find(i => i.id === id)?.category ?? null
+    if (category === prevCategory) return
+    setMenuItems(prev => prev.map(i => i.id === id ? { ...i, category } : i))
+    const { error } = await supabase.from('menu_items').update({ category }).eq('id', id)
+    if (error) {
+      setMenuItems(prev => prev.map(i => i.id === id ? { ...i, category: prevCategory } : i))
+      toast.error('עדכון הקטגוריה נכשל')
+    }
+  }
+
   async function addSupplier() {
     if (!newSupplier.trim()) return
     const { data, error } = await supabase.from('suppliers').insert({ name: newSupplier.trim() }).select().single()
@@ -120,6 +131,17 @@ export default function Settings() {
   }
 
   const UNITS = ['יח׳', 'ק״ג', 'גרם', 'ליטר', 'מ״ל', 'מגש', 'קרטון']
+  const knownCategories = [...new Set(menuItems.map(i => i.category).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'he'))
+
+  function handleCategoryChange(itemId, e) {
+    const value = e.target.value
+    if (value === '__new__') {
+      const name = window.prompt('שם קטגוריה חדשה:')
+      if (name && name.trim()) updateItemCategory(itemId, name.trim())
+      return
+    }
+    updateItemCategory(itemId, value || null)
+  }
 
 function ImportTab() {
   const { logs, running, startImport } = useImport()
@@ -306,7 +328,18 @@ function AuditLogTab({ filterText }) {
                     <td style={{ fontWeight: 500 }}>{item.name_he}</td>
                     <td style={{ color: 'var(--t3)' }}>{item.name_en || '—'}</td>
                     <td>{item.unit}</td>
-                    <td>{item.category || '—'}</td>
+                    <td>
+                      <select
+                        className="input"
+                        style={{ fontSize: 12, padding: '4px 8px', minWidth: 150 }}
+                        value={item.category || ''}
+                        onChange={e => handleCategoryChange(item.id, e)}
+                      >
+                        <option value="">—</option>
+                        {knownCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                        <option value="__new__">+ קטגוריה חדשה...</option>
+                      </select>
+                    </td>
                     <td>{item.suppliers?.name || '—'}</td>
                     <td>
                       <input
