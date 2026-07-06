@@ -24,7 +24,10 @@ export default function Settings() {
   const [showAddSupplier, setShowAddSupplier] = useState(false)
 
   useEffect(() => {
-    supabase.from('suppliers').select('*').order('name').then(({ data }) => setSuppliers(data || []))
+    supabase.from('suppliers').select('*').order('name').then(({ data, error }) => {
+      if (error) { console.error('[Settings suppliers]', error); toast.error('טעינת הספקים נכשלה') }
+      setSuppliers(data || [])
+    })
   }, [])
 
   async function addMenuItem() {
