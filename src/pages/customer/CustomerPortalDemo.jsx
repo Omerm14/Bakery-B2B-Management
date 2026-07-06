@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react'
-import { ChevronRight, ChevronLeft } from 'lucide-react'
+import { ChevronRight, ChevronLeft, ChevronDown } from 'lucide-react'
 import { WEEK_DAYS, weekStart, dayDate, formatWeekLabel, formatShortDate } from '../../constants/days'
 import QtyStepper from './QtyStepper'
 import CutoffCountdown from './CutoffCountdown'
 import WeekSummaryView from './WeekSummaryView'
+import SearchInput from '../../components/SearchInput'
 
 // Standalone design preview of the customer portal — phone+PIN login ->
 // day/week order views — using only local component state and static mock
@@ -64,6 +65,8 @@ export default function CustomerPortalDemo() {
   const [viewMode, setViewMode] = useState('day')
   const [dayOffset, setDayOffset] = useState(() => new Date().getDay())
   const [qty, setQty] = useState(MOCK_STARTING_QTY)
+  const [search, setSearch] = useState('')
+  const [collapsed, setCollapsed] = useState(() => new Set())
 
   const grouped = MOCK_ITEMS.reduce((acc, item) => {
     if (!acc[item.category]) acc[item.category] = []
@@ -89,6 +92,14 @@ export default function CustomerPortalDemo() {
 
   function nextDay() { setDayOffset(o => (o + 1) % 7) }
   function prevDay() { setDayOffset(o => (o + 6) % 7) }
+
+  function toggleCategory(cat) {
+    setCollapsed(prev => {
+      const next = new Set(prev)
+      if (next.has(cat)) next.delete(cat); else next.add(cat)
+      return next
+    })
+  }
 
   if (step === 'login') {
     return (
@@ -151,28 +162,44 @@ export default function CustomerPortalDemo() {
 
           {!dayEditable && <MockCutoffNotice />}
 
+          <div style={{ marginBottom: 12 }}>
+            <SearchInput value={search} onChange={setSearch} placeholder="חיפוש פריט..." />
+          </div>
+
           <div className="day-list">
-            {Object.entries(grouped).map(([cat, items]) => (
-              <div key={cat} className="day-list-group">
-                <div className="day-list-cat">{cat}</div>
-                {items.map(item => {
-                  const key = `${item.id}_${selectedDate}`
-                  return (
-                    <div key={item.id} className="day-list-row">
-                      <div className="day-list-item">
-                        <div className="day-list-item-name">{item.name_he}</div>
-                        <div className="day-list-item-unit">{item.unit}</div>
-                      </div>
-                      <QtyStepper
-                        value={orderLines[key]?.quantity || 0}
-                        onChange={v => handleQtyChange(item.id, selectedDate, v)}
-                        disabled={!dayEditable}
-                      />
-                    </div>
-                  )
-                })}
-              </div>
-            ))}
+            {Object.entries(grouped)
+              .map(([cat, items]) => [
+                cat,
+                search.trim() ? items.filter(i => i.name_he.toLowerCase().includes(search.trim().toLowerCase())) : items,
+              ])
+              .filter(([, items]) => items.length > 0)
+              .map(([cat, items]) => {
+                const isCollapsed = !search.trim() && collapsed.has(cat)
+                return (
+                  <div key={cat} className="day-list-group">
+                    <button type="button" className="day-list-cat" onClick={() => toggleCategory(cat)}>
+                      <span>{cat}</span>
+                      <ChevronDown size={14} className={`day-list-cat-chevron${isCollapsed ? ' collapsed' : ''}`} />
+                    </button>
+                    {!isCollapsed && items.map(item => {
+                      const key = `${item.id}_${selectedDate}`
+                      return (
+                        <div key={item.id} className="day-list-row">
+                          <div className="day-list-item">
+                            <div className="day-list-item-name">{item.name_he}</div>
+                            <div className="day-list-item-unit">{item.unit}</div>
+                          </div>
+                          <QtyStepper
+                            value={orderLines[key]?.quantity || 0}
+                            onChange={v => handleQtyChange(item.id, selectedDate, v)}
+                            disabled={!dayEditable}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })}
           </div>
         </div>
       ) : (

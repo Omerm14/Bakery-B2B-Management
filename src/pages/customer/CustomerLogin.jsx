@@ -17,12 +17,29 @@ export default function CustomerLogin() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [contact, setContact] = useState(null)
+  const [customerName, setCustomerName] = useState(null)
+  const [branding, setBranding] = useState({ logo_url: null, business_name: null })
 
   useEffect(() => {
-    document.title = 'כניסה להזמנות'
     supabase.from('app_config').select('value').eq('key', 'support_contact').maybeSingle()
       .then(({ data }) => setContact(data?.value || null))
+    supabase.from('app_config').select('value').eq('key', 'branding').maybeSingle()
+      .then(({ data }) => { if (data?.value) setBranding(data.value) })
+
+    // Only look up a name for the phone pre-filled from the shared link
+    // (not on every keystroke as someone types a phone manually) — keeps
+    // this to the intended "you clicked your own link" personalization,
+    // not an open phone-to-name lookup surface.
+    const initialPhone = searchParams.get('phone')
+    if (initialPhone) {
+      supabase.rpc('get_customer_display_name', { p_phone: initialPhone })
+        .then(({ data }) => { if (data) setCustomerName(data) })
+    }
   }, [])
+
+  useEffect(() => {
+    document.title = branding.business_name ? `כניסה — ${branding.business_name}` : 'כניסה להזמנות'
+  }, [branding.business_name])
 
   async function login() {
     if (!phone.trim() || !pin.trim()) return
@@ -46,8 +63,26 @@ export default function CustomerLogin() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div className="card" style={{ width: '100%', maxWidth: 360, direction: 'rtl' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 22, marginBottom: 6 }}>כניסה להזמנות</div>
-        <div style={{ fontSize: 13, color: 'var(--t3)', marginBottom: 20 }}>הזן את מספר הטלפון וקוד הגישה שקיבלת.</div>
+        {branding.logo_url ? (
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+            <img
+              src={branding.logo_url}
+              alt={branding.business_name || 'לוגו'}
+              style={{ maxHeight: 64, maxWidth: 200, objectFit: 'contain' }}
+            />
+          </div>
+        ) : branding.business_name ? (
+          <div style={{ textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, marginBottom: 16, color: 'var(--t2)' }}>
+            {branding.business_name}
+          </div>
+        ) : null}
+
+        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 22, marginBottom: 6 }}>
+          {customerName ? `שלום, ${customerName}! 👋` : 'כניסה להזמנות'}
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--t3)', marginBottom: 20 }}>
+          {customerName ? 'הזינו את קוד הגישה שקיבלתם כדי להיכנס להזמנות שלכם.' : 'הזן את מספר הטלפון וקוד הגישה שקיבלת.'}
+        </div>
 
         <label className="lbl">מספר טלפון</label>
         <input

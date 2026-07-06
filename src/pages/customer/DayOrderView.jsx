@@ -1,8 +1,9 @@
-import { useRef } from 'react'
-import { ChevronRight, ChevronLeft } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { ChevronRight, ChevronLeft, ChevronDown } from 'lucide-react'
 import QtyStepper from './QtyStepper'
 import CutoffCountdown from './CutoffCountdown'
 import CutoffBlockedNotice from './CutoffBlockedNotice'
+import SearchInput from '../../components/SearchInput'
 
 const SWIPE_THRESHOLD = 50
 
@@ -16,6 +17,8 @@ export default function DayOrderView({
   saveStates, onQtyChange, onPrevDay, onNextDay, dayTotal,
 }) {
   const touchStartX = useRef(null)
+  const [search, setSearch] = useState('')
+  const [collapsed, setCollapsed] = useState(() => new Set())
 
   function handleTouchStart(e) { touchStartX.current = e.touches[0].clientX }
   function handleTouchEnd(e) {
@@ -25,6 +28,20 @@ export default function DayOrderView({
     if (Math.abs(dx) < SWIPE_THRESHOLD) return
     if (dx < 0) onNextDay(); else onPrevDay()
   }
+
+  function toggleCategory(cat) {
+    setCollapsed(prev => {
+      const next = new Set(prev)
+      if (next.has(cat)) next.delete(cat); else next.add(cat)
+      return next
+    })
+  }
+
+  const searching = search.trim().length > 0
+  const searchTerm = search.trim().toLowerCase()
+  const visibleGroups = Object.entries(grouped)
+    .map(([cat, items]) => [cat, searching ? items.filter(i => i.name_he.toLowerCase().includes(searchTerm)) : items])
+    .filter(([, items]) => items.length > 0)
 
   return (
     <div>
@@ -48,39 +65,52 @@ export default function DayOrderView({
 
       {!canEdit && <CutoffBlockedNotice />}
 
+      <div style={{ marginBottom: 12 }}>
+        <SearchInput value={search} onChange={setSearch} placeholder="חיפוש פריט..." />
+      </div>
+
       <div className="day-list" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-        {Object.keys(grouped).length === 0 && (
-          <div className="empty"><div className="empty-icon">📋</div><div className="empty-text">אין פריטים זמינים</div></div>
-        )}
-        {Object.entries(grouped).map(([cat, items]) => (
-          <div key={cat} className="day-list-group">
-            <div className="day-list-cat">{cat}</div>
-            {items.map(item => {
-              const key = `${item.id}_${date}`
-              const line = orderLines[key]
-              const isAutoCopy = line?.change_reason === 'auto_copy'
-              return (
-                <div key={item.id} className="day-list-row">
-                  <div className="day-list-item">
-                    <div className="day-list-item-name">
-                      {item.name_he}
-                      {isAutoCopy && <span className="badge-autocopy">הועתק משבוע שעבר</span>}
-                    </div>
-                    <div className="day-list-item-unit">
-                      {item.unit}{item.price != null ? ` · ${item.price}₪` : ''}
-                    </div>
-                  </div>
-                  <QtyStepper
-                    value={line?.quantity || 0}
-                    onChange={v => onQtyChange(item.id, date, v)}
-                    disabled={!canEdit}
-                    saveState={saveStates[key]}
-                  />
-                </div>
-              )
-            })}
+        {visibleGroups.length === 0 && (
+          <div className="empty">
+            <div className="empty-icon">📋</div>
+            <div className="empty-text">{searching ? 'לא נמצאו פריטים תואמים' : 'אין פריטים זמינים'}</div>
           </div>
-        ))}
+        )}
+        {visibleGroups.map(([cat, items]) => {
+          const isCollapsed = !searching && collapsed.has(cat)
+          return (
+            <div key={cat} className="day-list-group">
+              <button type="button" className="day-list-cat" onClick={() => toggleCategory(cat)}>
+                <span>{cat}</span>
+                <ChevronDown size={14} className={`day-list-cat-chevron${isCollapsed ? ' collapsed' : ''}`} />
+              </button>
+              {!isCollapsed && items.map(item => {
+                const key = `${item.id}_${date}`
+                const line = orderLines[key]
+                const isAutoCopy = line?.change_reason === 'auto_copy'
+                return (
+                  <div key={item.id} className="day-list-row">
+                    <div className="day-list-item">
+                      <div className="day-list-item-name">
+                        {item.name_he}
+                        {isAutoCopy && <span className="badge-autocopy">הועתק משבוע שעבר</span>}
+                      </div>
+                      <div className="day-list-item-unit">
+                        {item.unit}{item.price != null ? ` · ${item.price}₪` : ''}
+                      </div>
+                    </div>
+                    <QtyStepper
+                      value={line?.quantity || 0}
+                      onChange={v => onQtyChange(item.id, date, v)}
+                      disabled={!canEdit}
+                      saveState={saveStates[key]}
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

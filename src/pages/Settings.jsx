@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Upload } from 'lucide-react'
+import { Plus, Upload, Image as ImageIcon } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useImport } from '../context/ImportContext'
 import { useCustomers } from '../hooks/useCustomers'
@@ -29,6 +29,49 @@ export default function Settings() {
       setSuppliers(data || [])
     })
   }, [])
+
+  // ── Branding (customer login page white-label) ──────────────────────
+  const [branding, setBranding] = useState({ logo_url: null, business_name: null })
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+
+  useEffect(() => {
+    supabase.from('app_config').select('value').eq('key', 'branding').maybeSingle().then(({ data, error }) => {
+      if (error) { console.error('[Settings branding]', error); return }
+      if (data?.value) setBranding(data.value)
+    })
+  }, [])
+
+  async function saveBranding(next) {
+    setBranding(next)
+    const { error } = await supabase.from('app_config').update({ value: next }).eq('key', 'branding')
+    if (error) { console.error('[Settings saveBranding]', error); toast.error('שמירת המיתוג נכשלה') }
+  }
+
+  async function uploadLogo(file) {
+    setUploadingLogo(true)
+    try {
+      const { error: uploadErr } = await supabase.storage
+        .from('branding')
+        .upload('logo', file, { upsert: true, contentType: file.type })
+      if (uploadErr) throw uploadErr
+      const { data: pub } = supabase.storage.from('branding').getPublicUrl('logo')
+      // Cache-bust: the object path is always "logo", so the public URL
+      // never changes on re-upload — without this, browsers/CDN would
+      // keep showing the previous image after a replacement.
+      await saveBranding({ ...branding, logo_url: `${pub.publicUrl}?t=${Date.now()}` })
+      toast.success('הלוגו הועלה בהצלחה')
+    } catch (err) {
+      console.error('[Settings uploadLogo]', err)
+      toast.error('העלאת הלוגו נכשלה')
+    } finally {
+      setUploadingLogo(false)
+    }
+  }
+
+  async function removeLogo() {
+    await supabase.storage.from('branding').remove(['logo'])
+    await saveBranding({ ...branding, logo_url: null })
+  }
 
   async function addMenuItem() {
     if (!newItem.name_he.trim()) return
@@ -311,7 +354,7 @@ function AuditLogTab({ filterText }) {
       </div>
 
       <div className="settings-tabs" style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
-        {[['menu', 'תפריט'], ['customers', 'לקוחות'], ['import', 'ייבוא Excel'], ['audit', 'יומן שינויים']].map(([k, l]) => (
+        {[['menu', 'תפריט'], ['customers', 'לקוחות'], ['import', 'ייבוא Excel'], ['audit', 'יומן שינויים'], ['branding', 'מיתוג']].map(([k, l]) => (
           <button key={k} className={'btn btn-sm ' + (tab === k ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -438,6 +481,59 @@ function AuditLogTab({ filterText }) {
         <div>
           <SearchInput value={filterText} onChange={setFilterText} placeholder="חיפוש לפי לקוח או פריט..." />
           <AuditLogTab filterText={filterText} />
+        </div>
+      )}
+
+      {/* BRANDING (customer portal white-label) */}
+      {tab === 'branding' && (
+        <div className="card" style={{ maxWidth: 480 }}>
+          <div className="section-title">מיתוג — עמוד כניסה ללקוחות</div>
+          <div style={{ fontSize: 13, color: 'var(--t2)', marginBottom: 20, lineHeight: 1.6 }}>
+            הלוגו ושם העסק שיוצגו ללקוחות במסך הכניסה (portal/login), במקום מסך גנרי.
+          </div>
+
+          <label className="lbl">שם העסק המוצג ללקוחות</label>
+          <input
+            className="input"
+            defaultValue={branding.business_name ?? ''}
+            placeholder="לדוגמה: מאפיית הבוקר"
+            onBlur={e => saveBranding({ ...branding, business_name: e.target.value.trim() || null })}
+            style={{ marginBottom: 20 }}
+          />
+
+          <label className="lbl">לוגו</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 6 }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: 'var(--rs)', border: '1px solid var(--bdr)',
+              background: 'var(--surf2)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              overflow: 'hidden', flexShrink: 0,
+            }}>
+              {branding.logo_url ? (
+                <img src={branding.logo_url} alt="לוגו" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+              ) : (
+                <ImageIcon size={24} color="var(--t3)" />
+              )}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <label className="btn btn-secondary btn-sm" style={{ cursor: uploadingLogo ? 'not-allowed' : 'pointer', opacity: uploadingLogo ? .6 : 1 }}>
+                <Upload size={14} /> {uploadingLogo ? 'מעלה...' : (branding.logo_url ? 'החלף לוגו' : 'העלאת לוגו')}
+                <input
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  disabled={uploadingLogo}
+                  onChange={e => {
+                    const file = e.target.files?.[0]
+                    e.target.value = ''
+                    if (file) uploadLogo(file)
+                  }}
+                />
+              </label>
+              {branding.logo_url && (
+                <button className="btn btn-ghost btn-sm" onClick={removeLogo}>הסר לוגו</button>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
