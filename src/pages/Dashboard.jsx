@@ -48,44 +48,49 @@ export default function Dashboard() {
   async function loadDashboard() {
     setLoading(true)
     try {
-      // Base "current week" on the most recent week that actually has data,
-      // not on the literal real-world calendar week — the latest Excel
-      // import may lag behind today by days or weeks, and a fixed calendar
-      // window would then show all-zero stats even though the platform has
-      // plenty of (slightly older) data.
-      const { data: recentWeeksDesc } = await supabase
+      // Base "current week" on the most recent week that actually has order
+      // data, not just the most recent row in `weeks` — calendar navigation
+      // and the customer ordering portal can pre-create a blank week row
+      // before any order exists in it, which must not be mistaken for "this
+      // week" (it would show zero everywhere despite real recent data).
+      const { data: candidateWeeksDesc } = await supabase
         .from('weeks')
         .select('id, start_date')
         .order('start_date', { ascending: false })
-        .limit(8)
+        .limit(60)
 
-      const weeksAsc = (recentWeeksDesc || []).slice().reverse() // oldest first
-      const weekIds = weeksAsc.map(w => w.id)
+      const candidateIds = (candidateWeeksDesc || []).map(w => w.id)
+      const { data: rawLines } = candidateIds.length
+        ? await supabase.from('order_lines').select('week_id, customer_id, menu_item_id, quantity, menu_items(name_he)').in('week_id', candidateIds).gt('quantity', 0)
+        : { data: [] }
+
+      const linesByWeek = new Map()
+      for (const l of rawLines || []) {
+        // Exclude a corrupted historical menu item ("תאריך") whose bogus
+        // quantities (leftover date-serial values from an old import bug)
+        // would otherwise blow up every total that includes it.
+        if (!l.menu_items || l.menu_items.name_he === 'תאריך') continue
+        if (!linesByWeek.has(l.week_id)) linesByWeek.set(l.week_id, [])
+        linesByWeek.get(l.week_id).push(l)
+      }
+
+      const weeksWithData = (candidateWeeksDesc || []).filter(w => linesByWeek.has(w.id))
+      const weeksAsc = weeksWithData.slice(0, 8).reverse() // most recent 8 with data, oldest first
       const thisWeek = weeksAsc[weeksAsc.length - 1] || null
       const prevWeek = weeksAsc[weeksAsc.length - 2] || null
       setLatestWeekLabel(thisWeek ? formatWeekShort(thisWeek.start_date) : null)
 
-      // Fetch order lines for these weeks
-      const { data: rawLines } = weekIds.length
-        ? await supabase.from('order_lines').select('week_id, customer_id, menu_item_id, quantity, menu_items(name_he)').in('week_id', weekIds).gt('quantity', 0)
-        : { data: [] }
-      // Exclude a corrupted historical menu item ("תאריך") whose bogus
-      // quantities (leftover date-serial values from an old import bug) would
-      // otherwise blow up every total that includes it.
-      const allLines = (rawLines || []).filter(l => l.menu_items && l.menu_items.name_he !== 'תאריך')
-
       // Build trend data: total quantity per week
       const trendMap = {}
-      for (const w of weeksAsc) trendMap[w.start_date] = { label: formatWeekShort(w.start_date), qty: 0, iso: w.start_date }
-      for (const line of allLines) {
-        const w = weeksAsc.find(w => w.id === line.week_id)
-        if (w) trendMap[w.start_date].qty += parseFloat(line.quantity)
+      for (const w of weeksAsc) {
+        const qty = (linesByWeek.get(w.id) || []).reduce((s, l) => s + parseFloat(l.quantity), 0)
+        trendMap[w.start_date] = { label: formatWeekShort(w.start_date), qty, iso: w.start_date }
       }
       setTrendData(Object.values(trendMap))
 
       // This week stats
-      const thisWeekLines = thisWeek ? allLines.filter(l => l.week_id === thisWeek.id) : []
-      const prevWeekLines = prevWeek ? allLines.filter(l => l.week_id === prevWeek.id) : []
+      const thisWeekLines = thisWeek ? (linesByWeek.get(thisWeek.id) || []) : []
+      const prevWeekLines = prevWeek ? (linesByWeek.get(prevWeek.id) || []) : []
       const thisTotal = thisWeekLines.reduce((s, l) => s + parseFloat(l.quantity), 0)
       const prevTotal = prevWeekLines.reduce((s, l) => s + parseFloat(l.quantity), 0)
       const wowChange = prevTotal > 0 ? Math.round(((thisTotal - prevTotal) / prevTotal) * 100) : null
