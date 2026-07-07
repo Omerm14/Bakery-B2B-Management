@@ -7,9 +7,11 @@ import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useToast } from '../context/ToastContext'
 import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
 import { ChevronRight, ChevronLeft, Lock } from 'lucide-react'
+import { useTranslation } from '../context/LanguageContext'
 
 export default function Forecasting() {
   const toast = useToast()
+  const { t, lang } = useTranslation()
   const week = useWeek()
   const { customers } = useCustomers()
   const { menuItems } = useMenuItems()
@@ -20,6 +22,10 @@ export default function Forecasting() {
   const [loading, setLoading] = useState(false)
   const [locking, setLocking] = useState(false)
   const [locked, setLocked] = useState({}) // keys already locked this week
+
+  function displayName(item) {
+    return lang === 'en' ? (item.name_en || item.name_he) : item.name_he
+  }
 
   useEffect(() => {
     if (customers.length && !selectedCustomer) setSelectedCustomer(customers[0])
@@ -166,10 +172,12 @@ export default function Forecasting() {
       const newLocked = {}
       for (const u of upserts) newLocked[`${u.menu_item_id}_${u.delivery_date}`] = true
       setLocked(newLocked)
-      toast.success(upserts.length ? `נעלה תחזית — ${upserts.length} תאים` : 'אין תחזית לנעילה')
+      toast.success(upserts.length
+        ? `${t('forecasting.lockedToastPrefix')} — ${upserts.length} ${t('forecasting.cells')}`
+        : t('forecasting.nothingToLockToast'))
     } catch (err) {
       console.error('[lockForecast]', err)
-      toast.error('נעילת התחזית נכשלה')
+      toast.error(t('forecasting.lockFailedToast'))
     } finally {
       setLocking(false)
     }
@@ -197,18 +205,18 @@ export default function Forecasting() {
   return (
     <div className="page">
       <div className="page-header">
-        <h1 className="page-title">תחזית הזמנות</h1>
+        <h1 className="page-title">{t('forecasting.title')}</h1>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {lockedCount > 0 && (
-            <span style={{ fontSize: 12, color: 'var(--green)' }}>✓ {lockedCount} תאים נעולים</span>
+            <span style={{ fontSize: 12, color: 'var(--green)' }}>✓ {lockedCount} {t('forecasting.lockedCells')}</span>
           )}
           <button
             className="btn btn-primary btn-sm"
             onClick={lockForecast}
             disabled={locking || !hasForecast || !selectedCustomer}
-            title="נעל תחזית כתוכנית ייצור"
+            title={t('forecasting.lockTooltip')}
           >
-            <Lock size={13} /> {locking ? '...' : 'נעל כתוכנית'}
+            <Lock size={13} /> {locking ? '...' : t('forecasting.lockButton')}
           </button>
         </div>
       </div>
@@ -218,13 +226,13 @@ export default function Forecasting() {
         <button className="btn btn-ghost btn-sm" onClick={week.prevWeek}><ChevronRight size={16} /></button>
         <span className="week-label">{week.weekLabel}</span>
         <button className="btn btn-ghost btn-sm" onClick={week.nextWeek}><ChevronLeft size={16} /></button>
-        <button className="btn btn-ghost btn-sm" onClick={week.goToToday} style={{ fontSize: 12 }}>השבוע</button>
+        <button className="btn btn-ghost btn-sm" onClick={week.goToToday} style={{ fontSize: 12 }}>{t('forecasting.thisWeek')}</button>
       </div>
 
       <div className="sidebar-layout">
         {/* Customer sidebar */}
         <div>
-          <div className="section-title" style={{ marginBottom: 10 }}>לקוח</div>
+          <div className="section-title" style={{ marginBottom: 10 }}>{t('common.customer')}</div>
           <div className="customer-list">
             {customers.map(c => (
               <div
@@ -241,7 +249,7 @@ export default function Forecasting() {
         {/* Forecast grid */}
         <div>
           {!selectedCustomer ? (
-            <div className="empty"><div className="empty-icon">👈</div><div className="empty-text">בחר לקוח</div></div>
+            <div className="empty"><div className="empty-icon">👈</div><div className="empty-text">{t('forecasting.selectCustomer')}</div></div>
           ) : loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[...Array(6)].map((_, i) => <div key={i} className="shimmer" style={{ height: 40 }} />)}
@@ -251,29 +259,29 @@ export default function Forecasting() {
               <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--bdr)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontWeight: 700, fontSize: 15 }}>{selectedCustomer.name}</span>
                 <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--t3)', alignItems: 'center' }}>
-                  {totalFcQty > 0 && <span style={{ color: 'var(--accent)', fontWeight: 600 }}>תחזית כוללת: {Math.round(totalFcQty * 10) / 10}</span>}
-                  <span>ממוצע 4 שבועות אחרונים</span>
-                  <span>📝 ניתן לעריכה ידנית</span>
-                  {lockedCount > 0 && <span style={{ color: 'var(--green)' }}>🔒 = נעול</span>}
+                  {totalFcQty > 0 && <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{t('forecasting.totalForecast')}: {Math.round(totalFcQty * 10) / 10}</span>}
+                  <span>{t('forecasting.avg4Weeks')}</span>
+                  <span>📝 {t('forecasting.manualEditable')}</span>
+                  {lockedCount > 0 && <span style={{ color: 'var(--green)' }}>🔒 {t('forecasting.lockedLegendInline')}</span>}
                 </div>
               </div>
 
               {!hasForecast ? (
                 <div className="empty" style={{ padding: 40 }}>
                   <div className="empty-icon">📉</div>
-                  <div className="empty-text">אין מספיק היסטוריה לתחזית</div>
-                  <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 8 }}>נדרשים לפחות 4 שבועות של הזמנות</div>
+                  <div className="empty-text">{t('forecasting.noHistoryTitle')}</div>
+                  <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 8 }}>{t('forecasting.noHistorySubtitle')}</div>
                 </div>
               ) : (
                 <div className="order-grid-wrap">
                   <table className="order-grid">
                     <thead>
                       <tr>
-                        <th className="item-col sticky-col">פריט</th>
-                        <th style={{ fontSize: 10, color: 'var(--t3)' }}>ספק</th>
+                        <th className="item-col sticky-col">{t('common.item')}</th>
+                        <th style={{ fontSize: 10, color: 'var(--t3)' }}>{t('common.supplier')}</th>
                         {WEEK_DAYS.map(d => (
                           <th key={d.key}>
-                            <div>{d.short}</div>
+                            <div>{lang === 'en' ? d.short_en : d.short}</div>
                             <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>
                               {formatShortDate(week.dayDate(d.key))}
                             </div>
@@ -307,7 +315,7 @@ export default function Forecasting() {
                               if (!hasAny) return null
                               return (
                                 <tr key={item.id}>
-                                  <td className="item-name sticky-col">{item.name_he}</td>
+                                  <td className="item-name sticky-col">{displayName(item)}</td>
                                   <td className="item-supplier">{item.suppliers?.name || '—'}</td>
                                   {WEEK_DAYS.map(d => {
                                     const date = week.dayDate(d.key)
@@ -327,7 +335,7 @@ export default function Forecasting() {
                                           placeholder={fcQty ? String(fcQty) : '—'}
                                           style={ov !== undefined && ov !== fcQty ? { borderColor: 'var(--amber)', color: 'var(--amber)' } : {}}
                                           onChange={e => handleOverride(item.id, date, e.target.value)}
-                                          title={isLocked ? 'נעול כתוכנית ייצור' : fcQty ? `תחזית: ${fcQty}` : ''}
+                                          title={isLocked ? t('forecasting.lockedInputTitle') : fcQty ? `${t('forecasting.forecastLabel')}: ${fcQty}` : ''}
                                         />
                                       </td>
                                     )
@@ -344,9 +352,9 @@ export default function Forecasting() {
               )}
 
               <div style={{ padding: '10px 20px', borderTop: '1px solid var(--bdr)', display: 'flex', gap: 16, fontSize: 12, color: 'var(--t3)' }}>
-                <span>⬜ תחזית (ממוצע)</span>
-                <span style={{ color: 'var(--amber)' }}>🟨 שונה ידנית</span>
-                <span style={{ color: 'var(--accent)' }}>🟦 נעול כתוכנית</span>
+                <span>⬜ {t('forecasting.legendForecast')}</span>
+                <span style={{ color: 'var(--amber)' }}>🟨 {t('forecasting.legendManual')}</span>
+                <span style={{ color: 'var(--accent)' }}>🟦 {t('forecasting.legendLocked')}</span>
               </div>
             </div>
           )}

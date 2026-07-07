@@ -40,6 +40,8 @@ async function fetchAllPages(buildQuery) {
 }
 
 export default function History() {
+  const { t, lang } = useTranslation()
+  const locale = lang === 'en' ? 'en-US' : 'he-IL'
   const location = useLocation()
   const navigate = useNavigate()
   const [viewMode, setViewMode] = useState('customer')
@@ -50,6 +52,10 @@ export default function History() {
   const [loading, setLoading] = useState(false)
   const [tableData, setTableData] = useState(null) // { weeks: [...iso], rows: [...], trendData: [...] }
   const [pillFilter, setPillFilter] = useState('')
+
+  function displayName(item) {
+    return lang === 'en' ? (item.name_en || item.name_he) : item.name_he
+  }
 
   useEffect(() => {
     if (customers.length && !selectedCustomer) setSelectedCustomer(customers[0])
@@ -79,7 +85,7 @@ export default function History() {
       const lines = await fetchAllPages((from, to) =>
         supabase
           .from('order_lines')
-          .select('week_id, menu_item_id, quantity, weeks(start_date), menu_items(name_he, unit)')
+          .select('week_id, menu_item_id, quantity, weeks(start_date), menu_items(name_he, name_en, unit)')
           .eq('customer_id', selectedCustomer.id)
           .gt('quantity', 0)
           .range(from, to)
@@ -88,7 +94,7 @@ export default function History() {
       if (!lines.length) { setTableData(null); return }
 
       // Group by (menu_item_id, week)
-      const itemWeekMap = {} // itemId → { name, unit, weekQtys: {iso: qty}, total }
+      const itemWeekMap = {} // itemId → { name_he, name_en, unit, weekQtys: {iso: qty}, total }
       const weekSet = new Set()
 
       for (const l of lines) {
@@ -96,7 +102,7 @@ export default function History() {
         if (!iso) continue
         weekSet.add(iso)
         const id = l.menu_item_id
-        if (!itemWeekMap[id]) itemWeekMap[id] = { id, name: l.menu_items?.name_he, unit: l.menu_items?.unit, weekQtys: {}, total: 0 }
+        if (!itemWeekMap[id]) itemWeekMap[id] = { id, name_he: l.menu_items?.name_he, name_en: l.menu_items?.name_en, unit: l.menu_items?.unit, weekQtys: {}, total: 0 }
         itemWeekMap[id].weekQtys[iso] = (itemWeekMap[id].weekQtys[iso] || 0) + parseFloat(l.quantity)
         itemWeekMap[id].total += parseFloat(l.quantity)
       }
@@ -179,7 +185,7 @@ export default function History() {
       }
       const trendData = allWeeks.map(iso => ({ label: fmtWeek(iso), כמות: Math.round((weekTotals[iso] || 0) * 10) / 10 }))
 
-      setTableData({ weeks: recentWeeks, rows, trendData, title: selectedItem.name_he })
+      setTableData({ weeks: recentWeeks, rows, trendData, title: displayName(selectedItem) })
     } finally {
       setLoading(false)
     }
@@ -205,21 +211,21 @@ export default function History() {
   return (
     <div className="page">
       <div className="page-header">
-        <h1 className="page-title">היסטוריה</h1>
+        <h1 className="page-title">{t('history.title')}</h1>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button className={'btn btn-sm ' + (viewMode === 'customer' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('customer')}>לפי לקוח</button>
-          <button className={'btn btn-sm ' + (viewMode === 'item' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('item')}>לפי פריט</button>
+          <button className={'btn btn-sm ' + (viewMode === 'customer' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('customer')}>{t('history.byCustomer')}</button>
+          <button className={'btn btn-sm ' + (viewMode === 'item' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('item')}>{t('history.byItem')}</button>
         </div>
       </div>
 
       <div className="sidebar-layout">
         {/* Selector sidebar */}
         <div>
-          <div className="section-title" style={{ marginBottom: 10 }}>{viewMode === 'customer' ? 'לקוח' : 'פריט'}</div>
-          <SearchInput value={pillFilter} onChange={setPillFilter} placeholder={viewMode === 'customer' ? 'חיפוש לקוח...' : 'חיפוש פריט...'} />
+          <div className="section-title" style={{ marginBottom: 10 }}>{viewMode === 'customer' ? t('common.customer') : t('common.item')}</div>
+          <SearchInput value={pillFilter} onChange={setPillFilter} placeholder={viewMode === 'customer' ? t('history.searchCustomer') : t('history.searchItem')} />
           <div className="customer-list" style={{ maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' }}>
             {(viewMode === 'customer' ? customers : menuItems)
-              .filter(item => (viewMode === 'customer' ? item.name : item.name_he).includes(pillFilter.trim()))
+              .filter(item => (viewMode === 'customer' ? item.name : displayName(item)).includes(pillFilter.trim()))
               .map(item => {
               const isSelected = viewMode === 'customer' ? selectedCustomer?.id === item.id : selectedItem?.id === item.id
               return (
@@ -228,7 +234,7 @@ export default function History() {
                   className={'customer-pill' + (isSelected ? ' active' : '')}
                   onClick={() => viewMode === 'customer' ? setSelectedCustomer(item) : setSelectedItem(item)}
                 >
-                  {viewMode === 'customer' ? item.name : item.name_he}
+                  {viewMode === 'customer' ? item.name : displayName(item)}
                 </div>
               )
             })}
@@ -244,22 +250,22 @@ export default function History() {
           ) : !tableData?.rows?.length ? (
             <div className="empty">
               <div className="empty-icon">📊</div>
-              <div className="empty-text">אין היסטוריה זמינה</div>
+              <div className="empty-text">{t('history.emptyText')}</div>
             </div>
           ) : (
             <>
               {/* Trend chart */}
               <div className="card" style={{ marginBottom: 20 }}>
                 <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 16 }}>
-                  מגמת כמות — {tableData.title}
+                  {t('history.trendPrefix')} — {tableData.title}
                 </div>
                 <ResponsiveContainer width="100%" height={160}>
                   <LineChart data={tableData.trendData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                     <CartesianGrid stroke="var(--bdr)" strokeDasharray="3 3" />
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Line type="monotone" dataKey="כמות" stroke="var(--accent)" strokeWidth={2} dot={{ fill: 'var(--accent)', r: 3 }} activeDot={{ r: 5 }} />
+                    <Tooltip content={<CustomTooltip locale={locale} />} />
+                    <Line type="monotone" dataKey="כמות" name={t('common.quantity')} stroke="var(--accent)" strokeWidth={2} dot={{ fill: 'var(--accent)', r: 3 }} activeDot={{ r: 5 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -267,28 +273,30 @@ export default function History() {
               {/* Cross-tab table: rows = items/customers, columns = weeks */}
               <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--bdr)', fontSize: 12, color: 'var(--t3)' }}>
-                  {viewMode === 'customer' ? 'פריטים' : 'לקוחות'} × {tableData.weeks.length} שבועות אחרונים
-                  {tableData.weeks.length === MAX_WEEKS && ' (12 אחרונים)'}
-                  <span style={{ marginInlineStart: 12 }}>🔄 = הזמנה קבועה (3+ שבועות זהים)</span>
+                  {viewMode === 'customer' ? t('common.items') : t('common.customers')} × {tableData.weeks.length} {t('history.recentWeeksCount')}
+                  {tableData.weeks.length === MAX_WEEKS && (
+                    lang === 'en' ? ` (${t('history.last')} ${MAX_WEEKS})` : ` (${MAX_WEEKS} ${t('history.last')})`
+                  )}
+                  <span style={{ marginInlineStart: 12 }}>{t('history.standingLegend')}</span>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
                   <table className="itbl" style={{ minWidth: 500 }}>
                     <thead>
                       <tr>
-                        <th style={{ minWidth: 160 }}>{viewMode === 'customer' ? 'פריט' : 'לקוח'}</th>
-                        {viewMode === 'customer' && <th style={{ fontSize: 10, color: 'var(--t3)', minWidth: 40 }}>יח׳</th>}
+                        <th style={{ minWidth: 160 }}>{viewMode === 'customer' ? t('common.item') : t('common.customer')}</th>
+                        {viewMode === 'customer' && <th style={{ fontSize: 10, color: 'var(--t3)', minWidth: 40 }}>{t('common.unit')}</th>}
                         {tableData.weeks.map(iso => (
                           <th key={iso} style={{ textAlign: 'center', minWidth: 52, fontSize: 11 }}>{fmtWeek(iso)}</th>
                         ))}
-                        <th style={{ textAlign: 'center', minWidth: 56, fontWeight: 700 }}>סה״כ</th>
+                        <th style={{ textAlign: 'center', minWidth: 56, fontWeight: 700 }}>{t('common.total')}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {tableData.rows.map(row => (
                         <tr key={row.id}>
                           <td style={{ fontWeight: 500 }}>
-                            {row.name}
-                            {row.standing && <span title="הזמנה קבועה" style={{ marginInlineStart: 6 }}>🔄</span>}
+                            {viewMode === 'customer' ? displayName(row) : row.name}
+                            {row.standing && <span title={t('history.standingOrder')} style={{ marginInlineStart: 6 }}>🔄</span>}
                           </td>
                           {viewMode === 'customer' && (
                             <td style={{ fontSize: 11, color: 'var(--t3)' }}>{row.unit}</td>
