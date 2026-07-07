@@ -5,14 +5,15 @@ import { supabase } from '../lib/supabase'
 import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
 import SearchInput from '../components/SearchInput'
+import { useTranslation } from '../context/LanguageContext'
 
-const CustomTooltip = ({ active, payload, label }) => {
+const CustomTooltip = ({ active, payload, label, locale }) => {
   if (!active || !payload?.length) return null
   return (
     <div style={{ background: 'var(--surf2)', border: '1px solid var(--bdr2)', borderRadius: 8, padding: '8px 12px', fontSize: 13 }}>
       <div style={{ color: 'var(--t2)', marginBottom: 4 }}>{label}</div>
       {payload.map((p, i) => (
-        <div key={i} style={{ color: p.color || 'var(--accent)', fontWeight: 600 }}>{p.name}: {p.value?.toLocaleString('he-IL')}</div>
+        <div key={i} style={{ color: p.color || 'var(--accent)', fontWeight: 600 }}>{p.name}: {p.value?.toLocaleString(locale)}</div>
       ))}
     </div>
   )
