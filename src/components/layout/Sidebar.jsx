@@ -9,7 +9,7 @@ const links = [
   { to: '/orders',      label: 'הזמנות',        Icon: ClipboardList },
   { to: '/production',  label: 'ייצור היום',     Icon: Factory },
   { to: '/packing',     label: 'אריזה',         Icon: PackageCheck },
-  { to: '/weekly',      label: 'תוכנית שבועית', Icon: CalendarDays },
+  { to: '/weekly',      label: 'טבלת ייצור שבועית', Icon: CalendarDays },
   { to: '/history',     label: 'היסטוריה',      Icon: History },
   { to: '/forecasting', label: 'תחזית',         Icon: TrendingUp },
 ]

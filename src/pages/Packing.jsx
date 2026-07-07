@@ -13,8 +13,21 @@ export default function Packing() {
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState({})
   const [allDone, setAllDone] = useState(false)
+  const [showEnglish, setShowEnglish] = useState(() => localStorage.getItem('packing_lang_en') === '1')
 
   useEffect(() => { loadPacking() }, [selectedDate])
+
+  function toggleLang() {
+    setShowEnglish(prev => {
+      const next = !prev
+      localStorage.setItem('packing_lang_en', next ? '1' : '0')
+      return next
+    })
+  }
+
+  function displayName(item) {
+    return showEnglish ? (item.name_en || item.name_he) : item.name_he
+  }
 
   async function loadPacking() {
     setLoading(true)
@@ -23,7 +36,7 @@ export default function Packing() {
         .from('order_lines')
         .select(`
           id, quantity, customer_id, menu_item_id,
-          menu_items(name_he, unit),
+          menu_items(name_he, name_en, unit),
           customers!inner(name, active),
           packing_checks(id, packed_at)
         `)
@@ -43,6 +56,7 @@ export default function Packing() {
         map[cid].items.push({
           line_id: line.id,
           name_he: line.menu_items?.name_he,
+          name_en: line.menu_items?.name_en,
           unit: line.menu_items?.unit,
           quantity: line.quantity,
           packed_at: packedAt,
@@ -106,7 +120,7 @@ export default function Packing() {
       htmlTitle: `שליחה – ${client.name}`,
       h2: client.name,
       subheading: dateStr,
-      sections: [{ items: client.items }],
+      sections: [{ items: client.items.map(i => ({ ...i, name_he: displayName(i) })) }],
     })
     if (!openAndPrint(html)) toast.error('הדפדפן חסם את חלון ההדפסה')
   }
@@ -118,7 +132,7 @@ export default function Packing() {
     const html = buildPackingListHtml({
       htmlTitle: `רשימות אריזה – ${dateStr}`,
       h2: `רשימות אריזה – ${dateStr}`,
-      sections: clients.map(client => ({ heading: client.name, items: client.items })),
+      sections: clients.map(client => ({ heading: client.name, items: client.items.map(i => ({ ...i, name_he: displayName(i) })) })),
     })
     if (!openAndPrint(html)) toast.error('הדפדפן חסם את חלון ההדפסה')
   }
@@ -158,6 +172,9 @@ export default function Packing() {
         <h1 className="page-title">אריזה יומית</h1>
         {clients.length > 0 && (
           <div style={{ display: 'flex', gap: 6 }}>
+            <button className="btn btn-ghost btn-sm no-print" onClick={toggleLang}>
+              {showEnglish ? 'עברית' : 'EN'}
+            </button>
             <button className="btn btn-ghost btn-sm no-print" onClick={printAll}>
               <Printer size={14} /> הכל
             </button>
@@ -197,7 +214,7 @@ export default function Packing() {
           const done = isClientDone(client)
           const isOpen = expanded[client.customer_id]
           const previewItems = client.items.slice(0, 3)
-          const previewText = previewItems.map(i => `${i.name_he} ×${i.quantity}`).join(', ')
+          const previewText = previewItems.map(i => `${displayName(i)} ×${i.quantity}`).join(', ')
             + (client.items.length > 3 ? ` ועוד ${client.items.length - 3}` : '')
 
           return (
@@ -252,7 +269,7 @@ export default function Packing() {
                       <div className={'pack-check' + (checked ? ' checked' : '')}>
                         {checked && <Check size={13} color="#fff" />}
                       </div>
-                      <span className="pack-label" style={{ flex: 1, fontSize: 15 }}>{item.name_he}</span>
+                      <span className="pack-label" style={{ flex: 1, fontSize: 15 }}>{displayName(item)}</span>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
                         <span className="pack-qty">{item.quantity} {item.unit}</span>
                         {time && <span style={{ fontSize: 10, color: 'var(--green)' }}>נארז {time}</span>}

@@ -1,11 +1,22 @@
 import { useState, useEffect } from 'react'
-import { ChevronRight, ChevronLeft, Download } from 'lucide-react'
+import { ChevronRight, ChevronLeft, Download, Printer } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useWeek } from '../hooks/useWeek'
 import { WEEK_DAYS, toLocalISODate } from '../constants/days'
+import { buildWeeklyProductionHtml, openAndPrint } from '../lib/printHtml'
+import { useToast } from '../context/ToastContext'
+
+const CATEGORY_EN = {
+  'מאפים': 'Pastries',
+  'לחם ולחמניות': 'Bread & Rolls',
+  'עוגות ועוגיות': 'Cakes & Cookies',
+  'קפואים ושונות - קונדי': 'Frozen & Misc',
+}
+function categoryEn(cat) { return CATEGORY_EN[cat] || cat }
 
 export default function Weekly() {
+  const toast = useToast()
   const week = useWeek()
   const [rows, setRows] = useState([])
   const [prevRows, setPrevRows] = useState([]) // previous week for comparison
@@ -58,6 +69,7 @@ export default function Weekly() {
         map[id] = {
           menu_item_id: id,
           name_he: row.name_he,
+          name_en: row.name_en,
           unit: row.unit,
           category: row.category || 'כללי',
           supplier: row.supplier_name || 'לא ידוע',
@@ -97,8 +109,30 @@ export default function Weekly() {
       XLSX.utils.book_append_sheet(wb, ws, group.slice(0, 31))
     }
 
-    const fileName = `תוכנית_שבועית_${week.weekStartISO}.xlsx`
+    const fileName = `טבלת_ייצור_שבועית_${week.weekStartISO}.xlsx`
     XLSX.writeFile(wb, fileName)
+  }
+
+  function printWeekly() {
+    const grouped = groupRows(rows) // honors CATEGORY_ORDER
+    const sections = Object.entries(grouped).map(([group, items]) => ({
+      heading: categoryEn(group),
+      items: items.map(row => ({
+        name: row.name_en || row.name_he,
+        unit: row.unit,
+        category: categoryEn(row.category),
+        days: WEEK_DAYS.reduce((acc, d) => { acc[d.key] = row.days[week.dayDate(d.key)]; return acc }, {}),
+        total: row.total,
+      })),
+    }))
+    const html = buildWeeklyProductionHtml({
+      htmlTitle: 'Weekly Production Table',
+      h1: 'Weekly Production Table',
+      subheading: week.weekLabel,
+      dayLabels: WEEK_DAYS,
+      sections,
+    })
+    if (!openAndPrint(html)) toast.error('הדפדפן חסם את חלון ההדפסה')
   }
 
   function changePercent(curr, prev) {
@@ -106,6 +140,8 @@ export default function Weekly() {
     const pct = Math.round(((curr - prev) / prev) * 100)
     return `${pct > 0 ? '+' : ''}${pct}%`
   }
+
+  const CATEGORY_ORDER = ['מאפים', 'לחם ולחמניות', 'עוגות ועוגיות', 'קפואים ושונות - קונדי']
 
   const TREND_ORDER = ['חדש השבוע', 'עלייה חדה', 'ירידה חדה', 'יציב']
   const TREND_ICONS = { 'חדש השבוע': '🆕', 'עלייה חדה': '📈', 'ירידה חדה': '📉', 'יציב': '➖' }
@@ -127,9 +163,21 @@ export default function Weekly() {
       for (const k of TREND_ORDER) if (buckets[k].length) result[k] = buckets[k]
       return result
     }
-    const key = viewMode === 'supplier' ? 'supplier' : 'category'
+    if (viewMode === 'category') {
+      const buckets = {}
+      for (const row of rowList) {
+        const k = row.category
+        if (!buckets[k]) buckets[k] = []
+        buckets[k].push(row)
+      }
+      const result = {}
+      for (const k of CATEGORY_ORDER) if (buckets[k]?.length) result[k] = buckets[k]
+      const rest = Object.keys(buckets).filter(k => !CATEGORY_ORDER.includes(k)).sort((a, b) => a.localeCompare(b, 'he'))
+      for (const k of rest) result[k] = buckets[k]
+      return result
+    }
     return rowList.reduce((acc, row) => {
-      const k = row[key]
+      const k = row.supplier
       if (!acc[k]) acc[k] = []
       acc[k].push(row)
       return acc
@@ -149,7 +197,7 @@ export default function Weekly() {
   return (
     <div className="page">
       <div className="page-header">
-        <h1 className="page-title">תוכנית שבועית</h1>
+        <h1 className="page-title">טבלת ייצור שבועית</h1>
         <div style={{ display: 'flex', gap: 6 }}>
           <button className={'btn btn-sm ' + (viewMode === 'category' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('category')}>לפי קטגוריה</button>
           <button className={'btn btn-sm ' + (viewMode === 'supplier' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('supplier')}>לפי ספק</button>
@@ -157,6 +205,11 @@ export default function Weekly() {
           {rows.length > 0 && (
             <button className="btn btn-ghost btn-sm" onClick={exportExcel} title="ייצוא Excel">
               <Download size={14} /> Excel
+            </button>
+          )}
+          {rows.length > 0 && viewMode === 'category' && (
+            <button className="btn btn-ghost btn-sm no-print" onClick={printWeekly} title="Print (English)">
+              <Printer size={14} /> Print
             </button>
           )}
         </div>

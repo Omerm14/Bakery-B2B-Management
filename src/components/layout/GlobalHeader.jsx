@@ -6,7 +6,7 @@ const TITLES = {
   '/orders': 'הזמנות',
   '/production': 'ייצור היום',
   '/packing': 'אריזה',
-  '/weekly': 'תוכנית שבועית',
+  '/weekly': 'טבלת ייצור שבועית',
   '/history': 'היסטוריה',
   '/forecasting': 'תחזית',
   '/settings': 'הגדרות',

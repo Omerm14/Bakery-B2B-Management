@@ -1,11 +1,11 @@
 export const WEEK_DAYS = [
-  { key: 0, label: 'ראשון', short: 'א׳' },
-  { key: 1, label: 'שני',   short: 'ב׳' },
-  { key: 2, label: 'שלישי', short: 'ג׳' },
-  { key: 3, label: 'רביעי', short: 'ד׳' },
-  { key: 4, label: 'חמישי', short: 'ה׳' },
-  { key: 5, label: 'שישי',  short: 'ו׳' },
-  { key: 6, label: 'שבת',   short: 'ש׳' },
+  { key: 0, label: 'ראשון', short: 'א׳', short_en: 'Sun' },
+  { key: 1, label: 'שני',   short: 'ב׳', short_en: 'Mon' },
+  { key: 2, label: 'שלישי', short: 'ג׳', short_en: 'Tue' },
+  { key: 3, label: 'רביעי', short: 'ד׳', short_en: 'Wed' },
+  { key: 4, label: 'חמישי', short: 'ה׳', short_en: 'Thu' },
+  { key: 5, label: 'שישי',  short: 'ו׳', short_en: 'Fri' },
+  { key: 6, label: 'שבת',   short: 'ש׳', short_en: 'Sat' },
 ]
 
 // Returns Sunday of the week containing `date`
