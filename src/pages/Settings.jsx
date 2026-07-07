@@ -6,9 +6,11 @@ import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
 import { useToast } from '../context/ToastContext'
 import SearchInput from '../components/SearchInput'
+import { useTranslation } from '../context/LanguageContext'
 
 export default function Settings() {
   const toast = useToast()
+  const { t } = useTranslation()
   const [tab, setTab] = useState('menu')
   const { menuItems, setMenuItems } = useMenuItems({ activeOnly: false })
   const { customers, setCustomers } = useCustomers({ activeOnly: false })
@@ -25,7 +27,7 @@ export default function Settings() {
 
   useEffect(() => {
     supabase.from('suppliers').select('*').order('name').then(({ data, error }) => {
-      if (error) { console.error('[Settings suppliers]', error); toast.error('טעינת הספקים נכשלה') }
+      if (error) { console.error('[Settings suppliers]', error); toast.error(t('settings.toast.suppliersLoadFailed')) }
       setSuppliers(data || [])
     })
   }, [])
@@ -44,7 +46,7 @@ export default function Settings() {
   async function saveBranding(next) {
     setBranding(next)
     const { error } = await supabase.from('app_config').update({ value: next }).eq('key', 'branding')
-    if (error) { console.error('[Settings saveBranding]', error); toast.error('שמירת המיתוג נכשלה') }
+    if (error) { console.error('[Settings saveBranding]', error); toast.error(t('settings.toast.brandingSaveFailed')) }
   }
 
   async function uploadLogo(file) {
@@ -59,10 +61,10 @@ export default function Settings() {
       // never changes on re-upload — without this, browsers/CDN would
       // keep showing the previous image after a replacement.
       await saveBranding({ ...branding, logo_url: `${pub.publicUrl}?t=${Date.now()}` })
-      toast.success('הלוגו הועלה בהצלחה')
+      toast.success(t('settings.toast.logoUploadSuccess'))
     } catch (err) {
       console.error('[Settings uploadLogo]', err)
-      toast.error('העלאת הלוגו נכשלה')
+      toast.error(t('settings.toast.logoUploadFailed'))
     } finally {
       setUploadingLogo(false)
     }
@@ -82,11 +84,11 @@ export default function Settings() {
       active: true,
     }).select('*, suppliers(name)').single()
     if (error) {
-      toast.error('הוספת הפריט נכשלה')
+      toast.error(t('settings.toast.itemAddFailed'))
       return
     }
     setMenuItems(prev => [...prev, data])
-    toast.success(`נוסף פריט: ${data.name_he}`)
+    toast.success(`${t('settings.toast.itemAdded')}: ${data.name_he}`)
     setNewItem({ name_he: '', name_en: '', unit: 'יח׳', category: '', supplier_id: '', price: '' })
     setShowAddItem(false)
   }
@@ -96,7 +98,7 @@ export default function Settings() {
     const { error } = await supabase.from('menu_items').update({ active: !current }).eq('id', id)
     if (error) {
       setMenuItems(prev => prev.map(i => i.id === id ? { ...i, active: current } : i))
-      toast.error('עדכון הסטטוס נכשל')
+      toast.error(t('settings.toast.statusUpdateFailed'))
     }
   }
 
@@ -108,7 +110,7 @@ export default function Settings() {
     const { error } = await supabase.from('menu_items').update({ price }).eq('id', id)
     if (error) {
       setMenuItems(prev => prev.map(i => i.id === id ? { ...i, price: prevPrice } : i))
-      toast.error('עדכון המחיר נכשל')
+      toast.error(t('settings.toast.priceUpdateFailed'))
     }
   }
 
@@ -119,7 +121,7 @@ export default function Settings() {
     const { error } = await supabase.from('menu_items').update({ category }).eq('id', id)
     if (error) {
       setMenuItems(prev => prev.map(i => i.id === id ? { ...i, category: prevCategory } : i))
-      toast.error('עדכון הקטגוריה נכשל')
+      toast.error(t('settings.toast.categoryUpdateFailed'))
     }
   }
 
@@ -128,7 +130,7 @@ export default function Settings() {
     const { error } = await supabase.from('customers').update({ active: !current }).eq('id', id)
     if (error) {
       setCustomers(prev => prev.map(c => c.id === id ? { ...c, active: current } : c))
-      toast.error('עדכון הסטטוס נכשל')
+      toast.error(t('settings.toast.statusUpdateFailed'))
     }
   }
 
@@ -139,7 +141,7 @@ export default function Settings() {
     const { error } = await supabase.from('customers').update({ phone: phone || null }).eq('id', id)
     if (error) {
       setCustomers(prev => prev.map(c => c.id === id ? { ...c, phone: prevPhone } : c))
-      toast.error('עדכון הטלפון נכשל')
+      toast.error(t('settings.toast.phoneUpdateFailed'))
     }
   }
 
@@ -161,13 +163,13 @@ export default function Settings() {
   }
 
   async function generateAndSetPin(customer) {
-    if (!customer.phone) { toast.error('יש להזין מספר טלפון לפני הגדרת קוד גישה'); return }
+    if (!customer.phone) { toast.error(t('settings.phoneRequiredForPin')); return }
     setSettingPin(customer.id)
     try {
       const pin = generatePin()
       const { data, error } = await supabase.functions.invoke('set-customer-pin', { body: { customer_id: customer.id, pin } })
       if (error || !data?.ok) {
-        toast.error(data?.error || 'הגדרת הקוד נכשלה')
+        toast.error(data?.error || t('settings.toast.pinSetFailed'))
         return
       }
       setCustomers(prev => prev.map(c => c.id === customer.id ? { ...c, auth_user_id: c.auth_user_id || 'pending', portal_pin: pin } : c))
@@ -180,9 +182,9 @@ export default function Settings() {
   async function copyToClipboard(text) {
     try {
       await navigator.clipboard.writeText(text)
-      toast.success('הועתק')
+      toast.success(t('settings.toast.copied'))
     } catch {
-      toast.error('ההעתקה נכשלה')
+      toast.error(t('settings.toast.copyFailed'))
     }
   }
 
@@ -198,7 +200,7 @@ export default function Settings() {
   function handleCategoryChange(itemId, e) {
     const value = e.target.value
     if (value === '__new__') {
-      const name = window.prompt('שם קטגוריה חדשה:')
+      const name = window.prompt(t('settings.newCategoryPrompt'))
       if (name && name.trim()) updateItemCategory(itemId, name.trim())
       return
     }
@@ -224,9 +226,7 @@ function ImportTab() {
   return (
     <div>
       <div className="card" style={{ marginBottom: 16, color: 'var(--t2)', fontSize: 13, lineHeight: 1.6 }}>
-        בחר קובץ Excel שבועי (פורמט המאפייה) — לקוח לכל גיליון, תאריכים בשורה 1, כמויות בעמודות B–H.
-        ניתן לבחור מספר קבצים בו-זמנית. ניתן לנווט לדפים אחרים בזמן הייבוא — הוא ימשיך ברקע.
-        השתמשו בכפתור "ייבוא Excel" בראש העמוד כדי להעלות קבצים.
+        {t('settings.importInstructions')}
       </div>
 
       {logs.length > 0 && (
@@ -242,14 +242,14 @@ function ImportTab() {
 
       {importHistory.length > 0 && (
         <div className="card" style={{ padding: 0 }}>
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--bdr)', fontWeight: 600, fontSize: 14 }}>היסטוריית ייבוא</div>
+          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--bdr)', fontWeight: 600, fontSize: 14 }}>{t('settings.importHistory')}</div>
           <table className="itbl">
             <thead>
               <tr>
-                <th>שם קובץ</th>
-                <th style={{ textAlign: 'center' }}>שורות חדשות</th>
-                <th style={{ textAlign: 'center' }}>קיימות</th>
-                <th style={{ textAlign: 'left' }}>תאריך</th>
+                <th>{t('settings.col.fileName')}</th>
+                <th style={{ textAlign: 'center' }}>{t('settings.col.newRows')}</th>
+                <th style={{ textAlign: 'center' }}>{t('settings.col.existingRows')}</th>
+                <th style={{ textAlign: 'left' }}>{t('settings.col.date')}</th>
               </tr>
             </thead>
             <tbody>
@@ -272,12 +272,12 @@ function ImportTab() {
 }
 
 const AUDIT_REASON_LABELS = {
-  customer_request: '📞 לקוח / וואטסאפ',
-  internal_decision: '🏭 החלטה פנימית',
-  correction: '✏️ תיקון טעות',
-  other: 'אחר',
-  import: 'ייבוא',
-  forecast: 'תחזית',
+  customer_request: t('settings.auditReason.customerRequest'),
+  internal_decision: t('settings.auditReason.internalDecision'),
+  correction: t('settings.auditReason.correction'),
+  other: t('settings.auditReason.other'),
+  import: t('settings.auditReason.import'),
+  forecast: t('settings.auditReason.forecast'),
 }
 
 function AuditLogTab({ filterText }) {
@@ -300,15 +300,15 @@ function AuditLogTab({ filterText }) {
       <table className="itbl">
         <thead>
           <tr>
-            <th>תאריך שינוי</th>
-            <th>לקוח</th>
-            <th>פריט</th>
-            <th>תאריך אספקה</th>
-            <th style={{ textAlign: 'center' }}>כמות</th>
-            <th>מקור</th>
-            <th>סיבה</th>
-            <th>הערה</th>
-            <th>בוצע ע"י</th>
+            <th>{t('settings.col.changeDate')}</th>
+            <th>{t('common.customer')}</th>
+            <th>{t('common.item')}</th>
+            <th>{t('settings.col.deliveryDate')}</th>
+            <th style={{ textAlign: 'center' }}>{t('common.quantity')}</th>
+            <th>{t('settings.col.source')}</th>
+            <th>{t('settings.col.reason')}</th>
+            <th>{t('settings.col.note')}</th>
+            <th>{t('settings.col.changedBy')}</th>
           </tr>
         </thead>
         <tbody>
@@ -338,7 +338,7 @@ function AuditLogTab({ filterText }) {
   return (
     <div className="page">
       <div className="page-header">
-        <h1 className="page-title">הגדרות</h1>
+        <h1 className="page-title">{t('settings.title')}</h1>
         <label
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer',
@@ -348,13 +348,13 @@ function AuditLogTab({ filterText }) {
           }}
         >
           <Upload size={16} />
-          {importRunning ? 'מייבא ברקע...' : 'ייבוא Excel'}
+          {importRunning ? t('settings.importRunning') : t('settings.importExcel')}
           <input ref={importFileRef} type="file" accept=".xlsx,.xls" multiple style={{ display: 'none' }} onChange={handleImportFiles} />
         </label>
       </div>
 
       <div className="settings-tabs" style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
-        {[['menu', 'תפריט'], ['customers', 'לקוחות'], ['import', 'ייבוא Excel'], ['audit', 'יומן שינויים'], ['branding', 'מיתוג']].map(([k, l]) => (
+        {[['menu', t('settings.tabs.menu')], ['customers', t('common.customers')], ['import', t('settings.importExcel')], ['audit', t('settings.tabs.audit')], ['branding', t('settings.tabs.branding')]].map(([k, l]) => (
           <button key={k} className={'btn btn-sm ' + (tab === k ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -364,21 +364,21 @@ function AuditLogTab({ filterText }) {
         <div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
             <button className="btn btn-primary btn-sm" onClick={() => setShowAddItem(true)}>
-              <Plus size={14} /> הוספת פריט
+              <Plus size={14} /> {t('settings.addItem')}
             </button>
           </div>
-          <SearchInput value={filterText} onChange={setFilterText} placeholder="חיפוש פריט..." />
+          <SearchInput value={filterText} onChange={setFilterText} placeholder={t('settings.searchItemPlaceholder')} />
           <div className="card" style={{ padding: 0 }}>
             <table className="itbl">
               <thead>
                 <tr>
-                  <th>שם (עברית)</th>
-                  <th>שם (אנגלית)</th>
-                  <th>יחידה</th>
-                  <th>קטגוריה</th>
-                  <th>ספק</th>
-                  <th>מחיר</th>
-                  <th>סטטוס</th>
+                  <th>{t('settings.col.nameHe')}</th>
+                  <th>{t('settings.col.nameEn')}</th>
+                  <th>{t('settings.col.unit')}</th>
+                  <th>{t('common.category')}</th>
+                  <th>{t('common.supplier')}</th>
+                  <th>{t('settings.col.price')}</th>
+                  <th>{t('settings.col.status')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -396,7 +396,7 @@ function AuditLogTab({ filterText }) {
                       >
                         <option value="">—</option>
                         {knownCategories.map(c => <option key={c} value={c}>{c}</option>)}
-                        <option value="__new__">+ קטגוריה חדשה...</option>
+                        <option value="__new__">{t('settings.newCategoryOption')}</option>
                       </select>
                     </td>
                     <td>{item.suppliers?.name || '—'}</td>
@@ -414,7 +414,7 @@ function AuditLogTab({ filterText }) {
                     </td>
                     <td>
                       <button className={'btn btn-sm ' + (item.active ? 'btn-success' : 'btn-ghost')} onClick={() => toggleItemActive(item.id, item.active)}>
-                        {item.active ? 'פעיל' : 'לא פעיל'}
+                        {item.active ? t('settings.active') : t('settings.inactive')}
                       </button>
                     </td>
                   </tr>
@@ -428,11 +428,11 @@ function AuditLogTab({ filterText }) {
       {/* CUSTOMERS */}
       {tab === 'customers' && (
         <div>
-          <SearchInput value={filterText} onChange={setFilterText} placeholder="חיפוש לקוח..." />
+          <SearchInput value={filterText} onChange={setFilterText} placeholder={t('settings.searchCustomerPlaceholder')} />
           <div className="card" style={{ padding: 0 }}>
             <table className="itbl">
               <thead>
-                <tr><th>שם</th><th>טלפון</th><th>גישה לפורטל</th><th>סטטוס</th></tr>
+                <tr><th>{t('settings.col.name')}</th><th>{t('settings.col.phone')}</th><th>{t('settings.col.portalAccess')}</th><th>{t('settings.col.status')}</th></tr>
               </thead>
               <tbody>
                 {sortedCustomers.filter(c => c.name.includes(filterText.trim())).map(c => (
@@ -452,17 +452,17 @@ function AuditLogTab({ filterText }) {
                       <button
                         className="btn btn-ghost btn-sm"
                         onClick={() => {
-                          if (!c.phone) { toast.error('יש להזין מספר טלפון לפני הגדרת קוד גישה'); return }
+                          if (!c.phone) { toast.error(t('settings.phoneRequiredForPin')); return }
                           setPinModalCustomerId(c.id)
                         }}
-                        title="מציג את קישור הכניסה ואת קוד הגישה של הלקוח"
+                        title={t('settings.pinButtonTitle')}
                       >
-                        {c.auth_user_id ? 'קוד גישה' : 'הגדר קוד גישה'}
+                        {c.auth_user_id ? t('settings.pinCode') : t('settings.setPinButton')}
                       </button>
                     </td>
                     <td>
                       <button className={'btn btn-sm ' + (c.active ? 'btn-success' : 'btn-ghost')} onClick={() => toggleCustomerActive(c.id, c.active)}>
-                        {c.active ? 'פעיל' : 'לא פעיל'}
+                        {c.active ? t('settings.active') : t('settings.inactive')}
                       </button>
                     </td>
                   </tr>
@@ -479,7 +479,7 @@ function AuditLogTab({ filterText }) {
       {/* AUDIT LOG */}
       {tab === 'audit' && (
         <div>
-          <SearchInput value={filterText} onChange={setFilterText} placeholder="חיפוש לפי לקוח או פריט..." />
+          <SearchInput value={filterText} onChange={setFilterText} placeholder={t('settings.searchAuditPlaceholder')} />
           <AuditLogTab filterText={filterText} />
         </div>
       )}
@@ -487,21 +487,21 @@ function AuditLogTab({ filterText }) {
       {/* BRANDING (customer portal white-label) */}
       {tab === 'branding' && (
         <div className="card" style={{ maxWidth: 480 }}>
-          <div className="section-title">מיתוג — עמוד כניסה ללקוחות</div>
+          <div className="section-title">{t('settings.brandingSectionTitle')}</div>
           <div style={{ fontSize: 13, color: 'var(--t2)', marginBottom: 20, lineHeight: 1.6 }}>
-            הלוגו ושם העסק שיוצגו ללקוחות במסך הכניסה (portal/login), במקום מסך גנרי.
+            {t('settings.brandingDescription')}
           </div>
 
-          <label className="lbl">שם העסק המוצג ללקוחות</label>
+          <label className="lbl">{t('settings.businessNameLabel')}</label>
           <input
             className="input"
             defaultValue={branding.business_name ?? ''}
-            placeholder="לדוגמה: מאפיית הבוקר"
+            placeholder={t('settings.businessNamePlaceholder')}
             onBlur={e => saveBranding({ ...branding, business_name: e.target.value.trim() || null })}
             style={{ marginBottom: 20 }}
           />
 
-          <label className="lbl">לוגו</label>
+          <label className="lbl">{t('settings.logoLabel')}</label>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 6 }}>
             <div style={{
               width: 64, height: 64, borderRadius: 'var(--rs)', border: '1px solid var(--bdr)',
@@ -509,14 +509,14 @@ function AuditLogTab({ filterText }) {
               overflow: 'hidden', flexShrink: 0,
             }}>
               {branding.logo_url ? (
-                <img src={branding.logo_url} alt="לוגו" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                <img src={branding.logo_url} alt={t('settings.logoAlt')} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
               ) : (
                 <ImageIcon size={24} color="var(--t3)" />
               )}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <label className="btn btn-secondary btn-sm" style={{ cursor: uploadingLogo ? 'not-allowed' : 'pointer', opacity: uploadingLogo ? .6 : 1 }}>
-                <Upload size={14} /> {uploadingLogo ? 'מעלה...' : (branding.logo_url ? 'החלף לוגו' : 'העלאת לוגו')}
+                <Upload size={14} /> {uploadingLogo ? t('settings.uploading') : (branding.logo_url ? t('settings.replaceLogo') : t('settings.uploadLogo'))}
                 <input
                   type="file"
                   accept="image/*"
@@ -530,7 +530,7 @@ function AuditLogTab({ filterText }) {
                 />
               </label>
               {branding.logo_url && (
-                <button className="btn btn-ghost btn-sm" onClick={removeLogo}>הסר לוגו</button>
+                <button className="btn btn-ghost btn-sm" onClick={removeLogo}>{t('settings.removeLogo')}</button>
               )}
             </div>
           </div>
@@ -541,36 +541,36 @@ function AuditLogTab({ filterText }) {
       {pinModalCustomer && (
         <div className="overlay" onClick={() => setPinModalCustomerId(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-title">קוד גישה — {pinModalCustomer.name}</div>
+            <div className="modal-title">{t('settings.pinCode')} — {pinModalCustomer.name}</div>
 
-            <label className="lbl">קישור לשליחה ללקוח</label>
+            <label className="lbl">{t('settings.pinModalLinkLabel')}</label>
             <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
               <input className="input" dir="ltr" readOnly value={portalUrlFor(pinModalCustomer)} onFocus={e => e.target.select()} style={{ fontSize: 12 }} />
-              <button className="btn btn-ghost btn-sm" onClick={() => copyToClipboard(portalUrlFor(pinModalCustomer))}>העתק</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => copyToClipboard(portalUrlFor(pinModalCustomer))}>{t('settings.copy')}</button>
             </div>
 
             {pinModalCustomer.portal_pin ? (
               <>
-                <label className="lbl">קוד גישה</label>
+                <label className="lbl">{t('settings.pinCode')}</label>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <input className="input" dir="ltr" readOnly value={pinModalCustomer.portal_pin} onFocus={e => e.target.select()} style={{ fontSize: 20, fontWeight: 700, textAlign: 'center', letterSpacing: '.1em' }} />
-                  <button className="btn btn-ghost btn-sm" onClick={() => copyToClipboard(pinModalCustomer.portal_pin)}>העתק</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => copyToClipboard(pinModalCustomer.portal_pin)}>{t('settings.copy')}</button>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 8 }}>
-                  יש למסור את הקישור והקוד ללקוח (וואטסאפ, טלפון וכו׳). זהו קוד הגישה הנוכחי של הלקוח — ניתן לחזור למסך זה בכל עת כדי לראות אותו שוב, או ליצור קוד חדש שיחליף אותו.
+                  {t('settings.pinHasCodeNote')}
                 </div>
               </>
             ) : (
               <div style={{ fontSize: 13, color: 'var(--t3)', marginTop: 4 }}>
-                עדיין לא הוגדר קוד גישה ללקוח זה. לחצו על "צור קוד חדש" כדי ליצור אחד.
+                {t('settings.pinNoCodeNote')}
               </div>
             )}
 
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={() => generateAndSetPin(pinModalCustomer)} disabled={settingPin === pinModalCustomer.id}>
-                {settingPin === pinModalCustomer.id ? 'מייצר...' : 'צור קוד חדש'}
+                {settingPin === pinModalCustomer.id ? t('settings.generating') : t('settings.generateNewPin')}
               </button>
-              <button className="btn btn-primary" onClick={() => setPinModalCustomerId(null)}>סגור</button>
+              <button className="btn btn-primary" onClick={() => setPinModalCustomerId(null)}>{t('common.close')}</button>
             </div>
           </div>
         </div>
@@ -580,45 +580,45 @@ function AuditLogTab({ filterText }) {
       {showAddItem && (
         <div className="overlay" onClick={() => setShowAddItem(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-title">הוספת פריט לתפריט</div>
+            <div className="modal-title">{t('settings.addItemModalTitle')}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
-                <label className="lbl">שם בעברית *</label>
+                <label className="lbl">{t('settings.nameHeLabel')}</label>
                 <input className="input" placeholder="קרואסון חמאה" value={newItem.name_he} onChange={e => setNewItem(p => ({ ...p, name_he: e.target.value }))} />
               </div>
               <div>
-                <label className="lbl">שם באנגלית</label>
+                <label className="lbl">{t('settings.nameEnLabel')}</label>
                 <input className="input" placeholder="Butter Croissant" dir="ltr" value={newItem.name_en} onChange={e => setNewItem(p => ({ ...p, name_en: e.target.value }))} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <label className="lbl">יחידת מידה</label>
+                  <label className="lbl">{t('settings.unitLabel')}</label>
                   <select className="input" value={newItem.unit} onChange={e => setNewItem(p => ({ ...p, unit: e.target.value }))}>
                     {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="lbl">קטגוריה</label>
+                  <label className="lbl">{t('common.category')}</label>
                   <input className="input" placeholder="מאפים" value={newItem.category} onChange={e => setNewItem(p => ({ ...p, category: e.target.value }))} />
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <label className="lbl">ספק</label>
+                  <label className="lbl">{t('common.supplier')}</label>
                   <select className="input" value={newItem.supplier_id} onChange={e => setNewItem(p => ({ ...p, supplier_id: e.target.value }))}>
-                    <option value="">ללא ספק</option>
+                    <option value="">{t('settings.noSupplierOption')}</option>
                     {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="lbl">מחיר (ש״ח) — אופציונלי</label>
-                  <input className="input" type="number" min="0" step="0.1" placeholder="לא נקבע" value={newItem.price} onChange={e => setNewItem(p => ({ ...p, price: e.target.value }))} />
+                  <label className="lbl">{t('settings.priceLabel')}</label>
+                  <input className="input" type="number" min="0" step="0.1" placeholder={t('settings.priceNotSetPlaceholder')} value={newItem.price} onChange={e => setNewItem(p => ({ ...p, price: e.target.value }))} />
                 </div>
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-ghost" onClick={() => setShowAddItem(false)}>ביטול</button>
-              <button className="btn btn-primary" onClick={addMenuItem}>הוספה</button>
+              <button className="btn btn-ghost" onClick={() => setShowAddItem(false)}>{t('common.cancel')}</button>
+              <button className="btn btn-primary" onClick={addMenuItem}>{t('common.add')}</button>
             </div>
           </div>
         </div>

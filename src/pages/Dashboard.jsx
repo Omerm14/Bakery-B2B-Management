@@ -3,10 +3,11 @@ import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContai
 import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { weekStart, formatWeekLabel, toLocalISODate } from '../constants/days'
+import { useTranslation } from '../context/LanguageContext'
 
 const TREND_WINDOW = 8
 
-function AnimatedNumber({ value, loading, prefix = '', suffix = '' }) {
+function AnimatedNumber({ value, loading, prefix = '', suffix = '', locale }) {
   const [display, setDisplay] = useState(0)
   const prev = useRef(0)
   useEffect(() => {
@@ -25,16 +26,16 @@ function AnimatedNumber({ value, loading, prefix = '', suffix = '' }) {
     return () => clearInterval(timer)
   }, [value, loading])
   if (loading) return <span>—</span>
-  return <span>{prefix}{display.toLocaleString('he-IL')}{suffix}</span>
+  return <span>{prefix}{display.toLocaleString(locale)}{suffix}</span>
 }
 
-const CustomTooltip = ({ active, payload, label }) => {
+const CustomTooltip = ({ active, payload, label, locale }) => {
   if (!active || !payload?.length) return null
   return (
     <div style={{ background: 'var(--surf2)', border: '1px solid var(--bdr2)', borderRadius: 8, padding: '8px 12px', fontSize: 13 }}>
       <div style={{ color: 'var(--t2)', marginBottom: 4 }}>{label}</div>
       {payload.map((p, i) => (
-        <div key={i} style={{ color: p.color, fontWeight: 600 }}>{p.name}: {p.value?.toLocaleString('he-IL')}</div>
+        <div key={i} style={{ color: p.color, fontWeight: 600 }}>{p.name}: {p.value?.toLocaleString(locale)}</div>
       ))}
     </div>
   )
@@ -130,6 +131,8 @@ function writeCache(weekHistory, viewedIndex, hasMoreHistory) {
 }
 
 export default function Dashboard() {
+  const { t, lang } = useTranslation()
+  const locale = lang === 'en' ? 'en-US' : 'he-IL'
   const cached = useRef(readCache()).current
   const [loading, setLoading] = useState(!cached)
   // Ascending list of weeks that actually have order data, each pre-computed
@@ -236,7 +239,7 @@ export default function Dashboard() {
   return (
     <div className="page">
       <div className="page-header">
-        <h1 className="page-title">דשבורד</h1>
+        <h1 className="page-title">{t('dashboard.title')}</h1>
       </div>
 
       <div className="week-nav">
@@ -245,30 +248,30 @@ export default function Dashboard() {
         </button>
         <span className="week-label">{viewedWeek ? viewedWeek.rangeLabel : '—'}</span>
         <button className="btn btn-ghost btn-sm" disabled={atLatest} onClick={() => setViewedIndex(i => Math.min(weekHistory.length - 1, i + 1))}><ChevronLeft size={16} /></button>
-        <button className="btn btn-ghost btn-sm" disabled={atLatest} onClick={() => setViewedIndex(weekHistory.length - 1)} style={{ fontSize: 12 }}>שבוע אחרון עם נתונים</button>
+        <button className="btn btn-ghost btn-sm" disabled={atLatest} onClick={() => setViewedIndex(weekHistory.length - 1)} style={{ fontSize: 12 }}>{t('dashboard.lastWeekWithData')}</button>
       </div>
 
       {/* KPI Cards */}
       <div className="stat-grid" style={{ marginBottom: 28 }}>
         <div className="card stat-card stat-cyan">
-          <div className="stat-lbl">כמות שבועית</div>
-          <div className="stat-val"><AnimatedNumber value={Math.round(thisTotal)} loading={loading} /></div>
+          <div className="stat-lbl">{t('dashboard.weeklyQty')}</div>
+          <div className="stat-val"><AnimatedNumber value={Math.round(thisTotal)} loading={loading} locale={locale} /></div>
         </div>
         <div className="card stat-card stat-blue">
-          <div className="stat-lbl">לקוחות פעילים</div>
-          <div className="stat-val"><AnimatedNumber value={activeCustomers} loading={loading} /></div>
+          <div className="stat-lbl">{t('dashboard.activeCustomers')}</div>
+          <div className="stat-val"><AnimatedNumber value={activeCustomers} loading={loading} locale={locale} /></div>
         </div>
         <div className="card stat-card stat-amber">
-          <div className="stat-lbl">פריט מוביל</div>
+          <div className="stat-lbl">{t('dashboard.topItem')}</div>
           <div className="stat-val" style={{ fontSize: 15, fontWeight: 700 }}>
             {loading ? '—' : (topItem?.name || '—')}
           </div>
           {!loading && topItem && (
-            <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 4 }}>{topItem.qty.toLocaleString('he-IL')} יח׳</div>
+            <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 4 }}>{topItem.qty.toLocaleString(locale)} {t('common.unit')}</div>
           )}
         </div>
         <div className="card stat-card" style={{ borderBottom: `3px solid ${wowChange === null ? 'var(--bdr2)' : wowChange >= 0 ? 'var(--green)' : 'var(--red)'}` }}>
-          <div className="stat-lbl">שינוי שבועי</div>
+          <div className="stat-lbl">{t('dashboard.weeklyChange')}</div>
           <div className="stat-val" style={{ fontSize: 22, color: wowChange === null ? 'var(--t3)' : wowChange >= 0 ? 'var(--green)' : 'var(--red)' }}>
             {loading || wowChange === null ? '—' : `${wowChange > 0 ? '+' : ''}${wowChange}%`}
           </div>
@@ -278,7 +281,7 @@ export default function Dashboard() {
       <div className="dash-layout">
         {/* Area chart — trend */}
         <div className="card">
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>מגמת כמויות — {TREND_WINDOW} שבועות</div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>{t('dashboard.trendTitle')} — {TREND_WINDOW} {t('dashboard.weeks')}</div>
           {loading ? (
             <div className="shimmer" style={{ height: 220 }} />
           ) : (
@@ -293,8 +296,8 @@ export default function Dashboard() {
                 <CartesianGrid stroke="var(--bdr)" strokeDasharray="3 3" />
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="qty" name="כמות" stroke="var(--accent)" strokeWidth={2} fill="url(#areaGrad)" dot={{ fill: 'var(--accent)', r: 3 }} activeDot={{ r: 5 }} />
+                <Tooltip content={<CustomTooltip locale={locale} />} />
+                <Area type="monotone" dataKey="qty" name={t('common.quantity')} stroke="var(--accent)" strokeWidth={2} fill="url(#areaGrad)" dot={{ fill: 'var(--accent)', r: 3 }} activeDot={{ r: 5 }} />
               </AreaChart>
             </ResponsiveContainer>
           )}
@@ -302,20 +305,20 @@ export default function Dashboard() {
 
         {/* Top 10 items */}
         <div className="card">
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>10 פריטים מובילים — {viewedWeek?.rangeLabel || '—'}</div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>{t('dashboard.top10Title')} — {viewedWeek?.rangeLabel || '—'}</div>
           {loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[...Array(6)].map((_, i) => <div key={i} className="shimmer" style={{ height: 28 }} />)}
             </div>
           ) : topItems.length === 0 ? (
-            <div style={{ color: 'var(--t3)', fontSize: 13 }}>אין נתונים לשבוע זה</div>
+            <div style={{ color: 'var(--t3)', fontSize: 13 }}>{t('dashboard.noDataWeek')}</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {topItems.map((item, i) => (
                 <div key={i}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
                     <span style={{ color: 'var(--t1)', fontWeight: i === 0 ? 700 : 400 }}>{item.name}</span>
-                    <span style={{ color: 'var(--t3)' }}>{item.qty.toLocaleString('he-IL')}</span>
+                    <span style={{ color: 'var(--t3)' }}>{item.qty.toLocaleString(locale)}</span>
                   </div>
                   <div style={{ height: 4, background: 'var(--bdr2)', borderRadius: 2, overflow: 'hidden' }}>
                     <div style={{
@@ -337,14 +340,14 @@ export default function Dashboard() {
       {/* Full bar chart */}
       {!loading && topItems.length > 0 && (
         <div className="card" style={{ marginTop: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>כמויות לפי פריט — {viewedWeek?.rangeLabel || '—'}</div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>{t('dashboard.qtyByItem')} — {viewedWeek?.rangeLabel || '—'}</div>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={topItems} margin={{ top: 4, right: 8, left: -20, bottom: 60 }}>
               <CartesianGrid stroke="var(--bdr)" strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--t3)' }} axisLine={false} tickLine={false} angle={-35} textAnchor="end" interval={0} />
               <YAxis tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="qty" name="כמות" fill="var(--brass)" radius={[4, 4, 0, 0]} />
+              <Tooltip content={<CustomTooltip locale={locale} />} />
+              <Bar dataKey="qty" name={t('common.quantity')} fill="var(--brass)" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

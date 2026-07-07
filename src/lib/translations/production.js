@@ -1,0 +1,26 @@
+export default {
+  he: {
+    'production.pdfByDept': 'PDF לפי מחלקה',
+    'production.itemsStat': 'פריטים',
+    'production.totalQtyStat': 'כמות כוללת',
+    'production.customersStat': 'לקוחות',
+    'production.doneStat': 'הושלמו',
+    'production.emptyText': 'אין הזמנות לתאריך זה',
+    'production.status.pending': 'ממתין',
+    'production.status.done': 'הושלם',
+    'production.exportTitle': 'רשימת ייצור לפי מחלקה',
+    'production.popupBlocked': 'הדפדפן חסם את חלון ההדפסה',
+  },
+  en: {
+    'production.pdfByDept': 'PDF by Department',
+    'production.itemsStat': 'Items',
+    'production.totalQtyStat': 'Total Quantity',
+    'production.customersStat': 'Customers',
+    'production.doneStat': 'Completed',
+    'production.emptyText': 'No orders for this date',
+    'production.status.pending': 'Pending',
+    'production.status.done': 'Done',
+    'production.exportTitle': 'Production List by Department',
+    'production.popupBlocked': 'The browser blocked the print window',
+  },
+}

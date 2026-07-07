@@ -1,0 +1,28 @@
+export default {
+  he: {
+    'history.title': 'היסטוריה',
+    'history.byCustomer': 'לפי לקוח',
+    'history.byItem': 'לפי פריט',
+    'history.searchCustomer': 'חיפוש לקוח...',
+    'history.searchItem': 'חיפוש פריט...',
+    'history.emptyText': 'אין היסטוריה זמינה',
+    'history.trendPrefix': 'מגמת כמות',
+    'history.recentWeeksCount': 'שבועות אחרונים',
+    'history.last': 'אחרונים',
+    'history.standingOrder': 'הזמנה קבועה',
+    'history.standingLegend': '🔄 = הזמנה קבועה (3+ שבועות זהים)',
+  },
+  en: {
+    'history.title': 'History',
+    'history.byCustomer': 'By Customer',
+    'history.byItem': 'By Item',
+    'history.searchCustomer': 'Search customer...',
+    'history.searchItem': 'Search item...',
+    'history.emptyText': 'No history available',
+    'history.trendPrefix': 'Quantity Trend',
+    'history.recentWeeksCount': 'recent weeks',
+    'history.last': 'last',
+    'history.standingOrder': 'Standing order',
+    'history.standingLegend': '🔄 = Standing order (3+ identical weeks)',
+  },
+}

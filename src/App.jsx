@@ -14,6 +14,7 @@ import History from './pages/History'
 import Forecasting from './pages/Forecasting'
 import { ImportProvider, useImport } from './context/ImportContext'
 import { ToastProvider } from './context/ToastContext'
+import { LanguageProvider } from './context/LanguageContext'
 import ToastHost from './components/ToastHost'
 import SearchOverlay from './components/search/SearchOverlay'
 import Landing from './pages/Landing'
@@ -92,16 +93,18 @@ function ProtectedLayout({ children, isDark, onToggleTheme }) {
   }, [])
 
   return (
-    <div className="app-shell">
-      <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
-      <div className="app-main">
-        <GlobalHeader isDark={isDark} onToggleTheme={onToggleTheme} onMenuOpen={() => setMobileOpen(true)} onSearchOpen={() => setSearchOpen(true)} />
-        {children}
+    <LanguageProvider>
+      <div className="app-shell">
+        <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
+        <div className="app-main">
+          <GlobalHeader isDark={isDark} onToggleTheme={onToggleTheme} onMenuOpen={() => setMobileOpen(true)} onSearchOpen={() => setSearchOpen(true)} />
+          {children}
+        </div>
+        <ImportToast />
+        <ToastHost />
+        <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
       </div>
-      <ImportToast />
-      <ToastHost />
-      <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
-    </div>
+    </LanguageProvider>
   )
 }
 

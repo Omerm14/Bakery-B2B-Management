@@ -18,12 +18,13 @@ function rowsHtml(items, padding) {
 // A single section with no heading renders as the original single-client layout
 // (h2 + subheading + one table); multiple sections (or a heading) render as the
 // original multi-client layout (repeated h3 + table blocks separated by <hr>).
-export function buildPackingListHtml({ htmlTitle, h2, subheading, sections }) {
+// dir: document direction -- follows the staff app's current language toggle.
+export function buildPackingListHtml({ htmlTitle, h2, subheading, sections, dir = 'rtl' }) {
   const isSingle = sections.length === 1 && !sections[0].heading
 
   if (isSingle) {
     const rows = rowsHtml(sections[0].items, '8px 12px')
-    return `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8">
+    return `<!DOCTYPE html><html dir="${dir}"><head><meta charset="utf-8">
       <title>${escapeHtml(htmlTitle)}</title>
       <style>body{font-family:Arial,sans-serif;margin:30px}h2{margin-bottom:4px}p{color:#666;font-size:14px;margin:0 0 16px}table{width:100%;border-collapse:collapse}td{font-size:15px}</style>
       </head><body>
@@ -38,7 +39,7 @@ export function buildPackingListHtml({ htmlTitle, h2, subheading, sections }) {
         <table style="width:100%;border-collapse:collapse">${rowsHtml(s.items, '6px 10px')}</table>
       </div>`).join('<hr style="margin:24px 0">')
 
-  return `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8">
+  return `<!DOCTYPE html><html dir="${dir}"><head><meta charset="utf-8">
       <title>${escapeHtml(htmlTitle)}</title>
       <style>body{font-family:Arial,sans-serif;margin:30px}h2{margin-bottom:16px}h3{font-size:16px}</style>
       </head><body>
@@ -58,21 +59,25 @@ function productionRowsHtml(items) {
 
 // sections: [{ heading, items: [{name_he, customerBreakdown, total_qty, unit}] }]
 // One <div> per section, each forced onto its own printed page except the last.
-export function buildProductionListHtml({ htmlTitle, h2, subheading, sections }) {
+// dir/labels: follow the staff app's current language toggle.
+export function buildProductionListHtml({ htmlTitle, h2, subheading, sections, dir = 'rtl', labels = {} }) {
+  const L = { item: 'פריט', byCustomer: 'לפי לקוח', totalQty: 'כמות כוללת', ...labels }
+  const start = dir === 'rtl' ? 'right' : 'left'
+  const end = dir === 'rtl' ? 'left' : 'right'
   const body = sections.map((s, i) => `
     <div style="${i < sections.length - 1 ? 'page-break-after:always;break-after:page;' : ''}">
       <h3 style="margin:0 0 4px;font-size:18px">${escapeHtml(s.heading)}</h3>
       <table style="width:100%;border-collapse:collapse">
         <thead><tr>
-          <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #333">פריט</th>
-          <th style="text-align:right;padding:6px 10px;border-bottom:2px solid #333">לפי לקוח</th>
-          <th style="text-align:left;padding:6px 10px;border-bottom:2px solid #333">כמות כוללת</th>
+          <th style="text-align:${start};padding:6px 10px;border-bottom:2px solid #333">${escapeHtml(L.item)}</th>
+          <th style="text-align:${start};padding:6px 10px;border-bottom:2px solid #333">${escapeHtml(L.byCustomer)}</th>
+          <th style="text-align:${end};padding:6px 10px;border-bottom:2px solid #333">${escapeHtml(L.totalQty)}</th>
         </tr></thead>
         <tbody>${productionRowsHtml(s.items)}</tbody>
       </table>
     </div>`).join('')
 
-  return `<!DOCTYPE html><html dir="rtl"><head><meta charset="utf-8">
+  return `<!DOCTYPE html><html dir="${dir}"><head><meta charset="utf-8">
     <title>${escapeHtml(htmlTitle)}</title>
     <style>@page{size:A4;margin:16mm}body{font-family:Arial,sans-serif;margin:0}h2{margin:0 0 16px}p{color:#666;font-size:14px;margin:0 0 20px}</style>
     </head><body>
@@ -83,8 +88,12 @@ export function buildProductionListHtml({ htmlTitle, h2, subheading, sections })
 }
 
 // sections: [{ heading, items: [{ name, unit, category, days: {dayKey: qty}, total }] }]
-// dayLabels: [{ key, short_en }] in display order (Sun..Sat)
-export function buildWeeklyProductionHtml({ htmlTitle, h1, subheading, dayLabels, sections }) {
+// dayLabels: [{ key, short_en }] in display order (Sun..Sat) -- despite the
+// field name, callers pass whichever language's short label is currently active.
+// dir/labels: follow the staff app's current language toggle.
+export function buildWeeklyProductionHtml({ htmlTitle, h1, subheading, dayLabels, sections, dir = 'ltr', labels = {} }) {
+  const L = { item: 'Item', category: 'Category', unit: 'Unit', total: 'Total', ...labels }
+  const start = dir === 'rtl' ? 'right' : 'left'
   const dayHeaders = dayLabels.map(d =>
     `<th style="text-align:center;padding:6px 8px;border-bottom:2px solid #333">${escapeHtml(d.short_en)}</th>`
   ).join('')
@@ -107,18 +116,18 @@ export function buildWeeklyProductionHtml({ htmlTitle, h1, subheading, dayLabels
       <h3 style="margin:0 0 6px;font-size:16px">${escapeHtml(s.heading)}</h3>
       <table style="width:100%;border-collapse:collapse">
         <thead><tr>
-          <th style="text-align:left;padding:6px 10px;border-bottom:2px solid #333">Item</th>
-          <th style="text-align:left;padding:6px 10px;border-bottom:2px solid #333">Category</th>
-          <th style="text-align:left;padding:6px 10px;border-bottom:2px solid #333">Unit</th>
+          <th style="text-align:${start};padding:6px 10px;border-bottom:2px solid #333">${escapeHtml(L.item)}</th>
+          <th style="text-align:${start};padding:6px 10px;border-bottom:2px solid #333">${escapeHtml(L.category)}</th>
+          <th style="text-align:${start};padding:6px 10px;border-bottom:2px solid #333">${escapeHtml(L.unit)}</th>
           ${dayHeaders}
-          <th style="text-align:center;padding:6px 8px;border-bottom:2px solid #333">Total</th>
+          <th style="text-align:center;padding:6px 8px;border-bottom:2px solid #333">${escapeHtml(L.total)}</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`
   }).join('')
 
-  return `<!DOCTYPE html><html dir="ltr"><head><meta charset="utf-8">
+  return `<!DOCTYPE html><html dir="${dir}"><head><meta charset="utf-8">
     <title>${escapeHtml(htmlTitle)}</title>
     <style>@page{size:A4 landscape;margin:14mm}body{font-family:Arial,sans-serif;margin:0}h1{margin:0 0 4px;font-size:20px}p{color:#666;font-size:13px;margin:0 0 18px}</style>
     </head><body>

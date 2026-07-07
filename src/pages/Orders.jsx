@@ -7,20 +7,21 @@ import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useToast } from '../context/ToastContext'
+import { useTranslation } from '../context/LanguageContext'
 import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
 import SearchInput from '../components/SearchInput'
 
-const REASON_LABELS = {
-  customer_request: '📞 לקוח / וואטסאפ',
-  internal_decision: '🏭 החלטה פנימית',
-  correction: '✏️ תיקון טעות',
-  other: 'אחר',
-  import: 'ייבוא',
-  forecast: 'תחזית',
-}
-
 export default function Orders() {
   const toast = useToast()
+  const { t, lang } = useTranslation()
+  const REASON_LABELS = {
+    customer_request: t('orders.reason.customerRequest'),
+    internal_decision: t('orders.reason.internalDecision'),
+    correction: t('orders.reason.correction'),
+    other: t('orders.reason.other'),
+    import: t('orders.reason.import'),
+    forecast: t('orders.reason.forecast'),
+  }
   const location = useLocation()
   const navigate = useNavigate()
   const week = useWeek()
@@ -43,6 +44,10 @@ export default function Orders() {
   const [changeNote, setChangeNote] = useState('')
   const [showNoteInput, setShowNoteInput] = useState(false)
   const gridRef = useRef(null)
+
+  function displayName(item) {
+    return lang === 'en' ? (item.name_en || item.name_he) : item.name_he
+  }
 
   const filteredCustomers = customers.filter(c => c.name.includes(customerFilter.trim()))
 
@@ -132,7 +137,7 @@ export default function Orders() {
         else delete next[key]
         return next
       })
-      toast.error('שמירת הכמות נכשלה — נסה שוב')
+      toast.error(t('orders.toastSaveFailed'))
     } finally {
       setSaving(false)
     }
@@ -146,12 +151,12 @@ export default function Orders() {
       .select()
       .single()
     if (error) {
-      toast.error('הוספת הלקוח נכשלה')
+      toast.error(t('orders.toastAddCustomerFailed'))
       return
     }
     setCustomers(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name, 'he')))
     setSelectedCustomer(data)
-    toast.success(`נוסף לקוח: ${data.name}`)
+    toast.success(`${t('orders.toastCustomerAdded')} ${data.name}`)
     setNewCustomerName('')
     setShowAddCustomer(false)
   }
@@ -165,7 +170,7 @@ export default function Orders() {
       prevStart.setDate(prevStart.getDate() - 7)
       const { data: prevWeekRow } = await supabase
         .from('weeks').select('id').eq('start_date', toLocalISODate(prevStart)).single()
-      if (!prevWeekRow) { toast.info('אין הזמנה בשבוע הקודם להעתקה'); return }
+      if (!prevWeekRow) { toast.info(t('orders.toastNoPrevWeek')); return }
 
       const { data: prevLines } = await supabase
         .from('order_lines')
@@ -174,7 +179,7 @@ export default function Orders() {
         .eq('customer_id', selectedCustomer.id)
         .gt('quantity', 0)
 
-      if (!prevLines?.length) { toast.info('אין הזמנה בשבוע הקודם להעתקה'); return }
+      if (!prevLines?.length) { toast.info(t('orders.toastNoPrevWeek')); return }
 
       // Shift dates by 7 days
       const upserts = prevLines.map(l => {
@@ -202,10 +207,10 @@ export default function Orders() {
       })
       if (error) throw error
       await loadOrders()
-      toast.success(`הועתקו ${upserts.length} שורות מהשבוע הקודם`)
+      toast.success(`${t('orders.toastCopiedPrefix')} ${upserts.length} ${t('orders.toastCopiedSuffix')}`)
     } catch (err) {
       console.error('[copyPrevWeek]', err)
-      toast.error('העתקת השבוע הקודם נכשלה')
+      toast.error(t('orders.toastCopyFailed'))
     } finally {
       setCopying(false)
     }
@@ -214,7 +219,7 @@ export default function Orders() {
   async function confirmBulkFill() {
     if (!bulkFillItem) return
     const qty = parseFloat(bulkFillQty)
-    if (!(qty >= 0)) { toast.error('כמות לא תקינה'); return }
+    if (!(qty >= 0)) { toast.error(t('orders.toastInvalidQty')); return }
     setBulkFilling(true)
     try {
       // Sequential, not concurrent — reuses the exact same save path as manual
@@ -224,7 +229,7 @@ export default function Orders() {
         const date = week.dayDate(d.key)
         await handleQtyChange(bulkFillItem.id, date, bulkFillQty, 'bulk_fill')
       }
-      toast.success(`מולא: ${qty} על כל השבוע — ${bulkFillItem.name_he}`)
+      toast.success(`${t('orders.toastBulkFilledPrefix')} ${qty} ${t('orders.toastBulkFilledMiddle')} — ${displayName(bulkFillItem)}`)
       setBulkFillItem(null)
       setBulkFillQty('')
     } finally {
@@ -260,10 +265,10 @@ export default function Orders() {
   return (
     <div className="page">
       <div className="page-header">
-        <h1 className="page-title">הזמנות שבועיות</h1>
+        <h1 className="page-title">{t('orders.title')}</h1>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {saving && <span style={{ fontSize: 12, color: 'var(--t3)' }}>שומר...</span>}
-          <button className="btn btn-ghost btn-sm" onClick={loadOrders} title="רענן">
+          {saving && <span style={{ fontSize: 12, color: 'var(--t3)' }}>{t('orders.saving')}</span>}
+          <button className="btn btn-ghost btn-sm" onClick={loadOrders} title={t('orders.refresh')}>
             <RefreshCw size={14} />
           </button>
         </div>
@@ -279,7 +284,7 @@ export default function Orders() {
           <ChevronLeft size={16} />
         </button>
         <button className="btn btn-ghost btn-sm" onClick={week.goToToday} style={{ fontSize: 12 }}>
-          השבוע
+          {t('orders.thisWeek')}
         </button>
       </div>
 
@@ -287,12 +292,12 @@ export default function Orders() {
         {/* Customer Sidebar */}
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span className="section-title" style={{ marginBottom: 0 }}>לקוחות</span>
+            <span className="section-title" style={{ marginBottom: 0 }}>{t('common.customers')}</span>
             <button className="btn btn-ghost btn-sm" onClick={() => setShowAddCustomer(true)}>
               <Plus size={14} />
             </button>
           </div>
-          <SearchInput value={customerFilter} onChange={setCustomerFilter} placeholder="חיפוש לקוח..." />
+          <SearchInput value={customerFilter} onChange={setCustomerFilter} placeholder={t('orders.searchPlaceholder')} />
           <div className="customer-list">
             {filteredCustomers.map(c => (
               <div
@@ -309,7 +314,7 @@ export default function Orders() {
         {/* Order Grid */}
         <div>
           {!selectedCustomer ? (
-            <div className="empty"><div className="empty-icon">👈</div><div className="empty-text">בחר לקוח</div></div>
+            <div className="empty"><div className="empty-icon">👈</div><div className="empty-text">{t('orders.selectCustomer')}</div></div>
           ) : loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[...Array(8)].map((_, i) => <div key={i} className="shimmer" style={{ height: 40 }} />)}
@@ -322,7 +327,7 @@ export default function Orders() {
                   <select
                     value={changeReason}
                     onChange={e => { setChangeReason(e.target.value); localStorage.setItem('floory_change_reason', e.target.value) }}
-                    title="סיבת השינוי — חלה על כל עריכה בגריד עד שתשונה"
+                    title={t('orders.changeReasonTitle')}
                     style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--bdr)', background: 'var(--surf2)', color: 'var(--t1)' }}
                   >
                     <option value="customer_request">{REASON_LABELS.customer_request}</option>
@@ -330,21 +335,21 @@ export default function Orders() {
                     <option value="correction">{REASON_LABELS.correction}</option>
                     <option value="other">{REASON_LABELS.other}</option>
                   </select>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setShowNoteInput(v => !v)} title="הערה לשינוי הנוכחי">📝</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setShowNoteInput(v => !v)} title={t('orders.noteButtonTitle')}>📝</button>
                   <button
                     className="btn btn-ghost btn-sm"
                     onClick={copyPrevWeek}
                     disabled={copying}
-                    title="העתק הזמנה מהשבוע הקודם"
+                    title={t('orders.copyPrevWeekTitle')}
                   >
-                    <Copy size={13} /> {copying ? '...' : 'העתק שבוע קודם'}
+                    <Copy size={13} /> {copying ? t('orders.copying') : t('orders.copyPrevWeek')}
                   </button>
                 </div>
                 {showNoteInput && (
                   <input
                     className="input"
                     style={{ width: '100%', fontSize: 13 }}
-                    placeholder="הערה אופציונלית לשינוי הנוכחי..."
+                    placeholder={t('orders.notePlaceholder')}
                     value={changeNote}
                     onChange={e => setChangeNote(e.target.value)}
                   />
@@ -354,16 +359,16 @@ export default function Orders() {
                 <table className="order-grid">
                   <thead>
                     <tr>
-                      <th className="item-col sticky-col">פריט</th>
+                      <th className="item-col sticky-col">{t('common.item')}</th>
                       {WEEK_DAYS.map(d => (
                         <th key={d.key}>
-                          <div>{d.short}</div>
+                          <div>{lang === 'en' ? d.short_en : d.short}</div>
                           <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>
                             {formatShortDate(week.dayDate(d.key))}
                           </div>
                         </th>
                       ))}
-                      <th style={{ width: 36 }} aria-label="מילוי שבועי" />
+                      <th style={{ width: 36 }} aria-label={t('orders.bulkFillColAria')} />
                     </tr>
                   </thead>
                   <tbody>
@@ -376,7 +381,7 @@ export default function Orders() {
                         </tr>
                         {items.map(item => (
                           <tr key={item.id}>
-                            <td className="item-name sticky-col">{item.name_he}</td>
+                            <td className="item-name sticky-col">{displayName(item)}</td>
                             {WEEK_DAYS.map(d => {
                               const date = week.dayDate(d.key)
                               const key = `${item.id}_${date}`
@@ -397,10 +402,10 @@ export default function Orders() {
                                     onChange={e => handleQtyChange(item.id, date, e.target.value)}
                                     onKeyDown={e => handleKeyDown(e, item.id, d.key, date)}
                                     title={[
-                                      line?.status === 'needs_review' ? 'דורש בדיקה' : '',
-                                      line?.change_reason ? `סיבה: ${REASON_LABELS[line.change_reason] || line.change_reason}` : '',
-                                      line?.change_note ? `הערה: ${line.change_note}` : '',
-                                      line?.changed_by ? `ע"י ${line.changed_by}` : '',
+                                      line?.status === 'needs_review' ? t('orders.needsReview') : '',
+                                      line?.change_reason ? `${t('orders.reasonPrefix')}: ${REASON_LABELS[line.change_reason] || line.change_reason}` : '',
+                                      line?.change_note ? `${t('orders.notePrefix')}: ${line.change_note}` : '',
+                                      line?.changed_by ? `${t('orders.changedByPrefix')} ${line.changed_by}` : '',
                                     ].filter(Boolean).join(' · ')}
                                   />
                                 </td>
@@ -411,8 +416,8 @@ export default function Orders() {
                                 className="btn btn-ghost btn-sm"
                                 style={{ padding: '4px 6px' }}
                                 onClick={() => { setBulkFillItem(item); setBulkFillQty('') }}
-                                title="מילוי כמות לכל השבוע"
-                                aria-label={`מילוי כמות לכל השבוע — ${item.name_he}`}
+                                title={t('orders.bulkFillButtonTitle')}
+                                aria-label={`${t('orders.bulkFillButtonTitle')} — ${displayName(item)}`}
                               >
                                 <Wand2 size={13} />
                               </button>
@@ -425,8 +430,8 @@ export default function Orders() {
                 </table>
               </div>
               <div style={{ padding: '10px 20px', borderTop: '1px solid var(--bdr)', display: 'flex', gap: 16, fontSize: 12, color: 'var(--t3)' }}>
-                <span>⬜ ידני</span>
-                <span style={{ color: 'var(--amber)' }}>🟨 דורש בדיקה</span>
+                <span>{t('orders.legendManual')}</span>
+                <span style={{ color: 'var(--amber)' }}>{t('orders.legendNeedsReview')}</span>
               </div>
             </div>
           )}
@@ -437,12 +442,12 @@ export default function Orders() {
       {showAddCustomer && (
         <div className="overlay" onClick={() => setShowAddCustomer(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-title">הוספת לקוח חדש</div>
+            <div className="modal-title">{t('orders.addCustomerTitle')}</div>
             <div style={{ marginBottom: 16 }}>
-              <label className="lbl">שם הלקוח</label>
+              <label className="lbl">{t('orders.customerNameLabel')}</label>
               <input
                 className="input"
-                placeholder="שם הלקוח או העסק"
+                placeholder={t('orders.customerNamePlaceholder')}
                 value={newCustomerName}
                 onChange={e => setNewCustomerName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && addCustomer()}
@@ -450,8 +455,8 @@ export default function Orders() {
               />
             </div>
             <div className="modal-footer">
-              <button className="btn btn-ghost" onClick={() => setShowAddCustomer(false)}>ביטול</button>
-              <button className="btn btn-primary" onClick={addCustomer}>הוספה</button>
+              <button className="btn btn-ghost" onClick={() => setShowAddCustomer(false)}>{t('common.cancel')}</button>
+              <button className="btn btn-primary" onClick={addCustomer}>{t('common.add')}</button>
             </div>
           </div>
         </div>
@@ -461,9 +466,9 @@ export default function Orders() {
       {bulkFillItem && (
         <div className="overlay" onClick={() => !bulkFilling && setBulkFillItem(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-title">מילוי כמות לכל השבוע — {bulkFillItem.name_he}</div>
+            <div className="modal-title">{t('orders.bulkFillButtonTitle')} — {displayName(bulkFillItem)}</div>
             <div style={{ marginBottom: 8 }}>
-              <label className="lbl">כמות</label>
+              <label className="lbl">{t('common.quantity')}</label>
               <input
                 className="input"
                 type="number"
@@ -477,12 +482,12 @@ export default function Orders() {
               />
             </div>
             <div className="alert alert-warn" style={{ marginBottom: 0 }}>
-              הפעולה תדרוס את כל 6 ימי השבוע עבור פריט זה, כולל תאים המסומנים כדורשים בדיקה.
+              {t('orders.bulkFillWarning')}
             </div>
             <div className="modal-footer">
-              <button className="btn btn-ghost" onClick={() => setBulkFillItem(null)} disabled={bulkFilling}>ביטול</button>
+              <button className="btn btn-ghost" onClick={() => setBulkFillItem(null)} disabled={bulkFilling}>{t('common.cancel')}</button>
               <button className="btn btn-primary" onClick={confirmBulkFill} disabled={bulkFilling}>
-                {bulkFilling ? 'ממלא...' : 'מלא'}
+                {bulkFilling ? t('orders.filling') : t('orders.fill')}
               </button>
             </div>
           </div>

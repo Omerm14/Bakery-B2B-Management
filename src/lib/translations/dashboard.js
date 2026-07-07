@@ -1,0 +1,28 @@
+export default {
+  he: {
+    'dashboard.title': 'דשבורד',
+    'dashboard.lastWeekWithData': 'שבוע אחרון עם נתונים',
+    'dashboard.weeklyQty': 'כמות שבועית',
+    'dashboard.activeCustomers': 'לקוחות פעילים',
+    'dashboard.topItem': 'פריט מוביל',
+    'dashboard.weeklyChange': 'שינוי שבועי',
+    'dashboard.trendTitle': 'מגמת כמויות',
+    'dashboard.weeks': 'שבועות',
+    'dashboard.top10Title': '10 פריטים מובילים',
+    'dashboard.noDataWeek': 'אין נתונים לשבוע זה',
+    'dashboard.qtyByItem': 'כמויות לפי פריט',
+  },
+  en: {
+    'dashboard.title': 'Dashboard',
+    'dashboard.lastWeekWithData': 'Last Week With Data',
+    'dashboard.weeklyQty': 'Weekly Quantity',
+    'dashboard.activeCustomers': 'Active Customers',
+    'dashboard.topItem': 'Top Item',
+    'dashboard.weeklyChange': 'Weekly Change',
+    'dashboard.trendTitle': 'Quantity Trend',
+    'dashboard.weeks': 'weeks',
+    'dashboard.top10Title': 'Top 10 Items',
+    'dashboard.noDataWeek': 'No data for this week',
+    'dashboard.qtyByItem': 'Quantities by Item',
+  },
+}
