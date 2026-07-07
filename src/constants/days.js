@@ -16,11 +16,23 @@ export function weekStart(date = new Date()) {
   return d
 }
 
+// Formats a Date by its LOCAL calendar fields (Y/M/D) — NOT `.toISOString()`,
+// which converts to UTC first and silently shifts the date back a day
+// whenever the local timezone is ahead of UTC (e.g. Israel) for any Date
+// representing local midnight. Use this everywhere a local Date needs to
+// become a plain SQL date string.
+export function toLocalISODate(d) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 // Returns ISO date string (YYYY-MM-DD) for day offset from a week-start date
 export function dayDate(weekStartDate, dayOffset) {
   const d = new Date(weekStartDate)
   d.setDate(d.getDate() + dayOffset)
-  return d.toISOString().slice(0, 10)
+  return toLocalISODate(d)
 }
 
 export function formatWeekLabel(weekStartDate) {
