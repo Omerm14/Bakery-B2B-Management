@@ -75,6 +75,33 @@ export default function Settings() {
     await saveBranding({ ...branding, logo_url: null })
   }
 
+  // ── Staff access allowlist ───────────────────────────────────────────
+  const [staffEmails, setStaffEmails] = useState([])
+  const [newStaffEmail, setNewStaffEmail] = useState('')
+
+  useEffect(() => {
+    supabase.from('staff_allowlist').select('email').order('email').then(({ data, error }) => {
+      if (error) { console.error('[Settings staffAllowlist]', error); return }
+      setStaffEmails(data || [])
+    })
+  }, [])
+
+  async function addStaffEmail() {
+    const email = newStaffEmail.trim().toLowerCase()
+    if (!email) return
+    const { data, error } = await supabase.from('staff_allowlist').insert({ email }).select('email').single()
+    if (error) { toast.error(t('settings.toast.staffAddFailed')); return }
+    setStaffEmails(prev => [...prev, data].sort((a, b) => a.email.localeCompare(b.email)))
+    setNewStaffEmail('')
+    toast.success(t('settings.toast.staffAdded'))
+  }
+
+  async function removeStaffEmail(email) {
+    setStaffEmails(prev => prev.filter(s => s.email !== email))
+    const { error } = await supabase.from('staff_allowlist').delete().eq('email', email)
+    if (error) { toast.error(t('settings.toast.staffRemoveFailed')) }
+  }
+
   async function addMenuItem() {
     if (!newItem.name_he.trim()) return
     const { data, error } = await supabase.from('menu_items').insert({
@@ -354,7 +381,7 @@ function AuditLogTab({ filterText }) {
       </div>
 
       <div className="settings-tabs" style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
-        {[['menu', t('settings.tabs.menu')], ['customers', t('common.customers')], ['import', t('settings.importExcel')], ['audit', t('settings.tabs.audit')], ['branding', t('settings.tabs.branding')]].map(([k, l]) => (
+        {[['menu', t('settings.tabs.menu')], ['customers', t('common.customers')], ['import', t('settings.importExcel')], ['audit', t('settings.tabs.audit')], ['branding', t('settings.tabs.branding')], ['staff', t('settings.tabs.staff')]].map(([k, l]) => (
           <button key={k} className={'btn btn-sm ' + (tab === k ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -534,6 +561,41 @@ function AuditLogTab({ filterText }) {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* STAFF ACCESS */}
+      {tab === 'staff' && (
+        <div className="card" style={{ maxWidth: 480 }}>
+          <div className="section-title">{t('settings.staffSectionTitle')}</div>
+          <div style={{ fontSize: 13, color: 'var(--t2)', marginBottom: 20, lineHeight: 1.6 }}>
+            {t('settings.staffDescription')}
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+            <input
+              className="input"
+              dir="ltr"
+              placeholder={t('settings.staffEmailPlaceholder')}
+              value={newStaffEmail}
+              onChange={e => setNewStaffEmail(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') addStaffEmail() }}
+            />
+            <button className="btn btn-primary btn-sm" onClick={addStaffEmail}>{t('settings.staffAddButton')}</button>
+          </div>
+
+          {staffEmails.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--t3)' }}>{t('settings.staffEmptyText')}</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {staffEmails.map(s => (
+                <div key={s.email} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 'var(--rs)', background: 'var(--surf2)' }}>
+                  <span dir="ltr" style={{ fontSize: 13 }}>{s.email}</span>
+                  <button className="btn btn-ghost btn-sm" onClick={() => removeStaffEmail(s.email)}>{t('settings.staffRemoveButton')}</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

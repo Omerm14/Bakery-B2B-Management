@@ -46,6 +46,8 @@ function NotificationBell() {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState([])
   const [loadingItems, setLoadingItems] = useState(false)
+  const [expandedId, setExpandedId] = useState(null)
+  const [auditRows, setAuditRows] = useState({})
   const wrapRef = useRef(null)
 
   const refreshCount = useCallback(async () => {
@@ -77,19 +79,45 @@ function NotificationBell() {
     setLoadingItems(true)
     const { data } = await supabase
       .from('order_change_notifications')
-      .select('id, customer_id, created_at, seen_at, customers(name), weeks(label)')
+      .select('id, customer_id, week_id, created_at, seen_at, customers(name), weeks(label)')
       .order('created_at', { ascending: false })
       .limit(20)
     setItems(data || [])
     setLoadingItems(false)
   }
 
-  async function openNotification(n) {
-    setOpen(false)
+  // Expands in place instead of navigating away immediately, so staff can
+  // see the itemized old->new breakdown before deciding whether to jump
+  // into the order. A ±10s window around created_at reliably isolates
+  // just this notification's changes in order_line_audit, since
+  // sendOrder() does one batched upsert immediately followed by the
+  // notification insert, all in the same request.
+  async function toggleExpand(n) {
     if (!n.seen_at) {
-      await supabase.from('order_change_notifications').update({ seen_at: new Date().toISOString(), seen_by: userEmail }).eq('id', n.id)
+      const seenAt = new Date().toISOString()
+      await supabase.from('order_change_notifications').update({ seen_at: seenAt, seen_by: userEmail }).eq('id', n.id)
+      setItems(prev => prev.map(i => i.id === n.id ? { ...i, seen_at: seenAt } : i))
       refreshCount()
     }
+    if (expandedId === n.id) { setExpandedId(null); return }
+    setExpandedId(n.id)
+    if (auditRows[n.id]) return
+    setAuditRows(prev => ({ ...prev, [n.id]: 'loading' }))
+    const center = new Date(n.created_at).getTime()
+    const { data, error } = await supabase
+      .from('order_line_audit')
+      .select('item_name_he, old_quantity, new_quantity')
+      .eq('customer_id', n.customer_id)
+      .eq('week_id', n.week_id)
+      .eq('changed_via', 'customer_portal')
+      .gte('created_at', new Date(center - 10000).toISOString())
+      .lte('created_at', new Date(center + 10000).toISOString())
+    if (error) { console.error('[NotificationBell audit]', error); setAuditRows(prev => ({ ...prev, [n.id]: [] })); return }
+    setAuditRows(prev => ({ ...prev, [n.id]: data || [] }))
+  }
+
+  function goToOrder(n) {
+    setOpen(false)
     navigate('/orders', { state: { customerId: n.customer_id } })
   }
 
@@ -107,12 +135,44 @@ function NotificationBell() {
           ) : items.length === 0 ? (
             <div className="notif-empty">{t('header.notificationsEmpty')}</div>
           ) : (
-            items.map(n => (
-              <button key={n.id} type="button" className={`notif-item${!n.seen_at ? ' unseen' : ''}`} onClick={() => openNotification(n)}>
-                <div className="notif-item-name">{n.customers?.name || t('common.customer')}</div>
-                <div className="notif-item-meta">{n.weeks?.label || ''} · {timeAgo(n.created_at, lang)}</div>
-              </button>
-            ))
+            items.map(n => {
+              const isExpanded = expandedId === n.id
+              const rows = auditRows[n.id]
+              return (
+                <div key={n.id} className={`notif-item${!n.seen_at ? ' unseen' : ''}`}>
+                  <button type="button" className="notif-item-header" onClick={() => toggleExpand(n)}>
+                    <div className="notif-item-name">{n.customers?.name || t('common.customer')}</div>
+                    <div className="notif-item-meta">{n.weeks?.label || ''} · {timeAgo(n.created_at, lang)}</div>
+                  </button>
+                  {isExpanded && (
+                    <div className="notif-item-detail">
+                      {rows === 'loading' || rows === undefined ? (
+                        <div className="notif-empty">{t('common.loading')}</div>
+                      ) : rows.length === 0 ? (
+                        <div className="notif-empty">{t('header.notificationsNoDetail')}</div>
+                      ) : (
+                        rows.map((r, i) => {
+                          const isNew = r.old_quantity === null
+                          const increasing = !isNew && r.new_quantity > r.old_quantity
+                          const color = isNew ? 'var(--accent)' : increasing ? 'var(--green)' : 'var(--red)'
+                          return (
+                            <div key={i} className="notif-detail-row">
+                              <span>{r.item_name_he}</span>
+                              <span style={{ color }}>
+                                {isNew ? `${t('header.notificationsNewItem')}: ${r.new_quantity}` : `${r.old_quantity} → ${r.new_quantity}`}
+                              </span>
+                            </div>
+                          )
+                        })
+                      )}
+                      <button type="button" className="notif-detail-goto" onClick={() => goToOrder(n)}>
+                        {t('header.notificationsGoToOrder')}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })
           )}
         </div>
       )}

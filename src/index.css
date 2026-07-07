@@ -137,13 +137,25 @@ body {
 .notif-panel-title { font: 700 12px var(--font-ui); color: var(--t3); padding: 12px 14px 8px; text-transform: uppercase; letter-spacing: .04em; }
 .notif-empty { padding: 20px 14px; text-align: center; color: var(--t3); font-size: 13px; }
 .notif-item {
-  display: block; width: 100%; text-align: start; padding: 10px 14px; border: none; background: transparent;
-  cursor: pointer; border-top: 1px solid var(--bdr); font-family: var(--font-ui);
+  border-top: 1px solid var(--bdr);
 }
-.notif-item:hover { background: var(--surf2); }
 .notif-item.unseen { background: var(--accent-tint); }
+.notif-item-header {
+  display: block; width: 100%; text-align: start; padding: 10px 14px; border: none; background: transparent;
+  cursor: pointer; font-family: var(--font-ui);
+}
+.notif-item-header:hover { background: var(--surf2); }
 .notif-item-name { font-size: 13.5px; font-weight: 600; color: var(--t1); }
 .notif-item-meta { font-size: 11.5px; color: var(--t3); margin-top: 2px; }
+.notif-item-detail { padding: 4px 14px 12px; display: flex; flex-direction: column; gap: 4px; }
+.notif-detail-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; }
+.notif-detail-row span:first-child { color: var(--t2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notif-detail-row span:last-child { font-weight: 700; white-space: nowrap; flex-shrink: 0; }
+.notif-detail-goto {
+  margin-top: 6px; padding: 6px 10px; border-radius: var(--rs); border: 1px solid var(--bdr2);
+  background: var(--surf2); color: var(--t1); font-size: 12px; cursor: pointer; font-family: var(--font-ui);
+}
+.notif-detail-goto:hover { background: var(--surf3, var(--surf2)); }
 .hd-search {
   display: flex; align-items: center; gap: 8px; height: 34px;
   padding-inline: 12px; background: var(--surf2); border: 1px solid var(--bdr);
@@ -577,6 +589,10 @@ body {
 .day-list-row {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 12px 4px; border-bottom: 1px solid var(--bdr);
+}
+.day-list-fav-btn {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 28px; height: 28px; padding: 0; border: none; background: none; cursor: pointer;
 }
 .day-list-item { min-width: 0; flex: 1; }
 .day-list-item-name { font-size: 15px; font-weight: 600; color: var(--t1); display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }

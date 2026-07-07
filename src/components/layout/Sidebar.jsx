@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useTranslation } from '../../context/LanguageContext'
+import { useBranding } from '../../hooks/useBranding'
 import {
   LayoutDashboard, ClipboardList, Factory, PackageCheck, CalendarDays, History, TrendingUp, Settings, X, LogOut,
 } from 'lucide-react'
@@ -31,6 +32,7 @@ export function BrandMark({ size = 28 }) {
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const branding = useBranding()
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -44,7 +46,11 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
       {mobileOpen && <button className="sb-scrim no-print" aria-label={t('nav.closeMenu')} onClick={closeMenu} />}
       <nav className={'sb no-print' + (mobileOpen ? ' sb-drawer drawer-anim' : '')} aria-label={t('nav.main')}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 10px 18px' }}>
-          <BrandMark />
+          {branding.logo_url ? (
+            <img src={branding.logo_url} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain', flexShrink: 0 }} />
+          ) : (
+            <BrandMark />
+          )}
           <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15.5, letterSpacing: '-0.01em', color: 'var(--t1)', flex: 1 }}>Floory</span>
           {mobileOpen && (
             <button onClick={closeMenu} aria-label={t('nav.close')}

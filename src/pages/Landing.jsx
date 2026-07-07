@@ -235,11 +235,11 @@ export default function Landing() {
                   padding: '7px 14px 7px 10px', borderRadius: 100, fontSize: 13, color: '#A8B5AE', marginBottom: 26,
                 }}>
                   <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#3BD68C', boxShadow: '0 0 0 3px rgba(59,214,140,.18)', flexShrink: 0, animation: 'pulse 1.6s infinite' }} />
-                  פלטפורמת ניהול הרצפה לעסקים
+                  פלטפורמת ניהול הזמנות ומלאי לעסקים
                 </div>
 
                 <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(38px,5.4vw,62px)', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.03, marginBottom: 20, color: '#F2F1EA' }}>
-                  ניהול רצפה חכם<br />
+                  ניהול הזמנות ומלאי חכם<br />
                   <span style={{ color: '#3DD6A3' }}>למאפייה שלך.</span>
                 </h1>
 
@@ -387,7 +387,7 @@ export default function Landing() {
                   <span style={{ width: 18, height: 1, background: '#3DD6A3', display: 'inline-block' }} />
                   יכולות
                 </div>
-                <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px,4vw,44px)', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1.1, color: '#F2F1EA' }}>כל מה שהרצפה צריכה</h2>
+                <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(28px,4vw,44px)', fontWeight: 700, letterSpacing: '-0.01em', lineHeight: 1.1, color: '#F2F1EA' }}>כל מה שההזמנות שלך צריכות</h2>
                 <p style={{ color: '#A8B5AE', marginTop: 14, fontSize: 17, maxWidth: 520 }}>ממשק אחד לניהול מלא — הזמנות, ייצור, אריזה, והיסטוריה. בלי Excel, בלי טעויות.</p>
               </div>
             </RevealDiv>
@@ -460,7 +460,7 @@ export default function Landing() {
                   מוכנים להתחיל?
                 </h2>
                 <p style={{ color: '#A8B5AE', margin: '16px 0 32px', fontSize: 17, position: 'relative' }}>
-                  הצטרפו לעסקים שכבר מנהלים את הרצפה שלהם בצורה חכמה יותר.
+                  הצטרפו לעסקים שכבר מנהלים את ההזמנות והמלאי שלהם בצורה חכמה יותר.
                 </p>
                 <Link to="/login" className="cta-card-btn" style={{
                   display: 'inline-flex', alignItems: 'center', gap: 8,

@@ -1,11 +1,13 @@
 import { useState, useRef } from 'react'
-import { ChevronRight, ChevronLeft, ChevronDown } from 'lucide-react'
+import { ChevronRight, ChevronLeft, ChevronDown, Star } from 'lucide-react'
 import QtyStepper from './QtyStepper'
 import CutoffCountdown from './CutoffCountdown'
 import CutoffBlockedNotice from './CutoffBlockedNotice'
 import SearchInput from '../../components/SearchInput'
+import { displayCategoryLabel } from '../../constants/categories'
 
 const SWIPE_THRESHOLD = 50
+const FAVORITES_KEY = '__favorites__'
 
 // Single-day, list-style order entry — the mobile-first default view.
 // Swiping the list left/right (or tapping the arrows) moves a day at a
@@ -14,7 +16,7 @@ const SWIPE_THRESHOLD = 50
 // order).
 export default function DayOrderView({
   dayLabel, dateLabel, date, grouped, orderLines, canEdit, lockAt,
-  onQtyChange, onPrevDay, onNextDay, dayTotal,
+  onQtyChange, onToggleFavorite, onPrevDay, onNextDay, dayTotal,
 }) {
   const touchStartX = useRef(null)
   const [search, setSearch] = useState('')
@@ -81,7 +83,7 @@ export default function DayOrderView({
           return (
             <div key={cat} className="day-list-group">
               <button type="button" className="day-list-cat" onClick={() => toggleCategory(cat)}>
-                <span>{cat}</span>
+                <span>{cat === FAVORITES_KEY ? '⭐ מועדפים' : displayCategoryLabel(cat)}</span>
                 <ChevronDown size={14} className={`day-list-cat-chevron${isCollapsed ? ' collapsed' : ''}`} />
               </button>
               {!isCollapsed && items.map(item => {
@@ -91,6 +93,14 @@ export default function DayOrderView({
                 const isPending = !!line?.pending
                 return (
                   <div key={item.id} className="day-list-row">
+                    <button
+                      type="button"
+                      className="day-list-fav-btn"
+                      onClick={() => onToggleFavorite(item.id, item.is_favorite)}
+                      aria-label={item.is_favorite ? 'הסר ממועדפים' : 'הוסף למועדפים'}
+                    >
+                      <Star size={16} fill={item.is_favorite ? 'var(--amber)' : 'none'} color={item.is_favorite ? 'var(--amber)' : 'var(--t3)'} />
+                    </button>
                     <div className="day-list-item">
                       <div className="day-list-item-name">
                         {item.name_he}

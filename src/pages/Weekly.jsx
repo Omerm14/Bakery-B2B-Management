@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useWeek } from '../hooks/useWeek'
 import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
+import { CATEGORY_ORDER } from '../constants/categories'
 import { buildWeeklyProductionHtml, openAndPrint } from '../lib/printHtml'
 import { useToast } from '../context/ToastContext'
 import { useTranslation } from '../context/LanguageContext'
@@ -164,8 +165,6 @@ export default function Weekly() {
     const pct = Math.round(((curr - prev) / prev) * 100)
     return `${pct > 0 ? '+' : ''}${pct}%`
   }
-
-  const CATEGORY_ORDER = ['מאפים', 'לחם ולחמניות', 'עוגות ועוגיות', 'קפואים ושונות - קונדי']
 
   const TREND_ORDER = ['חדש השבוע', 'עלייה חדה', 'ירידה חדה', 'יציב']
   const TREND_ICONS = { 'חדש השבוע': '🆕', 'עלייה חדה': '📈', 'ירידה חדה': '📉', 'יציב': '➖' }

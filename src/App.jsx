@@ -77,6 +77,26 @@ function ImportToast() {
   )
 }
 
+function AccessPending() {
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+  }
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ maxWidth: 420, textAlign: 'center', background: 'var(--surf2)', border: '1px solid var(--bdr2)', borderRadius: 16, padding: '32px 28px', boxShadow: 'var(--shadow-pop)' }}>
+        <div style={{ fontSize: 32, marginBottom: 12 }}>🔒</div>
+        <h2 style={{ margin: '0 0 8px', fontSize: 18, color: 'var(--t1)' }}>הגישה שלך ממתינה לאישור</h2>
+        <p style={{ margin: '0 0 20px', fontSize: 14, color: 'var(--t3)', lineHeight: 1.6 }}>
+          החשבון שלך התחבר בהצלחה, אך עדיין לא הוגדרה עבורו הרשאת גישה למערכת. פנה לצוות כדי להסדיר את הגישה.
+        </p>
+        <button onClick={handleSignOut} style={{ padding: '10px 20px', borderRadius: 10, border: '1px solid var(--bdr2)', background: 'var(--surf1)', color: 'var(--t1)', cursor: 'pointer', fontSize: 14 }}>
+          התנתקות
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function ProtectedLayout({ children, isDark, onToggleTheme }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -124,7 +144,10 @@ export default function App() {
   }, [isDark])
 
   const toggleTheme = useCallback(() => setIsDark(v => !v), [])
-  const isCustomer = session?.user?.app_metadata?.role === 'customer'
+  const role = session?.user?.app_metadata?.role
+  const isCustomer = role === 'customer'
+  const isStaff = role === 'staff'
+  const homeFor = isCustomer ? '/portal/orders' : isStaff ? '/dashboard' : '/access-pending'
 
   if (session === undefined) {
     return (
@@ -139,16 +162,16 @@ export default function App() {
       <ImportProvider>
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={session ? <Navigate to={isCustomer ? '/portal/orders' : '/dashboard'} replace /> : <Landing />} />
-            <Route path="/login" element={session ? <Navigate to={isCustomer ? '/portal/orders' : '/dashboard'} replace /> : <Login />} />
-            <Route path="/portal/login" element={session ? <Navigate to={isCustomer ? '/portal/orders' : '/dashboard'} replace /> : <CustomerLogin />} />
+            <Route path="/" element={session ? <Navigate to={homeFor} replace /> : <Landing />} />
+            <Route path="/login" element={session ? <Navigate to={homeFor} replace /> : <Login />} />
+            <Route path="/portal/login" element={session ? <Navigate to={homeFor} replace /> : <CustomerLogin />} />
             <Route path="/portal/preview" element={<CustomerPortalDemo />} />
             {session && isCustomer ? (
               <>
                 <Route path="/portal/orders" element={<CustomerOrders />} />
                 <Route path="*" element={<Navigate to="/portal/orders" replace />} />
               </>
-            ) : session ? (
+            ) : session && isStaff ? (
               <>
                 <Route path="/dashboard" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Dashboard /></ProtectedLayout>} />
                 <Route path="/orders" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Orders /></ProtectedLayout>} />
@@ -159,6 +182,11 @@ export default function App() {
                 <Route path="/forecasting" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Forecasting /></ProtectedLayout>} />
                 <Route path="/settings" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Settings /></ProtectedLayout>} />
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              </>
+            ) : session ? (
+              <>
+                <Route path="/access-pending" element={<AccessPending />} />
+                <Route path="*" element={<Navigate to="/access-pending" replace />} />
               </>
             ) : (
               <Route path="*" element={<Navigate to="/login" replace />} />

@@ -7,6 +7,7 @@ export default {
     'settings.tabs.menu': 'תפריט',
     'settings.tabs.audit': 'יומן שינויים',
     'settings.tabs.branding': 'מיתוג',
+    'settings.tabs.staff': 'גישת צוות',
 
     // Menu tab
     'settings.addItem': 'הוספת פריט',
@@ -74,6 +75,17 @@ export default {
     'settings.generating': 'מייצר...',
     'settings.generateNewPin': 'צור קוד חדש',
 
+    // Staff access tab
+    'settings.staffSectionTitle': 'רשימת גישה לצוות',
+    'settings.staffDescription': 'רק כתובות Gmail שברשימה זו יקבלו הרשאת צוות בעת התחברות עם Google. כתובת שאינה ברשימה תיחסם לאחר ההתחברות עם הודעה שהגישה שלה ממתינה לאישור.',
+    'settings.staffEmailPlaceholder': 'name@example.com',
+    'settings.staffAddButton': 'הוסף',
+    'settings.staffRemoveButton': 'הסר',
+    'settings.staffEmptyText': 'אין כתובות ברשימה עדיין',
+    'settings.toast.staffAdded': 'נוספה כתובת לרשימת הצוות',
+    'settings.toast.staffAddFailed': 'הוספת הכתובת נכשלה',
+    'settings.toast.staffRemoveFailed': 'הסרת הכתובת נכשלה',
+
     // Add item modal
     'settings.addItemModalTitle': 'הוספת פריט לתפריט',
     'settings.nameHeLabel': 'שם בעברית *',
@@ -106,6 +118,7 @@ export default {
     'settings.tabs.menu': 'Menu',
     'settings.tabs.audit': 'Change Log',
     'settings.tabs.branding': 'Branding',
+    'settings.tabs.staff': 'Staff Access',
 
     // Menu tab
     'settings.addItem': 'Add Item',
@@ -172,6 +185,17 @@ export default {
     'settings.pinNoCodeNote': 'No access code has been set for this customer yet. Click "Generate New Code" to create one.',
     'settings.generating': 'Generating...',
     'settings.generateNewPin': 'Generate New Code',
+
+    // Staff access tab
+    'settings.staffSectionTitle': 'Staff Access List',
+    'settings.staffDescription': 'Only Gmail addresses on this list receive staff access when signing in with Google. An address not on the list gets blocked after sign-in with a message that its access is pending approval.',
+    'settings.staffEmailPlaceholder': 'name@example.com',
+    'settings.staffAddButton': 'Add',
+    'settings.staffRemoveButton': 'Remove',
+    'settings.staffEmptyText': 'No addresses on the list yet',
+    'settings.toast.staffAdded': 'Staff address added',
+    'settings.toast.staffAddFailed': 'Failed to add address',
+    'settings.toast.staffRemoveFailed': 'Failed to remove address',
 
     // Add item modal
     'settings.addItemModalTitle': 'Add Menu Item',

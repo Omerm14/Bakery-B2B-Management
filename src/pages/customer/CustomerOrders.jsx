@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { ChevronRight, ChevronLeft, LogOut, Copy, Send } from 'lucide-react'
+import { ChevronRight, ChevronLeft, LogOut, Send } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useCustomerWeek } from '../../hooks/useCustomerWeek'
 import { useCustomerMenuItems } from '../../hooks/useCustomerMenuItems'
 import { useToast } from '../../context/ToastContext'
 import { WEEK_DAYS, formatShortDate, dayDate, toLocalISODate } from '../../constants/days'
+import { CATEGORY_ORDER } from '../../constants/categories'
 import DayOrderView from './DayOrderView'
 import WeekSummaryView from './WeekSummaryView'
+
+const FAVORITES_KEY = '__favorites__'
 
 export default function CustomerOrders() {
   const toast = useToast()
@@ -27,8 +30,11 @@ export default function CustomerOrders() {
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('floory_portal_view') || 'day')
   const [dayOffset, setDayOffset] = useState(() => new Date().getDay())
   const [nowTick, setNowTick] = useState(() => Date.now())
-  const [resetting, setResetting] = useState(false)
   const [sending, setSending] = useState(false)
+  // Optimistic overrides for is_favorite, keyed by menu_item_id — simpler
+  // than threading a setter through useCustomerMenuItems, which owns the
+  // base list. Merged over each item's server-fetched is_favorite.
+  const [favoriteOverrides, setFavoriteOverrides] = useState({})
 
   useEffect(() => { localStorage.setItem('floory_portal_view', viewMode) }, [viewMode])
 
@@ -188,42 +194,6 @@ export default function CustomerOrders() {
     setOrderLines(prev => ({ ...prev, [key]: { ...prev[key], quantity: qty, pending: true } }))
   }
 
-  // Overwrites the current draft (not-yet-sent editable days only) with
-  // last week's quantities — a manual "start over from last week" reset,
-  // on top of the automatic per-cell suggestion loadWeek() already does
-  // for empty cells. Still doesn't touch the database; the customer
-  // reviews and sends afterward like any other edit.
-  async function resetDraftToPreviousWeek() {
-    if (!customer || !weekId || resetting) return
-    if (!window.confirm('הכמויות המוצגות (שטרם נשלחו) יוחלפו בכמויות מהשבוע הקודם. השינוי לא יישלח עד שתלחצו על "שלח הזמנה". להמשיך?')) return
-
-    setResetting(true)
-    try {
-      const prevQtyByItemOffset = await fetchPreviousWeekQtyByOffset()
-      if (!Object.keys(prevQtyByItemOffset).length) { toast.info('אין הזמנה בשבוע הקודם להעתקה'); return }
-
-      setOrderLines(prev => {
-        const next = { ...prev }
-        for (const item of menuItems) {
-          for (const d of WEEK_DAYS) {
-            const date = week.dayDate(d.key)
-            if (canEdit[date] === false) continue
-            const key = `${item.id}_${date}`
-            const prevQty = prevQtyByItemOffset[`${item.id}_${d.key}`] || 0
-            next[key] = { ...next[key], quantity: prevQty, pending: true }
-          }
-        }
-        return next
-      })
-      toast.success('הכמויות מהשבוע הקודם נטענו — בדקו ולחצו על "שלח הזמנה" לאישור')
-    } catch (err) {
-      console.error('[CustomerOrders.resetDraftToPreviousWeek]', err)
-      toast.error('טעינת השבוע הקודם נכשלה')
-    } finally {
-      setResetting(false)
-    }
-  }
-
   // The one action that actually updates the real order for anything the
   // customer has genuinely touched this session — untouched defaults are
   // already real (loadWeek writes those through immediately), so this
@@ -279,6 +249,22 @@ export default function CustomerOrders() {
     }
   }
 
+  // Optimistic insert/delete on customer_favorite_items — RLS restricts
+  // both to rows owned by this customer (see migration 040).
+  async function toggleFavorite(menuItemId, currentlyFavorite) {
+    if (!customer) return
+    const next = !currentlyFavorite
+    setFavoriteOverrides(prev => ({ ...prev, [menuItemId]: next }))
+    const { error } = next
+      ? await supabase.from('customer_favorite_items').insert({ customer_id: customer.id, menu_item_id: menuItemId })
+      : await supabase.from('customer_favorite_items').delete().eq('customer_id', customer.id).eq('menu_item_id', menuItemId)
+    if (error) {
+      console.error('[CustomerOrders.toggleFavorite]', error)
+      setFavoriteOverrides(prev => ({ ...prev, [menuItemId]: currentlyFavorite }))
+      toast.error('עדכון המועדפים נכשל')
+    }
+  }
+
   function dayTotal(date) {
     let total = 0
     for (const key in orderLines) {
@@ -310,12 +296,26 @@ export default function CustomerOrders() {
     supabase.auth.signOut()
   }
 
-  const grouped = menuItems.reduce((acc, item) => {
-    const cat = item.category || 'כללי'
-    if (!acc[cat]) acc[cat] = []
-    acc[cat].push(item)
-    return acc
-  }, {})
+  // Ordered-bucket grouping (same pattern as Weekly.jsx's groupRows()):
+  // favorited items are pinned into their own bucket first — moved there
+  // instead of their normal category, never duplicated — then
+  // CATEGORY_ORDER buckets in order, then any leftover categories
+  // alphabetically.
+  const grouped = (() => {
+    const buckets = {}
+    for (const item of menuItems) {
+      const isFavorite = favoriteOverrides[item.id] ?? item.is_favorite ?? false
+      const key = isFavorite ? FAVORITES_KEY : (item.category || 'כללי')
+      if (!buckets[key]) buckets[key] = []
+      buckets[key].push({ ...item, is_favorite: isFavorite })
+    }
+    const result = {}
+    if (buckets[FAVORITES_KEY]?.length) result[FAVORITES_KEY] = buckets[FAVORITES_KEY]
+    for (const k of CATEGORY_ORDER) if (buckets[k]?.length) result[k] = buckets[k]
+    const rest = Object.keys(buckets).filter(k => k !== FAVORITES_KEY && !CATEGORY_ORDER.includes(k)).sort((a, b) => a.localeCompare(b, 'he'))
+    for (const k of rest) result[k] = buckets[k]
+    return result
+  })()
 
   const selectedDate = week.dayDate(dayOffset)
 
@@ -345,10 +345,7 @@ export default function CustomerOrders() {
       </div>
 
       {weekId && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-          <button className="btn btn-ghost btn-sm" onClick={resetDraftToPreviousWeek} disabled={resetting}>
-            <Copy size={14} /> {resetting ? 'טוען...' : 'העתק מהשבוע שעבר'}
-          </button>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
           <button className="btn btn-primary btn-sm" onClick={sendOrder} disabled={sending}>
             <Send size={14} /> {sending ? 'שולח...' : 'שלח הזמנה'}
           </button>
@@ -377,6 +374,7 @@ export default function CustomerOrders() {
           canEdit={canEdit[selectedDate]}
           lockAt={lockAtByDate[selectedDate]}
           onQtyChange={handleQtyChange}
+          onToggleFavorite={toggleFavorite}
           onPrevDay={prevDay}
           onNextDay={nextDay}
           dayTotal={dayTotal(selectedDate)}
