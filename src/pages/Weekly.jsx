@@ -6,6 +6,7 @@ import { useWeek } from '../hooks/useWeek'
 import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
 import { buildWeeklyProductionHtml, openAndPrint } from '../lib/printHtml'
 import { useToast } from '../context/ToastContext'
+import { useTranslation } from '../context/LanguageContext'
 
 const CATEGORY_EN = {
   'מאפים': 'Pastries',
@@ -13,15 +14,32 @@ const CATEGORY_EN = {
   'עוגות ועוגיות': 'Cakes & Cookies',
   'קפואים ושונות - קונדי': 'Frozen & Misc',
 }
-function categoryEn(cat) { return CATEGORY_EN[cat] || cat }
+
+const TREND_KEY = {
+  'חדש השבוע': 'weekly.trend.new',
+  'עלייה חדה': 'weekly.trend.up',
+  'ירידה חדה': 'weekly.trend.down',
+  'יציב': 'weekly.trend.stable',
+}
 
 export default function Weekly() {
   const toast = useToast()
+  const { t, lang } = useTranslation()
+  const locale = lang === 'en' ? 'en-US' : 'he-IL'
   const week = useWeek()
   const [rows, setRows] = useState([])
   const [prevRows, setPrevRows] = useState([]) // previous week for comparison
   const [loading, setLoading] = useState(false)
   const [viewMode, setViewMode] = useState('category')
+
+  // Category/trend labels have real translations; supplier names are
+  // free-text business data with no English equivalent, so pass through.
+  function groupLabel(group) {
+    if (lang !== 'en') return group
+    if (viewMode === 'category') return CATEGORY_EN[group] || group
+    if (viewMode === 'trend') return t(TREND_KEY[group] || group)
+    return group
+  }
 
   useEffect(() => { loadWeekly() }, [week.weekStartISO])
 
@@ -91,13 +109,14 @@ export default function Weekly() {
   function exportExcel() {
     const wb = XLSX.utils.book_new()
     const grouped = groupRows(rows)
+    const dayLabel = (d) => (lang === 'en' ? d.short_en : d.label)
 
     for (const [group, items] of Object.entries(grouped)) {
-      const header = ['פריט', 'יח׳', ...WEEK_DAYS.map(d => d.label), 'סה״כ', 'שבוע קודם', 'שינוי %']
+      const header = [t('common.item'), t('common.unit'), ...WEEK_DAYS.map(dayLabel), t('common.total'), t('weekly.prevWeekCol'), `${t('weekly.change')} %`]
       const sheetData = [header]
       for (const row of items) {
         sheetData.push([
-          row.name_he,
+          lang === 'en' ? (row.name_en || row.name_he) : row.name_he,
           row.unit,
           ...WEEK_DAYS.map(d => row.days[week.dayDate(d.key)] || 0),
           row.total,
@@ -106,33 +125,38 @@ export default function Weekly() {
         ])
       }
       const ws = XLSX.utils.aoa_to_sheet(sheetData)
-      XLSX.utils.book_append_sheet(wb, ws, group.slice(0, 31))
+      XLSX.utils.book_append_sheet(wb, ws, groupLabel(group).slice(0, 31))
     }
 
-    const fileName = `טבלת_ייצור_שבועית_${week.weekStartISO}.xlsx`
+    const fileName = lang === 'en'
+      ? `Weekly_Production_Table_${week.weekStartISO}.xlsx`
+      : `טבלת_ייצור_שבועית_${week.weekStartISO}.xlsx`
     XLSX.writeFile(wb, fileName)
   }
 
   function printWeekly() {
     const grouped = groupRows(rows) // honors CATEGORY_ORDER
+    const dir = lang === 'en' ? 'ltr' : 'rtl'
     const sections = Object.entries(grouped).map(([group, items]) => ({
-      heading: categoryEn(group),
+      heading: groupLabel(group),
       items: items.map(row => ({
-        name: row.name_en || row.name_he,
+        name: lang === 'en' ? (row.name_en || row.name_he) : row.name_he,
         unit: row.unit,
-        category: categoryEn(row.category),
+        category: groupLabel(row.category),
         days: WEEK_DAYS.reduce((acc, d) => { acc[d.key] = row.days[week.dayDate(d.key)]; return acc }, {}),
         total: row.total,
       })),
     }))
     const html = buildWeeklyProductionHtml({
-      htmlTitle: 'Weekly Production Table',
-      h1: 'Weekly Production Table',
+      htmlTitle: t('weekly.printHtmlTitle'),
+      h1: t('weekly.printHtmlTitle'),
       subheading: week.weekLabel,
-      dayLabels: WEEK_DAYS,
+      dayLabels: WEEK_DAYS.map(d => ({ key: d.key, short_en: lang === 'en' ? d.short_en : d.short })),
       sections,
+      dir,
+      labels: { item: t('common.item'), category: t('common.category'), unit: t('common.unit'), total: t('common.total') },
     })
-    if (!openAndPrint(html)) toast.error('הדפדפן חסם את חלון ההדפסה')
+    if (!openAndPrint(html)) toast.error(t('weekly.popupBlocked'))
   }
 
   function changePercent(curr, prev) {
@@ -197,19 +221,19 @@ export default function Weekly() {
   return (
     <div className="page">
       <div className="page-header">
-        <h1 className="page-title">טבלת ייצור שבועית</h1>
+        <h1 className="page-title">{t('weekly.title')}</h1>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button className={'btn btn-sm ' + (viewMode === 'category' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('category')}>לפי קטגוריה</button>
-          <button className={'btn btn-sm ' + (viewMode === 'supplier' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('supplier')}>לפי ספק</button>
-          <button className={'btn btn-sm ' + (viewMode === 'trend' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('trend')}>לפי מגמה</button>
+          <button className={'btn btn-sm ' + (viewMode === 'category' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('category')}>{t('weekly.byCategory')}</button>
+          <button className={'btn btn-sm ' + (viewMode === 'supplier' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('supplier')}>{t('weekly.bySupplier')}</button>
+          <button className={'btn btn-sm ' + (viewMode === 'trend' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('trend')}>{t('weekly.byTrend')}</button>
           {rows.length > 0 && (
-            <button className="btn btn-ghost btn-sm" onClick={exportExcel} title="ייצוא Excel">
+            <button className="btn btn-ghost btn-sm" onClick={exportExcel} title={t('weekly.exportExcel')}>
               <Download size={14} /> Excel
             </button>
           )}
-          {rows.length > 0 && viewMode === 'category' && (
-            <button className="btn btn-ghost btn-sm no-print" onClick={printWeekly} title="Print (English)">
-              <Printer size={14} /> Print
+          {rows.length > 0 && (
+            <button className="btn btn-ghost btn-sm no-print" onClick={printWeekly} title={t('weekly.printEnglish')}>
+              <Printer size={14} /> {t('common.print')}
             </button>
           )}
         </div>
@@ -219,20 +243,20 @@ export default function Weekly() {
         <button className="btn btn-ghost btn-sm" onClick={week.prevWeek}><ChevronRight size={16} /></button>
         <span className="week-label">{week.weekLabel}</span>
         <button className="btn btn-ghost btn-sm" onClick={week.nextWeek}><ChevronLeft size={16} /></button>
-        <button className="btn btn-ghost btn-sm" onClick={week.goToToday} style={{ fontSize: 12 }}>השבוע</button>
+        <button className="btn btn-ghost btn-sm" onClick={week.goToToday} style={{ fontSize: 12 }}>{t('weekly.thisWeek')}</button>
       </div>
 
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 24 }}>
         <div className="card stat-card stat-cyan">
-          <div className="stat-lbl">פריטים שונים</div>
+          <div className="stat-lbl">{t('weekly.uniqueItems')}</div>
           <div className="stat-val">{loading ? '—' : totalItems}</div>
         </div>
         <div className="card stat-card stat-green">
-          <div className="stat-lbl">כמות שבועית</div>
-          <div className="stat-val">{loading ? '—' : grandTotal.toLocaleString('he-IL')}</div>
+          <div className="stat-lbl">{t('weekly.weeklyQty')}</div>
+          <div className="stat-val">{loading ? '—' : grandTotal.toLocaleString(locale)}</div>
         </div>
         <div className="card stat-card" style={{ borderBottom: `3px solid ${weekChange === null ? 'var(--bdr2)' : weekChange >= 0 ? 'var(--green)' : 'var(--red)'}` }}>
-          <div className="stat-lbl">מול שבוע קודם</div>
+          <div className="stat-lbl">{t('weekly.vsPrevWeek')}</div>
           <div className="stat-val" style={{ color: weekChange === null ? 'var(--t3)' : weekChange >= 0 ? 'var(--green)' : 'var(--red)', fontSize: 22 }}>
             {loading || weekChange === null ? '—' : `${weekChange > 0 ? '+' : ''}${weekChange}%`}
           </div>
@@ -246,7 +270,7 @@ export default function Weekly() {
       ) : rows.length === 0 ? (
         <div className="empty">
           <div className="empty-icon">📋</div>
-          <div className="empty-text">אין הזמנות לשבוע זה</div>
+          <div className="empty-text">{t('weekly.emptyText')}</div>
         </div>
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -254,22 +278,22 @@ export default function Weekly() {
             <table className="itbl" style={{ minWidth: 820 }}>
               <thead>
                 <tr>
-                  <th className="sticky-col" style={{ minWidth: 180 }}>פריט</th>
-                  <th>{viewMode === 'supplier' ? 'ספק' : 'קטגוריה'}</th>
-                  <th>יח׳</th>
+                  <th className="sticky-col" style={{ minWidth: 180 }}>{t('common.item')}</th>
+                  <th>{viewMode === 'supplier' ? t('common.supplier') : t('common.category')}</th>
+                  <th>{t('common.unit')}</th>
                   {WEEK_DAYS.map(d => (
                     <th key={d.key} style={{ textAlign: 'center', minWidth: 64 }}>
-                      <div>{d.short}</div>
+                      <div>{lang === 'en' ? d.short_en : d.short}</div>
                       <div style={{ fontSize: 10, color: 'var(--t3)' }}>{formatShortDate(week.dayDate(d.key))}</div>
                     </th>
                   ))}
-                  <th style={{ textAlign: 'center' }}>סה״כ</th>
-                  <th style={{ textAlign: 'center', fontSize: 11, color: 'var(--t3)' }}>שינוי</th>
+                  <th style={{ textAlign: 'center' }}>{t('common.total')}</th>
+                  <th style={{ textAlign: 'center', fontSize: 11, color: 'var(--t3)' }}>{t('weekly.change')}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td className="sticky-col" style={{ fontWeight: 700, background: 'var(--accent-tint)' }}>סה״כ כללי</td>
+                  <td className="sticky-col" style={{ fontWeight: 700, background: 'var(--accent-tint)' }}>{t('weekly.grandTotal')}</td>
                   <td style={{ background: 'var(--accent-tint)' }} />
                   <td style={{ background: 'var(--accent-tint)' }} />
                   {dayTotals.map((total, i) => (
@@ -294,10 +318,10 @@ export default function Weekly() {
                         <td colSpan={12} style={{ background: 'var(--accent-tint)', padding: '8px 14px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span className="supplier-tag" style={{ marginBottom: 0 }}>
-                              {viewMode === 'trend' ? TREND_ICONS[group] : viewMode === 'supplier' ? '🏭' : '📦'} {group}
+                              {viewMode === 'trend' ? TREND_ICONS[group] : viewMode === 'supplier' ? '🏭' : '📦'} {groupLabel(group)}
                             </span>
                             <span style={{ fontSize: 12, color: 'var(--t2)', fontWeight: 600 }}>
-                              {groupTotal.toLocaleString('he-IL')}
+                              {groupTotal.toLocaleString(locale)}
                               {gChange !== null && (
                                 <span style={{ marginInlineStart: 8, color: gChange >= 0 ? 'var(--green)' : 'var(--red)' }}>
                                   {gChange > 0 ? '+' : ''}{gChange}%
@@ -312,8 +336,8 @@ export default function Weekly() {
                         const chg = prev > 0 ? Math.round(((row.total - prev) / prev) * 100) : null
                         return (
                           <tr key={row.menu_item_id}>
-                            <td className="sticky-col" style={{ fontWeight: 500 }}>{row.name_he}</td>
-                            <td style={{ color: 'var(--t3)', fontSize: 12 }}>{row[viewMode === 'supplier' ? 'supplier' : 'category']}</td>
+                            <td className="sticky-col" style={{ fontWeight: 500 }}>{lang === 'en' ? (row.name_en || row.name_he) : row.name_he}</td>
+                            <td style={{ color: 'var(--t3)', fontSize: 12 }}>{groupLabel(row[viewMode === 'supplier' ? 'supplier' : 'category'])}</td>
                             <td style={{ color: 'var(--t3)', fontSize: 12 }}>{row.unit}</td>
                             {WEEK_DAYS.map(d => {
                               const date = week.dayDate(d.key)

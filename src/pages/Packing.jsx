@@ -4,29 +4,23 @@ import { supabase } from '../lib/supabase'
 import { isoToday, toLocalISODate } from '../constants/days'
 import { buildPackingListHtml, openAndPrint } from '../lib/printHtml'
 import { useToast } from '../context/ToastContext'
+import { useTranslation } from '../context/LanguageContext'
 
 export default function Packing() {
   const toast = useToast()
+  const { t, lang } = useTranslation()
+  const locale = lang === 'en' ? 'en-US' : 'he-IL'
   const [selectedDate, setSelectedDate] = useState(isoToday())
   const [clients, setClients] = useState([])
   const [checks, setChecks] = useState({})    // line_id → packed_at ISO string or null
   const [loading, setLoading] = useState(false)
   const [expanded, setExpanded] = useState({})
   const [allDone, setAllDone] = useState(false)
-  const [showEnglish, setShowEnglish] = useState(() => localStorage.getItem('packing_lang_en') === '1')
 
   useEffect(() => { loadPacking() }, [selectedDate])
 
-  function toggleLang() {
-    setShowEnglish(prev => {
-      const next = !prev
-      localStorage.setItem('packing_lang_en', next ? '1' : '0')
-      return next
-    })
-  }
-
   function displayName(item) {
-    return showEnglish ? (item.name_en || item.name_he) : item.name_he
+    return lang === 'en' ? (item.name_en || item.name_he) : item.name_he
   }
 
   async function loadPacking() {
@@ -109,39 +103,41 @@ export default function Packing() {
 
   function packedTime(isoStr) {
     if (!isoStr) return null
-    return new Date(isoStr).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })
+    return new Date(isoStr).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
   }
 
   function printClient(client) {
-    const dateStr = new Date(selectedDate + 'T00:00:00').toLocaleDateString('he-IL', {
+    const dateStr = new Date(selectedDate + 'T00:00:00').toLocaleDateString(locale, {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
     })
     const html = buildPackingListHtml({
-      htmlTitle: `שליחה – ${client.name}`,
+      htmlTitle: `${t('packing.printTitleClient')} – ${client.name}`,
       h2: client.name,
       subheading: dateStr,
       sections: [{ items: client.items.map(i => ({ ...i, name_he: displayName(i) })) }],
+      dir: lang === 'en' ? 'ltr' : 'rtl',
     })
-    if (!openAndPrint(html)) toast.error('הדפדפן חסם את חלון ההדפסה')
+    if (!openAndPrint(html)) toast.error(t('packing.popupBlocked'))
   }
 
   function printAll() {
-    const dateStr = new Date(selectedDate + 'T00:00:00').toLocaleDateString('he-IL', {
+    const dateStr = new Date(selectedDate + 'T00:00:00').toLocaleDateString(locale, {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
     })
     const html = buildPackingListHtml({
-      htmlTitle: `רשימות אריזה – ${dateStr}`,
-      h2: `רשימות אריזה – ${dateStr}`,
+      htmlTitle: `${t('packing.printTitleAll')} – ${dateStr}`,
+      h2: `${t('packing.printTitleAll')} – ${dateStr}`,
       sections: clients.map(client => ({ heading: client.name, items: client.items.map(i => ({ ...i, name_he: displayName(i) })) })),
+      dir: lang === 'en' ? 'ltr' : 'rtl',
     })
-    if (!openAndPrint(html)) toast.error('הדפדפן חסם את חלון ההדפסה')
+    if (!openAndPrint(html)) toast.error(t('packing.popupBlocked'))
   }
 
   const doneCount = clients.filter(isClientDone).length
   const totalItems = clients.reduce((s, c) => s + c.items.length, 0)
   const checkedItems = Object.values(checks).filter(Boolean).length
 
-  const dateLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString('he-IL', {
+  const dateLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString(locale, {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
 
@@ -152,9 +148,9 @@ export default function Packing() {
         <div className="packing-sticky-header no-print">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <span style={{ fontWeight: 700, fontSize: 15 }}>
-              {allDone ? '🎉 הכל נארז!' : `${doneCount} / ${clients.length} לקוחות`}
+              {allDone ? t('packing.allDone') : `${doneCount} / ${clients.length} ${t('packing.customersCount')}`}
             </span>
-            <span style={{ fontSize: 12, color: 'var(--t2)' }}>{checkedItems}/{totalItems} פריטים</span>
+            <span style={{ fontSize: 12, color: 'var(--t2)' }}>{checkedItems}/{totalItems} {t('packing.itemsCount')}</span>
           </div>
           <div style={{ height: 6, background: 'var(--bdr2)', borderRadius: 3, overflow: 'hidden' }}>
             <div style={{
@@ -169,14 +165,11 @@ export default function Packing() {
       )}
 
       <div className="page-header" style={{ marginTop: clients.length ? 8 : 0 }}>
-        <h1 className="page-title">אריזה יומית</h1>
+        <h1 className="page-title">{t('packing.title')}</h1>
         {clients.length > 0 && (
           <div style={{ display: 'flex', gap: 6 }}>
-            <button className="btn btn-ghost btn-sm no-print" onClick={toggleLang}>
-              {showEnglish ? 'עברית' : 'EN'}
-            </button>
             <button className="btn btn-ghost btn-sm no-print" onClick={printAll}>
-              <Printer size={14} /> הכל
+              <Printer size={14} /> {t('packing.printAll')}
             </button>
           </div>
         )}
@@ -186,7 +179,7 @@ export default function Packing() {
         <button className="btn btn-ghost btn-sm" onClick={() => changeDate(-1)}><ChevronRight size={16} /></button>
         <span className="week-label">{dateLabel}</span>
         <button className="btn btn-ghost btn-sm" onClick={() => changeDate(1)}><ChevronLeft size={16} /></button>
-        <button className="btn btn-ghost btn-sm" onClick={() => setSelectedDate(isoToday())} style={{ fontSize: 12 }}>היום</button>
+        <button className="btn btn-ghost btn-sm" onClick={() => setSelectedDate(isoToday())} style={{ fontSize: 12 }}>{t('common.today')}</button>
       </div>
 
       {/* Completion celebration */}
@@ -194,8 +187,8 @@ export default function Packing() {
         <div className="completion-banner">
           <span style={{ fontSize: 28 }}>🎉</span>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>כל ההזמנות נארזו!</div>
-            <div style={{ fontSize: 13, color: 'var(--t2)', marginTop: 2 }}>{clients.length} לקוחות · {totalItems} פריטים</div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{t('packing.completionTitle')}</div>
+            <div style={{ fontSize: 13, color: 'var(--t2)', marginTop: 2 }}>{clients.length} {t('packing.customersCount')} · {totalItems} {t('packing.itemsCount')}</div>
           </div>
         </div>
       )}
@@ -207,7 +200,7 @@ export default function Packing() {
       ) : clients.length === 0 ? (
         <div className="empty">
           <div className="empty-icon">📦</div>
-          <div className="empty-text">אין הזמנות לאריזה היום</div>
+          <div className="empty-text">{t('packing.emptyText')}</div>
         </div>
       ) : (
         clients.map(client => {
@@ -215,7 +208,7 @@ export default function Packing() {
           const isOpen = expanded[client.customer_id]
           const previewItems = client.items.slice(0, 3)
           const previewText = previewItems.map(i => `${displayName(i)} ×${i.quantity}`).join(', ')
-            + (client.items.length > 3 ? ` ועוד ${client.items.length - 3}` : '')
+            + (client.items.length > 3 ? ` ${t('packing.andMore')} ${client.items.length - 3}` : '')
 
           return (
             <div key={client.customer_id} className={'client-block' + (done ? ' done' : '')}>
@@ -247,7 +240,7 @@ export default function Packing() {
                   <button
                     className="btn btn-ghost btn-sm no-print"
                     onClick={e => { e.stopPropagation(); printClient(client) }}
-                    title="הדפס שליחה"
+                    title={t('packing.printClient')}
                     style={{ padding: '4px 8px' }}
                   >
                     <Printer size={13} />
@@ -272,7 +265,7 @@ export default function Packing() {
                       <span className="pack-label" style={{ flex: 1, fontSize: 15 }}>{displayName(item)}</span>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
                         <span className="pack-qty">{item.quantity} {item.unit}</span>
-                        {time && <span style={{ fontSize: 10, color: 'var(--green)' }}>נארז {time}</span>}
+                        {time && <span style={{ fontSize: 10, color: 'var(--green)' }}>{t('packing.packedAt')} {time}</span>}
                       </div>
                     </div>
                   )

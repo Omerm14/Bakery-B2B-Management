@@ -1,17 +1,18 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { useTranslation } from '../../context/LanguageContext'
 import {
   LayoutDashboard, ClipboardList, Factory, PackageCheck, CalendarDays, History, TrendingUp, Settings, X, LogOut,
 } from 'lucide-react'
 
 const links = [
-  { to: '/dashboard',   label: 'דשבורד',        Icon: LayoutDashboard },
-  { to: '/orders',      label: 'הזמנות',        Icon: ClipboardList },
-  { to: '/production',  label: 'עגלה',     Icon: Factory },
-  { to: '/packing',     label: 'אריזה',         Icon: PackageCheck },
-  { to: '/weekly',      label: 'טבלת ייצור שבועית', Icon: CalendarDays },
-  { to: '/history',     label: 'היסטוריה',      Icon: History },
-  { to: '/forecasting', label: 'תחזית',         Icon: TrendingUp },
+  { to: '/dashboard',   key: 'nav.dashboard',   Icon: LayoutDashboard },
+  { to: '/orders',      key: 'nav.orders',      Icon: ClipboardList },
+  { to: '/production',  key: 'nav.production',  Icon: Factory },
+  { to: '/packing',     key: 'nav.packing',     Icon: PackageCheck },
+  { to: '/weekly',      key: 'nav.weekly',      Icon: CalendarDays },
+  { to: '/history',     key: 'nav.history',     Icon: History },
+  { to: '/forecasting', key: 'nav.forecasting', Icon: TrendingUp },
 ]
 
 export function BrandMark({ size = 28 }) {
@@ -29,6 +30,7 @@ export function BrandMark({ size = 28 }) {
 
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
   const navigate = useNavigate()
+  const { t } = useTranslation()
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -39,13 +41,13 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
 
   return (
     <>
-      {mobileOpen && <button className="sb-scrim no-print" aria-label="סגור תפריט" onClick={closeMenu} />}
-      <nav className={'sb no-print' + (mobileOpen ? ' sb-drawer drawer-anim' : '')} aria-label="ניווט ראשי">
+      {mobileOpen && <button className="sb-scrim no-print" aria-label={t('nav.closeMenu')} onClick={closeMenu} />}
+      <nav className={'sb no-print' + (mobileOpen ? ' sb-drawer drawer-anim' : '')} aria-label={t('nav.main')}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 10px 18px' }}>
           <BrandMark />
           <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15.5, letterSpacing: '-0.01em', color: 'var(--t1)', flex: 1 }}>Floory</span>
           {mobileOpen && (
-            <button onClick={closeMenu} aria-label="סגור"
+            <button onClick={closeMenu} aria-label={t('nav.close')}
               style={{ background: 'none', border: 'none', color: 'var(--t3)', cursor: 'pointer', display: 'flex', padding: 4 }}>
               <X size={16} />
             </button>
@@ -53,13 +55,13 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          {links.map(({ to, label, Icon }) => (
+          {links.map(({ to, key, Icon }) => (
             <NavLink key={to} to={to} onClick={closeMenu}
               className={({ isActive }) => 'sb-nav-item' + (isActive ? ' active' : '')}>
               {({ isActive }) => (
                 <>
                   <Icon size={15} strokeWidth={1.75} color={isActive ? 'var(--accent)' : 'currentColor'} style={{ flexShrink: 0 }} aria-hidden="true" />
-                  <span style={{ flex: 1 }}>{label}</span>
+                  <span style={{ flex: 1 }}>{t(key)}</span>
                 </>
               )}
             </NavLink>
@@ -74,13 +76,13 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             {({ isActive }) => (
               <>
                 <Settings size={15} strokeWidth={1.75} color={isActive ? 'var(--accent)' : 'currentColor'} style={{ flexShrink: 0 }} aria-hidden="true" />
-                <span style={{ flex: 1 }}>הגדרות</span>
+                <span style={{ flex: 1 }}>{t('nav.settings')}</span>
               </>
             )}
           </NavLink>
           <button className="sb-nav-item" onClick={handleLogout} style={{ color: 'var(--red)' }}>
             <LogOut size={15} strokeWidth={1.75} style={{ flexShrink: 0, opacity: .8 }} aria-hidden="true" />
-            <span style={{ flex: 1 }}>יציאה</span>
+            <span style={{ flex: 1 }}>{t('nav.logout')}</span>
           </button>
         </div>
       </nav>

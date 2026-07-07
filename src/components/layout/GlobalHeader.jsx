@@ -1,24 +1,32 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Menu, Sun, Moon, Search, Bell } from 'lucide-react'
+import { Menu, Sun, Moon, Search, Bell, Languages } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
+import { useTranslation } from '../../context/LanguageContext'
 
-const TITLES = {
-  '/dashboard': 'דשבורד',
-  '/orders': 'הזמנות',
-  '/production': 'עגלה',
-  '/packing': 'אריזה',
-  '/weekly': 'טבלת ייצור שבועית',
-  '/history': 'היסטוריה',
-  '/forecasting': 'תחזית',
-  '/settings': 'הגדרות',
+const TITLE_KEYS = {
+  '/dashboard': 'nav.dashboard',
+  '/orders': 'nav.orders',
+  '/production': 'nav.production',
+  '/packing': 'nav.packing',
+  '/weekly': 'nav.weekly',
+  '/history': 'nav.history',
+  '/forecasting': 'nav.forecasting',
+  '/settings': 'nav.settings',
 }
 
 const POLL_MS = 30000
 
-function timeAgo(iso) {
+function timeAgo(iso, lang) {
   const diffMin = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+  if (lang === 'en') {
+    if (diffMin < 1) return 'just now'
+    if (diffMin < 60) return `${diffMin} min ago`
+    const diffHr = Math.round(diffMin / 60)
+    if (diffHr < 24) return `${diffHr}h ago`
+    return `${Math.round(diffHr / 24)}d ago`
+  }
   if (diffMin < 1) return 'עכשיו'
   if (diffMin < 60) return `לפני ${diffMin} דק׳`
   const diffHr = Math.round(diffMin / 60)
@@ -31,6 +39,7 @@ function timeAgo(iso) {
 // deliberate signal worth surfacing here rather than staff having to
 // notice a change on their own.
 function NotificationBell() {
+  const { t, lang } = useTranslation()
   const userEmail = useCurrentUser()
   const navigate = useNavigate()
   const [unseenCount, setUnseenCount] = useState(0)
@@ -86,22 +95,22 @@ function NotificationBell() {
 
   return (
     <div ref={wrapRef} style={{ position: 'relative' }}>
-      <button className="hd-btn" onClick={toggleOpen} aria-label="התראות">
+      <button className="hd-btn" onClick={toggleOpen} aria-label={t('header.notifications')}>
         <Bell size={14} />
         {unseenCount > 0 && <span className="notif-badge">{unseenCount > 9 ? '9+' : unseenCount}</span>}
       </button>
       {open && (
         <div className="notif-panel">
-          <div className="notif-panel-title">עדכוני הזמנות מלקוחות</div>
+          <div className="notif-panel-title">{t('header.notificationsTitle')}</div>
           {loadingItems ? (
-            <div className="notif-empty">טוען...</div>
+            <div className="notif-empty">{t('common.loading')}</div>
           ) : items.length === 0 ? (
-            <div className="notif-empty">אין עדכונים</div>
+            <div className="notif-empty">{t('header.notificationsEmpty')}</div>
           ) : (
             items.map(n => (
               <button key={n.id} type="button" className={`notif-item${!n.seen_at ? ' unseen' : ''}`} onClick={() => openNotification(n)}>
-                <div className="notif-item-name">{n.customers?.name || 'לקוח'}</div>
-                <div className="notif-item-meta">{n.weeks?.label || ''} · {timeAgo(n.created_at)}</div>
+                <div className="notif-item-name">{n.customers?.name || t('common.customer')}</div>
+                <div className="notif-item-meta">{n.weeks?.label || ''} · {timeAgo(n.created_at, lang)}</div>
               </button>
             ))
           )}
@@ -113,22 +122,26 @@ function NotificationBell() {
 
 export default function GlobalHeader({ isDark, onToggleTheme, onMenuOpen, onSearchOpen }) {
   const { pathname } = useLocation()
-  const title = TITLES[pathname] || ''
+  const { t, toggleLang } = useTranslation()
+  const title = t(TITLE_KEYS[pathname] || '')
 
   return (
     <header className="hd no-print">
-      <button className="hd-btn hd-menu-btn" style={{ border: 'none' }} onClick={onMenuOpen} aria-label="תפריט">
+      <button className="hd-btn hd-menu-btn" style={{ border: 'none' }} onClick={onMenuOpen} aria-label={t('header.menu')}>
         <Menu size={18} />
       </button>
-      <span className="hd-title">{title}</span>
+      <span className="hd-title">{TITLE_KEYS[pathname] ? title : ''}</span>
       <div style={{ flex: 1 }} />
-      <button className="hd-search" onClick={onSearchOpen} aria-label="חיפוש">
+      <button className="hd-search" onClick={onSearchOpen} aria-label={t('header.search')}>
         <Search size={13} aria-hidden="true" />
-        <span>חיפוש</span>
+        <span>{t('header.search')}</span>
         <kbd>Ctrl K</kbd>
       </button>
       <NotificationBell />
-      <button className="hd-btn" onClick={onToggleTheme} aria-label={isDark ? 'עבור למצב יום' : 'עבור למצב לילה'}>
+      <button className="hd-btn" onClick={toggleLang} aria-label={t('header.lang')} title={t('header.lang')}>
+        <Languages size={14} />
+      </button>
+      <button className="hd-btn" onClick={onToggleTheme} aria-label={isDark ? t('header.toggleDay') : t('header.toggleNight')}>
         {isDark ? <Sun size={14} /> : <Moon size={14} />}
       </button>
     </header>
