@@ -6,6 +6,7 @@ import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
 import SearchInput from '../components/SearchInput'
 import { useTranslation } from '../context/LanguageContext'
+import { customerDisplayName } from '../lib/displayName'
 
 const CustomTooltip = ({ active, payload, label, locale }) => {
   if (!active || !payload?.length) return null
@@ -130,7 +131,7 @@ export default function History() {
       }
       const trendData = allWeeks.map(iso => ({ label: fmtWeek(iso), כמות: Math.round((weekTotals[iso] || 0) * 10) / 10 }))
 
-      setTableData({ weeks: recentWeeks, rows, trendData, title: selectedCustomer.name })
+      setTableData({ weeks: recentWeeks, rows, trendData, title: customerDisplayName(selectedCustomer, lang) })
     } finally {
       setLoading(false)
     }
@@ -143,7 +144,7 @@ export default function History() {
       const lines = await fetchAllPages((from, to) =>
         supabase
           .from('order_lines')
-          .select('week_id, customer_id, quantity, weeks(start_date), customers!inner(name, active)')
+          .select('week_id, customer_id, quantity, weeks(start_date), customers!inner(name, name_en, active)')
           .eq('menu_item_id', selectedItem.id)
           .eq('customers.active', true)
           .gt('quantity', 0)
@@ -160,7 +161,7 @@ export default function History() {
         if (!iso) continue
         weekSet.add(iso)
         const id = l.customer_id
-        if (!custWeekMap[id]) custWeekMap[id] = { id, name: l.customers?.name, weekQtys: {}, total: 0 }
+        if (!custWeekMap[id]) custWeekMap[id] = { id, name: l.customers?.name, name_en: l.customers?.name_en, weekQtys: {}, total: 0 }
         custWeekMap[id].weekQtys[iso] = (custWeekMap[id].weekQtys[iso] || 0) + parseFloat(l.quantity)
         custWeekMap[id].total += parseFloat(l.quantity)
       }
@@ -225,7 +226,7 @@ export default function History() {
           <SearchInput value={pillFilter} onChange={setPillFilter} placeholder={viewMode === 'customer' ? t('history.searchCustomer') : t('history.searchItem')} />
           <div className="customer-list" style={{ maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' }}>
             {(viewMode === 'customer' ? customers : menuItems)
-              .filter(item => (viewMode === 'customer' ? item.name : displayName(item)).includes(pillFilter.trim()))
+              .filter(item => (viewMode === 'customer' ? customerDisplayName(item, lang) : displayName(item)).includes(pillFilter.trim()))
               .map(item => {
               const isSelected = viewMode === 'customer' ? selectedCustomer?.id === item.id : selectedItem?.id === item.id
               return (
@@ -234,7 +235,7 @@ export default function History() {
                   className={'customer-pill' + (isSelected ? ' active' : '')}
                   onClick={() => viewMode === 'customer' ? setSelectedCustomer(item) : setSelectedItem(item)}
                 >
-                  {viewMode === 'customer' ? item.name : displayName(item)}
+                  {viewMode === 'customer' ? customerDisplayName(item, lang) : displayName(item)}
                 </div>
               )
             })}
@@ -295,7 +296,7 @@ export default function History() {
                       {tableData.rows.map(row => (
                         <tr key={row.id}>
                           <td style={{ fontWeight: 500 }}>
-                            {viewMode === 'customer' ? displayName(row) : row.name}
+                            {viewMode === 'customer' ? displayName(row) : customerDisplayName(row, lang)}
                             {row.standing && <span title={t('history.standingOrder')} style={{ marginInlineStart: 6 }}>🔄</span>}
                           </td>
                           {viewMode === 'customer' && (

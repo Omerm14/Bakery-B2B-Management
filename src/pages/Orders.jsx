@@ -10,6 +10,7 @@ import { useToast } from '../context/ToastContext'
 import { useTranslation } from '../context/LanguageContext'
 import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
 import SearchInput from '../components/SearchInput'
+import { customerDisplayName } from '../lib/displayName'
 
 export default function Orders() {
   const toast = useToast()
@@ -25,7 +26,7 @@ export default function Orders() {
   const location = useLocation()
   const navigate = useNavigate()
   const week = useWeek()
-  const { customers, setCustomers } = useCustomers()
+  const { customers, createCustomer } = useCustomers()
   const { menuItems } = useMenuItems()
   const userEmail = useCurrentUser()
   const [selectedCustomer, setSelectedCustomer] = useState(null)
@@ -36,6 +37,7 @@ export default function Orders() {
   const [saving, setSaving] = useState(false)
   const [showAddCustomer, setShowAddCustomer] = useState(false)
   const [newCustomerName, setNewCustomerName] = useState('')
+  const [showAllItems, setShowAllItems] = useState(false)
   const [copying, setCopying] = useState(false)
   const [bulkFillItem, setBulkFillItem] = useState(null)
   const [bulkFillQty, setBulkFillQty] = useState('')
@@ -145,18 +147,13 @@ export default function Orders() {
 
   async function addCustomer() {
     if (!newCustomerName.trim()) return
-    const { data, error } = await supabase
-      .from('customers')
-      .insert({ name: newCustomerName.trim(), active: true })
-      .select()
-      .single()
+    const { data, error, reactivated, alreadyActive } = await createCustomer(newCustomerName)
     if (error) {
-      toast.error(t('orders.toastAddCustomerFailed'))
+      toast.error(alreadyActive ? t('orders.toastCustomerAlreadyExists') : t('orders.toastAddCustomerFailed'))
       return
     }
-    setCustomers(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name, 'he')))
     setSelectedCustomer(data)
-    toast.success(`${t('orders.toastCustomerAdded')} ${data.name}`)
+    toast.success(`${reactivated ? t('orders.toastCustomerReactivated') : t('orders.toastCustomerAdded')} ${data.name}`)
     setNewCustomerName('')
     setShowAddCustomer(false)
   }
@@ -254,8 +251,20 @@ export default function Orders() {
     }
   }
 
+  // An item with quantity 0 on every day this week is just noise for the
+  // customer currently being edited — hide it so staff only see what's
+  // actually ordered. A needs_review flag can exist on a zero/empty cell
+  // (e.g. an import that zeroed out a previously-ordered item), so that
+  // still counts as "activity" and keeps the row visible.
+  function itemHasActivity(item) {
+    return WEEK_DAYS.some(d => {
+      const line = orderLines[`${item.id}_${week.dayDate(d.key)}`]
+      return (line?.quantity > 0) || line?.status === 'needs_review'
+    })
+  }
+
   // Group menu items by category
-  const grouped = menuItems.reduce((acc, item) => {
+  const grouped = (selectedCustomer && !showAllItems ? menuItems.filter(itemHasActivity) : menuItems).reduce((acc, item) => {
     const cat = item.category || 'כללי'
     if (!acc[cat]) acc[cat] = []
     acc[cat].push(item)
@@ -305,7 +314,7 @@ export default function Orders() {
                 className={'customer-pill' + (selectedCustomer?.id === c.id ? ' active' : '')}
                 onClick={() => setSelectedCustomer(c)}
               >
-                {c.name}
+                {customerDisplayName(c, lang)}
               </div>
             ))}
           </div>
@@ -322,7 +331,7 @@ export default function Orders() {
           ) : (
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
               <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--bdr)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-                <span style={{ fontWeight: 700, fontSize: 16 }}>{selectedCustomer.name}</span>
+                <span style={{ fontWeight: 700, fontSize: 16 }}>{customerDisplayName(selectedCustomer, lang)}</span>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                   <select
                     value={changeReason}
@@ -336,6 +345,13 @@ export default function Orders() {
                     <option value="other">{REASON_LABELS.other}</option>
                   </select>
                   <button className="btn btn-ghost btn-sm" onClick={() => setShowNoteInput(v => !v)} title={t('orders.noteButtonTitle')}>📝</button>
+                  <button
+                    className={'btn btn-sm ' + (showAllItems ? 'btn-primary' : 'btn-ghost')}
+                    onClick={() => setShowAllItems(v => !v)}
+                    title={t('orders.showAllItemsTitle')}
+                  >
+                    {showAllItems ? t('orders.showOrderedOnly') : t('orders.showAllItems')}
+                  </button>
                   <button
                     className="btn btn-ghost btn-sm"
                     onClick={copyPrevWeek}

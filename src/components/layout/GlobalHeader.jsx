@@ -4,6 +4,7 @@ import { Menu, Sun, Moon, Search, Bell, Languages } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { useTranslation } from '../../context/LanguageContext'
+import { customerDisplayName } from '../../lib/displayName'
 
 const TITLE_KEYS = {
   '/dashboard': 'nav.dashboard',
@@ -79,7 +80,7 @@ function NotificationBell() {
     setLoadingItems(true)
     const { data } = await supabase
       .from('order_change_notifications')
-      .select('id, customer_id, week_id, created_at, seen_at, customers(name), weeks(label)')
+      .select('id, customer_id, week_id, created_at, seen_at, customers(name, name_en), weeks(label)')
       .order('created_at', { ascending: false })
       .limit(20)
     setItems(data || [])
@@ -141,7 +142,7 @@ function NotificationBell() {
               return (
                 <div key={n.id} className={`notif-item${!n.seen_at ? ' unseen' : ''}`}>
                   <button type="button" className="notif-item-header" onClick={() => toggleExpand(n)}>
-                    <div className="notif-item-name">{n.customers?.name || t('common.customer')}</div>
+                    <div className="notif-item-name">{n.customers ? customerDisplayName(n.customers, lang) : t('common.customer')}</div>
                     <div className="notif-item-meta">{n.weeks?.label || ''} · {timeAgo(n.created_at, lang)}</div>
                   </button>
                   {isExpanded && (

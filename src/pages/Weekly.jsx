@@ -186,25 +186,18 @@ export default function Weekly() {
       for (const k of TREND_ORDER) if (buckets[k].length) result[k] = buckets[k]
       return result
     }
-    if (viewMode === 'category') {
-      const buckets = {}
-      for (const row of rowList) {
-        const k = row.category
-        if (!buckets[k]) buckets[k] = []
-        buckets[k].push(row)
-      }
-      const result = {}
-      for (const k of CATEGORY_ORDER) if (buckets[k]?.length) result[k] = buckets[k]
-      const rest = Object.keys(buckets).filter(k => !CATEGORY_ORDER.includes(k)).sort((a, b) => a.localeCompare(b, 'he'))
-      for (const k of rest) result[k] = buckets[k]
-      return result
+    // category (the only remaining view mode besides trend)
+    const buckets = {}
+    for (const row of rowList) {
+      const k = row.category
+      if (!buckets[k]) buckets[k] = []
+      buckets[k].push(row)
     }
-    return rowList.reduce((acc, row) => {
-      const k = row.supplier
-      if (!acc[k]) acc[k] = []
-      acc[k].push(row)
-      return acc
-    }, {})
+    const result = {}
+    for (const k of CATEGORY_ORDER) if (buckets[k]?.length) result[k] = buckets[k]
+    const rest = Object.keys(buckets).filter(k => !CATEGORY_ORDER.includes(k)).sort((a, b) => a.localeCompare(b, 'he'))
+    for (const k of rest) result[k] = buckets[k]
+    return result
   }
 
   const grouped = groupRows(rows)
@@ -223,7 +216,6 @@ export default function Weekly() {
         <h1 className="page-title">{t('weekly.title')}</h1>
         <div style={{ display: 'flex', gap: 6 }}>
           <button className={'btn btn-sm ' + (viewMode === 'category' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('category')}>{t('weekly.byCategory')}</button>
-          <button className={'btn btn-sm ' + (viewMode === 'supplier' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('supplier')}>{t('weekly.bySupplier')}</button>
           <button className={'btn btn-sm ' + (viewMode === 'trend' ? 'btn-primary' : 'btn-ghost')} onClick={() => setViewMode('trend')}>{t('weekly.byTrend')}</button>
           {rows.length > 0 && (
             <button className="btn btn-ghost btn-sm" onClick={exportExcel} title={t('weekly.exportExcel')}>
@@ -278,8 +270,7 @@ export default function Weekly() {
               <thead>
                 <tr>
                   <th className="sticky-col" style={{ minWidth: 180 }}>{t('common.item')}</th>
-                  <th>{viewMode === 'supplier' ? t('common.supplier') : t('common.category')}</th>
-                  <th>{t('common.unit')}</th>
+                  <th>{t('common.category')}</th>
                   {WEEK_DAYS.map(d => (
                     <th key={d.key} style={{ textAlign: 'center', minWidth: 64 }}>
                       <div>{lang === 'en' ? d.short_en : d.short}</div>
@@ -293,7 +284,6 @@ export default function Weekly() {
               <tbody>
                 <tr>
                   <td className="sticky-col" style={{ fontWeight: 700, background: 'var(--accent-tint)' }}>{t('weekly.grandTotal')}</td>
-                  <td style={{ background: 'var(--accent-tint)' }} />
                   <td style={{ background: 'var(--accent-tint)' }} />
                   {dayTotals.map((total, i) => (
                     <td key={WEEK_DAYS[i].key} style={{ textAlign: 'center', fontWeight: 700, background: 'var(--accent-tint)' }}>
@@ -317,7 +307,7 @@ export default function Weekly() {
                         <td colSpan={12} style={{ background: 'var(--accent-tint)', padding: '8px 14px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span className="supplier-tag" style={{ marginBottom: 0 }}>
-                              {viewMode === 'trend' ? TREND_ICONS[group] : viewMode === 'supplier' ? '🏭' : '📦'} {groupLabel(group)}
+                              {viewMode === 'trend' ? TREND_ICONS[group] : '📦'} {groupLabel(group)}
                             </span>
                             <span style={{ fontSize: 12, color: 'var(--t2)', fontWeight: 600 }}>
                               {groupTotal.toLocaleString(locale)}
@@ -336,8 +326,7 @@ export default function Weekly() {
                         return (
                           <tr key={row.menu_item_id}>
                             <td className="sticky-col" style={{ fontWeight: 500 }}>{lang === 'en' ? (row.name_en || row.name_he) : row.name_he}</td>
-                            <td style={{ color: 'var(--t3)', fontSize: 12 }}>{groupLabel(row[viewMode === 'supplier' ? 'supplier' : 'category'])}</td>
-                            <td style={{ color: 'var(--t3)', fontSize: 12 }}>{row.unit}</td>
+                            <td style={{ color: 'var(--t3)', fontSize: 12 }}>{groupLabel(row.category)}</td>
                             {WEEK_DAYS.map(d => {
                               const date = week.dayDate(d.key)
                               const qty = row.days[date]

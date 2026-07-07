@@ -5,6 +5,7 @@ import { isoToday, toLocalISODate } from '../constants/days'
 import { buildPackingListHtml, openAndPrint } from '../lib/printHtml'
 import { useToast } from '../context/ToastContext'
 import { useTranslation } from '../context/LanguageContext'
+import { customerDisplayName } from '../lib/displayName'
 
 export default function Packing() {
   const toast = useToast()
@@ -31,7 +32,7 @@ export default function Packing() {
         .select(`
           id, quantity, customer_id, menu_item_id,
           menu_items(name_he, name_en, unit),
-          customers!inner(name, active),
+          customers!inner(name, name_en, active),
           packing_checks(id, packed_at)
         `)
         .eq('delivery_date', selectedDate)
@@ -45,7 +46,7 @@ export default function Packing() {
       const initChecks = {}
       for (const line of data) {
         const cid = line.customer_id
-        if (!map[cid]) map[cid] = { customer_id: cid, name: line.customers?.name, items: [] }
+        if (!map[cid]) map[cid] = { customer_id: cid, name: line.customers?.name, name_en: line.customers?.name_en, items: [] }
         const packedAt = line.packing_checks?.[0]?.packed_at || null
         map[cid].items.push({
           line_id: line.id,
@@ -110,9 +111,10 @@ export default function Packing() {
     const dateStr = new Date(selectedDate + 'T00:00:00').toLocaleDateString(locale, {
       weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
     })
+    const clientName = customerDisplayName(client, lang)
     const html = buildPackingListHtml({
-      htmlTitle: `${t('packing.printTitleClient')} – ${client.name}`,
-      h2: client.name,
+      htmlTitle: `${t('packing.printTitleClient')} – ${clientName}`,
+      h2: clientName,
       subheading: dateStr,
       sections: [{ items: client.items.map(i => ({ ...i, name_he: displayName(i) })) }],
       dir: lang === 'en' ? 'ltr' : 'rtl',
@@ -127,7 +129,7 @@ export default function Packing() {
     const html = buildPackingListHtml({
       htmlTitle: `${t('packing.printTitleAll')} – ${dateStr}`,
       h2: `${t('packing.printTitleAll')} – ${dateStr}`,
-      sections: clients.map(client => ({ heading: client.name, items: client.items.map(i => ({ ...i, name_he: displayName(i) })) })),
+      sections: clients.map(client => ({ heading: customerDisplayName(client, lang), items: client.items.map(i => ({ ...i, name_he: displayName(i) })) })),
       dir: lang === 'en' ? 'ltr' : 'rtl',
     })
     if (!openAndPrint(html)) toast.error(t('packing.popupBlocked'))
@@ -203,77 +205,80 @@ export default function Packing() {
           <div className="empty-text">{t('packing.emptyText')}</div>
         </div>
       ) : (
-        clients.map(client => {
-          const done = isClientDone(client)
-          const isOpen = expanded[client.customer_id]
-          const previewItems = client.items.slice(0, 3)
-          const previewText = previewItems.map(i => `${displayName(i)} ×${i.quantity}`).join(', ')
-            + (client.items.length > 3 ? ` ${t('packing.andMore')} ${client.items.length - 3}` : '')
+        <div className="packing-grid">
+          {clients.map(client => {
+            const done = isClientDone(client)
+            const isOpen = expanded[client.customer_id]
+            const clientName = customerDisplayName(client, lang)
+            const previewItems = client.items.slice(0, 3)
+            const previewText = previewItems.map(i => `${displayName(i)} ×${i.quantity}`).join(', ')
+              + (client.items.length > 3 ? ` ${t('packing.andMore')} ${client.items.length - 3}` : '')
 
-          return (
-            <div key={client.customer_id} className={'client-block' + (done ? ' done' : '')}>
-              <div
-                className="client-hdr"
-                onClick={() => setExpanded(p => ({ ...p, [client.customer_id]: !p[client.customer_id] }))}
-              >
-                <div style={{
-                  width: 32, height: 32, borderRadius: '50%',
-                  background: done ? 'var(--green-tint)' : 'var(--surf2)',
-                  border: `2px solid ${done ? 'var(--green)' : 'var(--bdr2)'}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  transition: 'all .3s',
-                }}>
-                  {done && <Check size={16} color="var(--green)" />}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 16 }}>{client.name}</div>
-                  {!isOpen && (
-                    <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {previewText}
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                  <span style={{ fontSize: 12, color: 'var(--t3)' }}>
-                    {client.items.filter(i => !!checks[i.line_id]).length}/{client.items.length}
-                  </span>
-                  <button
-                    className="btn btn-ghost btn-sm no-print"
-                    onClick={e => { e.stopPropagation(); printClient(client) }}
-                    title={t('packing.printClient')}
-                    style={{ padding: '4px 8px' }}
-                  >
-                    <Printer size={13} />
-                  </button>
-                  {isOpen ? <ChevronUp size={16} color="var(--t3)" /> : <ChevronDown size={16} color="var(--t3)" />}
-                </div>
-              </div>
-
-              <div className={'client-body' + (isOpen ? ' open' : '')}>
-                {client.items.map(item => {
-                  const checked = !!checks[item.line_id]
-                  const time = checked ? packedTime(checks[item.line_id]) : null
-                  return (
-                    <div
-                      key={item.line_id}
-                      className={'pack-item' + (checked ? ' checked' : '')}
-                      onClick={() => toggleCheck(item.line_id)}
+            return (
+              <div key={client.customer_id} className={'client-block' + (done ? ' done' : '')}>
+                <div
+                  className="client-hdr"
+                  onClick={() => setExpanded(p => ({ ...p, [client.customer_id]: !p[client.customer_id] }))}
+                >
+                  <div style={{
+                    width: 26, height: 26, borderRadius: '50%',
+                    background: done ? 'var(--green-tint)' : 'var(--surf2)',
+                    border: `2px solid ${done ? 'var(--green)' : 'var(--bdr2)'}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    transition: 'all .3s',
+                  }}>
+                    {done && <Check size={13} color="var(--green)" />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{clientName}</div>
+                    {!isOpen && (
+                      <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {previewText}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, color: 'var(--t3)' }}>
+                      {client.items.filter(i => !!checks[i.line_id]).length}/{client.items.length}
+                    </span>
+                    <button
+                      className="btn btn-ghost btn-sm no-print"
+                      onClick={e => { e.stopPropagation(); printClient(client) }}
+                      title={t('packing.printClient')}
+                      style={{ padding: '4px 6px' }}
                     >
-                      <div className={'pack-check' + (checked ? ' checked' : '')}>
-                        {checked && <Check size={13} color="#fff" />}
+                      <Printer size={12} />
+                    </button>
+                    {isOpen ? <ChevronUp size={14} color="var(--t3)" /> : <ChevronDown size={14} color="var(--t3)" />}
+                  </div>
+                </div>
+
+                <div className={'client-body' + (isOpen ? ' open' : '')}>
+                  {client.items.map(item => {
+                    const checked = !!checks[item.line_id]
+                    const time = checked ? packedTime(checks[item.line_id]) : null
+                    return (
+                      <div
+                        key={item.line_id}
+                        className={'pack-item' + (checked ? ' checked' : '')}
+                        onClick={() => toggleCheck(item.line_id)}
+                      >
+                        <div className={'pack-check' + (checked ? ' checked' : '')}>
+                          {checked && <Check size={11} color="#fff" />}
+                        </div>
+                        <span className="pack-label" style={{ flex: 1, fontSize: 13 }}>{displayName(item)}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                          <span className="pack-qty">{item.quantity} {item.unit}</span>
+                          {time && <span style={{ fontSize: 9, color: 'var(--green)' }}>{t('packing.packedAt')} {time}</span>}
+                        </div>
                       </div>
-                      <span className="pack-label" style={{ flex: 1, fontSize: 15 }}>{displayName(item)}</span>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-                        <span className="pack-qty">{item.quantity} {item.unit}</span>
-                        {time && <span style={{ fontSize: 10, color: 'var(--green)' }}>{t('packing.packedAt')} {time}</span>}
-                      </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          )
-        })
+            )
+          })}
+        </div>
       )}
     </div>
   )

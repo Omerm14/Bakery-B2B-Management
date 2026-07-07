@@ -24,13 +24,25 @@ export default {
 
     // Customers tab
     'settings.searchCustomerPlaceholder': 'חיפוש לקוח...',
+    'settings.addCustomer': 'הוספת לקוח',
     'settings.col.name': 'שם',
+    'settings.col.nameEn': 'שם (אנגלית)',
     'settings.col.phone': 'טלפון',
     'settings.col.portalAccess': 'גישה לפורטל',
     'settings.pinButtonTitle': 'מציג את קישור הכניסה ואת קוד הגישה של הלקוח',
     'settings.pinCode': 'קוד גישה',
     'settings.setPinButton': 'הגדר קוד גישה',
     'settings.phoneRequiredForPin': 'יש להזין מספר טלפון לפני הגדרת קוד גישה',
+
+    // Add customer modal
+    'settings.addCustomerModalTitle': 'הוספת לקוח חדש',
+    'settings.customerNameLabel': 'שם הלקוח',
+    'settings.customerNamePlaceholder': 'שם הלקוח או העסק',
+    'settings.toast.customerAddFailed': 'הוספת הלקוח נכשלה',
+    'settings.toast.customerAdded': 'נוסף לקוח:',
+    'settings.toast.customerReactivated': 'הלקוח היה לא פעיל ושוחזר:',
+    'settings.toast.customerAlreadyExists': 'כבר קיים לקוח פעיל בשם זה',
+    'settings.toast.nameEnUpdateFailed': 'עדכון השם באנגלית נכשל',
 
     // Import tab
     'settings.importInstructions': 'בחר קובץ Excel שבועי (פורמט המאפייה) — לקוח לכל גיליון, תאריכים בשורה 1, כמויות בעמודות B–H. ניתן לבחור מספר קבצים בו-זמנית. ניתן לנווט לדפים אחרים בזמן הייבוא — הוא ימשיך ברקע. השתמשו בכפתור "ייבוא Excel" בראש העמוד כדי להעלות קבצים.',
@@ -135,13 +147,25 @@ export default {
 
     // Customers tab
     'settings.searchCustomerPlaceholder': 'Search customer...',
+    'settings.addCustomer': 'Add Customer',
     'settings.col.name': 'Name',
+    'settings.col.nameEn': 'Name (English)',
     'settings.col.phone': 'Phone',
     'settings.col.portalAccess': 'Portal Access',
     'settings.pinButtonTitle': "Shows the customer's login link and access code",
     'settings.pinCode': 'Access Code',
     'settings.setPinButton': 'Set Access Code',
     'settings.phoneRequiredForPin': 'A phone number is required before setting an access code',
+
+    // Add customer modal
+    'settings.addCustomerModalTitle': 'Add New Customer',
+    'settings.customerNameLabel': 'Customer Name',
+    'settings.customerNamePlaceholder': 'Customer or business name',
+    'settings.toast.customerAddFailed': 'Failed to add customer',
+    'settings.toast.customerAdded': 'Customer added:',
+    'settings.toast.customerReactivated': 'Customer was inactive and was reactivated:',
+    'settings.toast.customerAlreadyExists': 'An active customer with this name already exists',
+    'settings.toast.nameEnUpdateFailed': 'Failed to update English name',
 
     // Import tab
     'settings.importInstructions': 'Select a weekly Excel file (bakery format) — one customer per sheet, dates in row 1, quantities in columns B–H. You can select multiple files at once. You can navigate to other pages during import — it will continue in the background. Use the "Import Excel" button at the top of the page to upload files.',
