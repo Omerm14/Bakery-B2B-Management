@@ -1,19 +1,18 @@
 export const WEEK_DAYS = [
-  { key: 0, label: 'ראשון', short: 'א׳' },
-  { key: 1, label: 'שני',   short: 'ב׳' },
-  { key: 2, label: 'שלישי', short: 'ג׳' },
-  { key: 3, label: 'רביעי', short: 'ד׳' },
-  { key: 4, label: 'חמישי', short: 'ה׳' },
-  { key: 5, label: 'שישי',  short: 'ו׳' },
-  { key: 6, label: 'שבת',   short: 'ש׳' },
+  { key: 0, label: 'ראשון', short: 'א׳', short_en: 'Sun' },
+  { key: 1, label: 'שני',   short: 'ב׳', short_en: 'Mon' },
+  { key: 2, label: 'שלישי', short: 'ג׳', short_en: 'Tue' },
+  { key: 3, label: 'רביעי', short: 'ד׳', short_en: 'Wed' },
+  { key: 4, label: 'חמישי', short: 'ה׳', short_en: 'Thu' },
+  { key: 5, label: 'שישי',  short: 'ו׳', short_en: 'Fri' },
+  { key: 6, label: 'שבת',   short: 'ש׳', short_en: 'Sat' },
 ]
 
-// Formats a Date's LOCAL calendar day as YYYY-MM-DD — deliberately not
-// `.toISOString().slice(0, 10)`, which renders in UTC. For any timezone
-// ahead of UTC (Israel is always +2/+3), a Date pinned to local midnight
-// converts to the *previous* UTC calendar day, silently shifting every
-// week/day computed this way back by one. Every "what's today's/this
-// day's date" helper in the app must go through this, not toISOString().
+// Formats a Date by its LOCAL calendar fields (Y/M/D) — NOT `.toISOString()`,
+// which converts to UTC first and silently shifts the date back a day
+// whenever the local timezone is ahead of UTC (e.g. Israel) for any Date
+// representing local midnight. Use this everywhere a local Date needs to
+// become a plain SQL date string.
 export function toLocalISODate(d) {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')

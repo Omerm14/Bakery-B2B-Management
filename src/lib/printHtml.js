@@ -82,6 +82,52 @@ export function buildProductionListHtml({ htmlTitle, h2, subheading, sections })
     </body></html>`
 }
 
+// sections: [{ heading, items: [{ name, unit, category, days: {dayKey: qty}, total }] }]
+// dayLabels: [{ key, short_en }] in display order (Sun..Sat)
+export function buildWeeklyProductionHtml({ htmlTitle, h1, subheading, dayLabels, sections }) {
+  const dayHeaders = dayLabels.map(d =>
+    `<th style="text-align:center;padding:6px 8px;border-bottom:2px solid #333">${escapeHtml(d.short_en)}</th>`
+  ).join('')
+
+  const body = sections.map(s => {
+    const rows = s.items.map(i => {
+      const dayCells = dayLabels.map(d => {
+        const qty = i.days[d.key]
+        return `<td style="text-align:center;padding:6px 8px;border-bottom:1px solid #eee">${qty ? (qty % 1 === 0 ? qty : qty.toFixed(1)) : '—'}</td>`
+      }).join('')
+      return `<tr>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee">${escapeHtml(i.name)}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:12px;color:#555">${escapeHtml(i.category)}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:12px;color:#555">${escapeHtml(i.unit)}</td>
+        ${dayCells}
+        <td style="text-align:center;padding:6px 8px;border-bottom:1px solid #eee;font-weight:700">${i.total % 1 === 0 ? i.total : i.total.toFixed(1)}</td>
+      </tr>`
+    }).join('')
+    return `<div style="page-break-inside:avoid;margin-bottom:24px">
+      <h3 style="margin:0 0 6px;font-size:16px">${escapeHtml(s.heading)}</h3>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr>
+          <th style="text-align:left;padding:6px 10px;border-bottom:2px solid #333">Item</th>
+          <th style="text-align:left;padding:6px 10px;border-bottom:2px solid #333">Category</th>
+          <th style="text-align:left;padding:6px 10px;border-bottom:2px solid #333">Unit</th>
+          ${dayHeaders}
+          <th style="text-align:center;padding:6px 8px;border-bottom:2px solid #333">Total</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`
+  }).join('')
+
+  return `<!DOCTYPE html><html dir="ltr"><head><meta charset="utf-8">
+    <title>${escapeHtml(htmlTitle)}</title>
+    <style>@page{size:A4 landscape;margin:14mm}body{font-family:Arial,sans-serif;margin:0}h1{margin:0 0 4px;font-size:20px}p{color:#666;font-size:13px;margin:0 0 18px}</style>
+    </head><body>
+    <h1>${escapeHtml(h1)}</h1><p>${escapeHtml(subheading)}</p>
+    ${body}
+    <script>window.onload=()=>{window.print()}<\/script>
+    </body></html>`
+}
+
 export function openAndPrint(html) {
   const w = window.open('', '_blank')
   if (!w) return false

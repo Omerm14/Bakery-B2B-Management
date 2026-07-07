@@ -7,7 +7,7 @@ import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useToast } from '../context/ToastContext'
-import { WEEK_DAYS, formatShortDate } from '../constants/days'
+import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
 import SearchInput from '../components/SearchInput'
 
 const REASON_LABELS = {
@@ -164,7 +164,7 @@ export default function Orders() {
       const prevStart = new Date(week.weekStartISO)
       prevStart.setDate(prevStart.getDate() - 7)
       const { data: prevWeekRow } = await supabase
-        .from('weeks').select('id').eq('start_date', prevStart.toISOString().slice(0, 10)).single()
+        .from('weeks').select('id').eq('start_date', toLocalISODate(prevStart)).single()
       if (!prevWeekRow) { toast.info('אין הזמנה בשבוע הקודם להעתקה'); return }
 
       const { data: prevLines } = await supabase
@@ -184,7 +184,7 @@ export default function Orders() {
           week_id: weekId,
           customer_id: selectedCustomer.id,
           menu_item_id: l.menu_item_id,
-          delivery_date: d.toISOString().slice(0, 10),
+          delivery_date: toLocalISODate(d),
           quantity: l.quantity,
           source: 'manual',
           status: 'ok',
