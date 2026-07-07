@@ -199,6 +199,21 @@ export default function Settings() {
     setShowAddCustomer(false)
   }
 
+  const [seedingFavorites, setSeedingFavorites] = useState(false)
+
+  async function seedFavoritesFromHistory() {
+    if (seedingFavorites) return
+    if (!window.confirm(t('settings.seedFavoritesConfirm'))) return
+    setSeedingFavorites(true)
+    try {
+      const { data, error } = await supabase.rpc('seed_favorite_items_from_history')
+      if (error) { toast.error(t('settings.toast.seedFavoritesFailed')); return }
+      toast.success(`${t('settings.toast.seedFavoritesSuccess')} ${data ?? 0}`)
+    } finally {
+      setSeedingFavorites(false)
+    }
+  }
+
   const [settingPin, setSettingPin] = useState(null)
   // The PIN itself is stored server-side (customers.portal_pin), kept in
   // sync with the real auth password by set-customer-pin — so we only need
@@ -482,7 +497,10 @@ function AuditLogTab({ filterText }) {
       {/* CUSTOMERS */}
       {tab === 'customers' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 16 }}>
+            <button className="btn btn-ghost btn-sm" onClick={seedFavoritesFromHistory} disabled={seedingFavorites} title={t('settings.seedFavoritesTitle')}>
+              {seedingFavorites ? t('settings.seeding') : t('settings.seedFavorites')}
+            </button>
             <button className="btn btn-primary btn-sm" onClick={() => setShowAddCustomer(true)}>
               <Plus size={14} /> {t('settings.addCustomer')}
             </button>

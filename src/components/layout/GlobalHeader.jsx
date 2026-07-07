@@ -107,7 +107,7 @@ function NotificationBell() {
     const center = new Date(n.created_at).getTime()
     const { data, error } = await supabase
       .from('order_line_audit')
-      .select('item_name_he, old_quantity, new_quantity')
+      .select('item_name_he, old_quantity, new_quantity, menu_items(name_he, name_en)')
       .eq('customer_id', n.customer_id)
       .eq('week_id', n.week_id)
       .eq('changed_via', 'customer_portal')
@@ -156,9 +156,12 @@ function NotificationBell() {
                           const isNew = r.old_quantity === null
                           const increasing = !isNew && r.new_quantity > r.old_quantity
                           const color = isNew ? 'var(--accent)' : increasing ? 'var(--green)' : 'var(--red)'
+                          const itemName = r.menu_items
+                            ? (lang === 'en' ? (r.menu_items.name_en || r.menu_items.name_he) : r.menu_items.name_he)
+                            : r.item_name_he
                           return (
                             <div key={i} className="notif-detail-row">
-                              <span>{r.item_name_he}</span>
+                              <span>{itemName || '—'}</span>
                               <span style={{ color }}>
                                 {isNew ? `${t('header.notificationsNewItem')}: ${r.new_quantity}` : `${r.old_quantity} → ${r.new_quantity}`}
                               </span>
