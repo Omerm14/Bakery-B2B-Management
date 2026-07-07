@@ -5,6 +5,7 @@ import { isoToday, toLocalISODate } from '../constants/days'
 import { useToast } from '../context/ToastContext'
 import { buildProductionListHtml, openAndPrint } from '../lib/printHtml'
 import { useTranslation } from '../context/LanguageContext'
+import { customerDisplayName } from '../lib/displayName'
 
 function AnimatedNumber({ value, loading, locale }) {
   const [display, setDisplay] = useState(0)
@@ -59,7 +60,7 @@ export default function Production() {
       const [{ data }, { data: checks }] = await Promise.all([
         supabase
           .from('order_lines')
-          .select('quantity, menu_item_id, menu_items(id, name_he, name_en, unit, category, suppliers(name)), customers!inner(name, active)')
+          .select('quantity, menu_item_id, menu_items(id, name_he, name_en, unit, category, suppliers(name)), customers!inner(name, name_en, active)')
           .eq('delivery_date', selectedDate)
           .eq('status', 'ok')
           .eq('customers.active', true)
@@ -95,7 +96,7 @@ export default function Production() {
           }
         }
         map[id].total_qty += parseFloat(line.quantity)
-        map[id].customers.push({ name: line.customers?.name, qty: line.quantity })
+        map[id].customers.push({ name: line.customers?.name, name_en: line.customers?.name_en, qty: line.quantity })
       }
 
       const sorted = Object.values(map).sort((a, b) => {
@@ -150,7 +151,7 @@ export default function Production() {
           name_he: displayName(i),
           unit: i.unit,
           total_qty: i.total_qty % 1 === 0 ? i.total_qty : i.total_qty.toFixed(1),
-          customerBreakdown: i.customers.map(c => `${c.name} (${c.qty})`).join(', '),
+          customerBreakdown: i.customers.map(c => `${customerDisplayName(c, lang)} (${c.qty})`).join(', '),
         })),
     }))
     const html = buildProductionListHtml({
@@ -272,7 +273,7 @@ export default function Production() {
                       {displayName(item)}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 4 }}>
-                      {item.customers.map(c => `${c.name} (${c.qty})`).join(' · ')}
+                      {item.customers.map(c => `${customerDisplayName(c, lang)} (${c.qty})`).join(' · ')}
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

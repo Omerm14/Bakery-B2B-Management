@@ -8,6 +8,7 @@ import { useToast } from '../context/ToastContext'
 import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
 import { ChevronRight, ChevronLeft, Lock } from 'lucide-react'
 import { useTranslation } from '../context/LanguageContext'
+import { customerDisplayName } from '../lib/displayName'
 
 export default function Forecasting() {
   const toast = useToast()
@@ -240,7 +241,7 @@ export default function Forecasting() {
                 className={'customer-pill' + (selectedCustomer?.id === c.id ? ' active' : '')}
                 onClick={() => setSelectedCustomer(c)}
               >
-                {c.name}
+                {customerDisplayName(c, lang)}
               </div>
             ))}
           </div>
@@ -257,7 +258,7 @@ export default function Forecasting() {
           ) : (
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
               <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--bdr)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700, fontSize: 15 }}>{selectedCustomer.name}</span>
+                <span style={{ fontWeight: 700, fontSize: 15 }}>{customerDisplayName(selectedCustomer, lang)}</span>
                 <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--t3)', alignItems: 'center' }}>
                   {totalFcQty > 0 && <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{t('forecasting.totalForecast')}: {Math.round(totalFcQty * 10) / 10}</span>}
                   <span>{t('forecasting.avg4Weeks')}</span>

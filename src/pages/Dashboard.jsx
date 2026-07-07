@@ -83,11 +83,11 @@ const HISTORY_BATCH = 20
 // Turns a page of `weeks` rows (descending) + their aggregated order rows
 // into the ascending, pre-computed history entries the UI navigates over.
 function buildHistorySegment(weeksDesc, weekRows) {
-  const itemsByWeek = new Map() // week_id → [{name, qty}]
+  const itemsByWeek = new Map() // week_id → [{name_he, name_en, qty}]
   const activeCustomersByWeek = new Map() // week_id → count
   for (const row of weekRows || []) {
     if (!itemsByWeek.has(row.week_id)) itemsByWeek.set(row.week_id, [])
-    itemsByWeek.get(row.week_id).push({ name: row.item_name, qty: parseFloat(row.item_qty) })
+    itemsByWeek.get(row.week_id).push({ name_he: row.item_name, name_en: row.item_name_en, qty: parseFloat(row.item_qty) })
     activeCustomersByWeek.set(row.week_id, row.active_customers)
   }
 
@@ -100,8 +100,8 @@ function buildHistorySegment(weeksDesc, weekRows) {
       const activeCustomers = activeCustomersByWeek.get(w.id) || 0
 
       const sortedItems = [...items].sort((a, b) => b.qty - a.qty)
-      const top10 = sortedItems.slice(0, 10).map(i => ({ name: i.name, qty: Math.round(i.qty * 10) / 10 }))
-      const topItem = sortedItems[0] ? { name: sortedItems[0].name, qty: Math.round(sortedItems[0].qty * 10) / 10 } : null
+      const top10 = sortedItems.slice(0, 10).map(i => ({ name_he: i.name_he, name_en: i.name_en, qty: Math.round(i.qty * 10) / 10 }))
+      const topItem = sortedItems[0] ? { name_he: sortedItems[0].name_he, name_en: sortedItems[0].name_en, qty: Math.round(sortedItems[0].qty * 10) / 10 } : null
 
       // `label` is the compact single-date form used on the trend chart's
       // x-axis (little room per tick); `rangeLabel` spells out the full
@@ -229,8 +229,9 @@ export default function Dashboard() {
   const prevTotal = prevWeek?.qty || 0
   const wowChange = prevTotal > 0 ? Math.round(((thisTotal - prevTotal) / prevTotal) * 100) : null
   const activeCustomers = viewedWeek?.activeCustomers || 0
-  const topItem = viewedWeek?.topItem || null
-  const topItems = viewedWeek?.top10 || []
+  const rawTopItem = viewedWeek?.topItem || null
+  const topItem = rawTopItem ? { ...rawTopItem, name: lang === 'en' ? (rawTopItem.name_en || rawTopItem.name_he) : rawTopItem.name_he } : null
+  const topItems = (viewedWeek?.top10 || []).map(i => ({ ...i, name: lang === 'en' ? (i.name_en || i.name_he) : i.name_he }))
   const maxBar = topItems[0]?.qty || 1
   const trendData = weekHistory.slice(Math.max(0, viewedIndex - (TREND_WINDOW - 1)), viewedIndex + 1)
   const atLatest = viewedIndex >= weekHistory.length - 1

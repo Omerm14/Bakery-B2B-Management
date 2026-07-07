@@ -13,7 +13,7 @@ export default function Settings() {
   const { t } = useTranslation()
   const [tab, setTab] = useState('menu')
   const { menuItems, setMenuItems } = useMenuItems({ activeOnly: false })
-  const { customers, setCustomers } = useCustomers({ activeOnly: false })
+  const { customers, setCustomers, createCustomer } = useCustomers({ activeOnly: false })
   const [suppliers, setSuppliers] = useState([])
   const [filterText, setFilterText] = useState('')
   const { running: importRunning, startImport } = useImport()
@@ -170,6 +170,33 @@ export default function Settings() {
       setCustomers(prev => prev.map(c => c.id === id ? { ...c, phone: prevPhone } : c))
       toast.error(t('settings.toast.phoneUpdateFailed'))
     }
+  }
+
+  async function updateCustomerNameEn(id, nameEn) {
+    const prevNameEn = customers.find(c => c.id === id)?.name_en
+    const value = nameEn.trim() || null
+    if (value === prevNameEn) return
+    setCustomers(prev => prev.map(c => c.id === id ? { ...c, name_en: value } : c))
+    const { error } = await supabase.from('customers').update({ name_en: value }).eq('id', id)
+    if (error) {
+      setCustomers(prev => prev.map(c => c.id === id ? { ...c, name_en: prevNameEn } : c))
+      toast.error(t('settings.toast.nameEnUpdateFailed'))
+    }
+  }
+
+  const [showAddCustomer, setShowAddCustomer] = useState(false)
+  const [newCustomerName, setNewCustomerName] = useState('')
+
+  async function addCustomer() {
+    if (!newCustomerName.trim()) return
+    const { error, reactivated, alreadyActive, data } = await createCustomer(newCustomerName)
+    if (error) {
+      toast.error(alreadyActive ? t('settings.toast.customerAlreadyExists') : t('settings.toast.customerAddFailed'))
+      return
+    }
+    toast.success(`${reactivated ? t('settings.toast.customerReactivated') : t('settings.toast.customerAdded')} ${data.name}`)
+    setNewCustomerName('')
+    setShowAddCustomer(false)
   }
 
   const [settingPin, setSettingPin] = useState(null)
@@ -455,16 +482,31 @@ function AuditLogTab({ filterText }) {
       {/* CUSTOMERS */}
       {tab === 'customers' && (
         <div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowAddCustomer(true)}>
+              <Plus size={14} /> {t('settings.addCustomer')}
+            </button>
+          </div>
           <SearchInput value={filterText} onChange={setFilterText} placeholder={t('settings.searchCustomerPlaceholder')} />
           <div className="card" style={{ padding: 0 }}>
             <table className="itbl">
               <thead>
-                <tr><th>{t('settings.col.name')}</th><th>{t('settings.col.phone')}</th><th>{t('settings.col.portalAccess')}</th><th>{t('settings.col.status')}</th></tr>
+                <tr><th>{t('settings.col.name')}</th><th>{t('settings.col.nameEn')}</th><th>{t('settings.col.phone')}</th><th>{t('settings.col.portalAccess')}</th><th>{t('settings.col.status')}</th></tr>
               </thead>
               <tbody>
                 {sortedCustomers.filter(c => c.name.includes(filterText.trim())).map(c => (
                   <tr key={c.id} style={{ opacity: c.active ? 1 : 0.45 }}>
                     <td style={{ fontWeight: 500 }}>{c.name}</td>
+                    <td>
+                      <input
+                        className="input"
+                        dir="ltr"
+                        style={{ width: 130, padding: '4px 8px' }}
+                        defaultValue={c.name_en ?? ''}
+                        placeholder="Customer Name"
+                        onBlur={e => updateCustomerNameEn(c.id, e.target.value)}
+                      />
+                    </td>
                     <td>
                       <input
                         className="input"
@@ -633,6 +675,30 @@ function AuditLogTab({ filterText }) {
                 {settingPin === pinModalCustomer.id ? t('settings.generating') : t('settings.generateNewPin')}
               </button>
               <button className="btn btn-primary" onClick={() => setPinModalCustomerId(null)}>{t('common.close')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Customer Modal */}
+      {showAddCustomer && (
+        <div className="overlay" onClick={() => setShowAddCustomer(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-title">{t('settings.addCustomerModalTitle')}</div>
+            <div style={{ marginBottom: 16 }}>
+              <label className="lbl">{t('settings.customerNameLabel')}</label>
+              <input
+                className="input"
+                placeholder={t('settings.customerNamePlaceholder')}
+                value={newCustomerName}
+                onChange={e => setNewCustomerName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addCustomer()}
+                autoFocus
+              />
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setShowAddCustomer(false)}>{t('common.cancel')}</button>
+              <button className="btn btn-primary" onClick={addCustomer}>{t('common.add')}</button>
             </div>
           </div>
         </div>

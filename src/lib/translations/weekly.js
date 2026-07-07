@@ -2,7 +2,6 @@ export default {
   he: {
     'weekly.title': 'טבלת ייצור שבועית',
     'weekly.byCategory': 'לפי קטגוריה',
-    'weekly.bySupplier': 'לפי ספק',
     'weekly.byTrend': 'לפי מגמה',
     'weekly.exportExcel': 'ייצוא Excel',
     'weekly.printEnglish': 'הדפסה',
@@ -24,7 +23,6 @@ export default {
   en: {
     'weekly.title': 'Weekly Production Table',
     'weekly.byCategory': 'By Category',
-    'weekly.bySupplier': 'By Supplier',
     'weekly.byTrend': 'By Trend',
     'weekly.exportExcel': 'Export Excel',
     'weekly.printEnglish': 'Print',
