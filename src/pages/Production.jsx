@@ -4,13 +4,9 @@ import { supabase } from '../lib/supabase'
 import { isoToday, toLocalISODate } from '../constants/days'
 import { useToast } from '../context/ToastContext'
 import { buildProductionListHtml, openAndPrint } from '../lib/printHtml'
+import { useTranslation } from '../context/LanguageContext'
 
-const STATUS_CYCLE = { pending: 'done', done: 'pending' }
-const STATUS_LABEL = { pending: 'ממתין', done: 'הושלם' }
-const STATUS_COLOR = { pending: 'var(--t3)', done: 'var(--green)' }
-const STATUS_BG = { pending: 'transparent', done: 'var(--green-tint)' }
-
-function AnimatedNumber({ value, loading }) {
+function AnimatedNumber({ value, loading, locale }) {
   const [display, setDisplay] = useState(0)
   const prev = useRef(0)
   useEffect(() => {
@@ -28,7 +24,7 @@ function AnimatedNumber({ value, loading }) {
     }, 16)
     return () => clearInterval(timer)
   }, [value, loading])
-  return loading ? '—' : display.toLocaleString('he-IL')
+  return loading ? '—' : display.toLocaleString(locale)
 }
 
 function tomorrowIso() {
@@ -39,6 +35,12 @@ function tomorrowIso() {
 
 export default function Production() {
   const toast = useToast()
+  const { t, lang } = useTranslation()
+  const locale = lang === 'en' ? 'en-US' : 'he-IL'
+  const STATUS_CYCLE = { pending: 'done', done: 'pending' }
+  const STATUS_LABEL = { pending: t('production.status.pending'), done: t('production.status.done') }
+  const STATUS_COLOR = { pending: 'var(--t3)', done: 'var(--green)' }
+  const STATUS_BG = { pending: 'transparent', done: 'var(--green-tint)' }
   const [selectedDate, setSelectedDate] = useState(tomorrowIso())
   const [items, setItems] = useState([])
   const [prodStatus, setProdStatus] = useState({}) // menu_item_id → status
@@ -47,13 +49,17 @@ export default function Production() {
 
   useEffect(() => { loadProduction() }, [selectedDate])
 
+  function displayName(item) {
+    return lang === 'en' ? (item.name_en || item.name_he) : item.name_he
+  }
+
   async function loadProduction() {
     setLoading(true)
     try {
       const [{ data }, { data: checks }] = await Promise.all([
         supabase
           .from('order_lines')
-          .select('quantity, menu_item_id, menu_items(id, name_he, unit, category, suppliers(name)), customers!inner(name, active)')
+          .select('quantity, menu_item_id, menu_items(id, name_he, name_en, unit, category, suppliers(name)), customers!inner(name, active)')
           .eq('delivery_date', selectedDate)
           .eq('status', 'ok')
           .eq('customers.active', true)
@@ -80,6 +86,7 @@ export default function Production() {
           map[id] = {
             menu_item_id: id,
             name_he: mi.name_he,
+            name_en: mi.name_en,
             unit: mi.unit,
             category: mi.category || 'כללי',
             supplier: mi.suppliers?.name || 'לא ידוע',
@@ -140,19 +147,21 @@ export default function Production() {
         .slice()
         .sort((a, b) => a.name_he.localeCompare(b.name_he, 'he'))
         .map(i => ({
-          name_he: i.name_he,
+          name_he: displayName(i),
           unit: i.unit,
           total_qty: i.total_qty % 1 === 0 ? i.total_qty : i.total_qty.toFixed(1),
           customerBreakdown: i.customers.map(c => `${c.name} (${c.qty})`).join(', '),
         })),
     }))
     const html = buildProductionListHtml({
-      htmlTitle: `רשימת ייצור לפי מחלקה – ${dateLabel}`,
-      h2: 'רשימת ייצור לפי מחלקה',
+      htmlTitle: `${t('production.exportTitle')} – ${dateLabel}`,
+      h2: t('production.exportTitle'),
       subheading: dateLabel,
       sections,
+      dir: lang === 'en' ? 'ltr' : 'rtl',
+      labels: { item: t('common.item'), byCustomer: t('common.customer'), totalQty: t('production.totalQtyStat') },
     })
-    if (!openAndPrint(html)) toast.error('הדפדפן חסם את חלון ההדפסה')
+    if (!openAndPrint(html)) toast.error(t('production.popupBlocked'))
   }
 
   const suppliers = ['all', ...new Set(items.map(i => i.supplier))]
@@ -169,20 +178,20 @@ export default function Production() {
   const uniqueCustomers = new Set(filtered.flatMap(i => i.customers.map(c => c.name))).size
   const doneCount = filtered.filter(i => (prodStatus[i.menu_item_id] || 'pending') === 'done').length
 
-  const dateLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString('he-IL', {
+  const dateLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString(locale, {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   })
 
   return (
     <div className="page production-page">
       <div className="page-header">
-        <h1 className="page-title">עגלה</h1>
+        <h1 className="page-title">{t('nav.production')}</h1>
         <div style={{ display: 'flex', gap: 6 }}>
           <button className="btn btn-ghost btn-sm no-print" onClick={exportByDepartment}>
-            <FileDown size={15} /> PDF לפי מחלקה
+            <FileDown size={15} /> {t('production.pdfByDept')}
           </button>
           <button className="btn btn-ghost btn-sm no-print" onClick={printView}>
-            <Printer size={15} /> הדפסה
+            <Printer size={15} /> {t('common.print')}
           </button>
         </div>
       </div>
@@ -192,25 +201,25 @@ export default function Production() {
         <button className="btn btn-ghost btn-sm" onClick={() => changeDate(-1)}><ChevronRight size={16} /></button>
         <span className="week-label">{dateLabel}</span>
         <button className="btn btn-ghost btn-sm" onClick={() => changeDate(1)}><ChevronLeft size={16} /></button>
-        <button className="btn btn-ghost btn-sm" onClick={() => setSelectedDate(isoToday())} style={{ fontSize: 12 }}>היום</button>
+        <button className="btn btn-ghost btn-sm" onClick={() => setSelectedDate(isoToday())} style={{ fontSize: 12 }}>{t('common.today')}</button>
       </div>
 
       {/* 4-stat summary */}
       <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 20 }}>
         <div className="card stat-card stat-cyan">
-          <div className="stat-lbl">פריטים</div>
-          <div className="stat-val"><AnimatedNumber value={totalItems} loading={loading} /></div>
+          <div className="stat-lbl">{t('production.itemsStat')}</div>
+          <div className="stat-val"><AnimatedNumber value={totalItems} loading={loading} locale={locale} /></div>
         </div>
         <div className="card stat-card stat-blue">
-          <div className="stat-lbl">כמות כוללת</div>
-          <div className="stat-val"><AnimatedNumber value={totalQty} loading={loading} /></div>
+          <div className="stat-lbl">{t('production.totalQtyStat')}</div>
+          <div className="stat-val"><AnimatedNumber value={totalQty} loading={loading} locale={locale} /></div>
         </div>
         <div className="card stat-card stat-amber">
-          <div className="stat-lbl">לקוחות</div>
-          <div className="stat-val"><AnimatedNumber value={uniqueCustomers} loading={loading} /></div>
+          <div className="stat-lbl">{t('production.customersStat')}</div>
+          <div className="stat-val"><AnimatedNumber value={uniqueCustomers} loading={loading} locale={locale} /></div>
         </div>
         <div className="card stat-card stat-green">
-          <div className="stat-lbl">הושלמו</div>
+          <div className="stat-lbl">{t('production.doneStat')}</div>
           <div className="stat-val" style={{ color: doneCount === totalItems && totalItems > 0 ? 'var(--green)' : undefined }}>
             {loading ? '—' : `${doneCount}/${totalItems}`}
           </div>
@@ -226,7 +235,7 @@ export default function Production() {
               className={'btn btn-sm ' + (filterSupplier === s ? 'btn-primary' : 'btn-ghost')}
               onClick={() => setFilterSupplier(s)}
             >
-              {s === 'all' ? 'הכל' : s}
+              {s === 'all' ? t('common.all') : s}
             </button>
           ))}
         </div>
@@ -239,7 +248,7 @@ export default function Production() {
       ) : filtered.length === 0 ? (
         <div className="empty">
           <div className="empty-icon">✅</div>
-          <div className="empty-text">אין הזמנות לתאריך זה</div>
+          <div className="empty-text">{t('production.emptyText')}</div>
         </div>
       ) : (
         Object.entries(bySupplier).map(([supplier, supplierItems]) => (
@@ -260,7 +269,7 @@ export default function Production() {
                 >
                   <div style={{ flex: 1 }}>
                     <div className="produce-item-name" style={{ textDecoration: isDone ? 'line-through' : 'none' }}>
-                      {item.name_he}
+                      {displayName(item)}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 4 }}>
                       {item.customers.map(c => `${c.name} (${c.qty})`).join(' · ')}
