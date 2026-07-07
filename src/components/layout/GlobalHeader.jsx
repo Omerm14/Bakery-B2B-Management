@@ -7,7 +7,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser'
 const TITLES = {
   '/dashboard': 'דשבורד',
   '/orders': 'הזמנות',
-  '/production': 'ייצור היום',
+  '/production': 'עגלה',
   '/packing': 'אריזה',
   '/weekly': 'טבלת ייצור שבועית',
   '/history': 'היסטוריה',

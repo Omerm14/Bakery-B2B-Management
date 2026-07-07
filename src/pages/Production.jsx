@@ -5,10 +5,10 @@ import { isoToday, toLocalISODate } from '../constants/days'
 import { useToast } from '../context/ToastContext'
 import { buildProductionListHtml, openAndPrint } from '../lib/printHtml'
 
-const STATUS_CYCLE = { pending: 'in_progress', in_progress: 'done', done: 'pending' }
-const STATUS_LABEL = { pending: 'ממתין', in_progress: 'בייצור', done: 'הושלם' }
-const STATUS_COLOR = { pending: 'var(--t3)', in_progress: 'var(--amber)', done: 'var(--green)' }
-const STATUS_BG = { pending: 'transparent', in_progress: 'var(--amber-tint)', done: 'var(--green-tint)' }
+const STATUS_CYCLE = { pending: 'done', done: 'pending' }
+const STATUS_LABEL = { pending: 'ממתין', done: 'הושלם' }
+const STATUS_COLOR = { pending: 'var(--t3)', done: 'var(--green)' }
+const STATUS_BG = { pending: 'transparent', done: 'var(--green-tint)' }
 
 function AnimatedNumber({ value, loading }) {
   const [display, setDisplay] = useState(0)
@@ -31,9 +31,15 @@ function AnimatedNumber({ value, loading }) {
   return loading ? '—' : display.toLocaleString('he-IL')
 }
 
+function tomorrowIso() {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  return toLocalISODate(d)
+}
+
 export default function Production() {
   const toast = useToast()
-  const [selectedDate, setSelectedDate] = useState(isoToday())
+  const [selectedDate, setSelectedDate] = useState(tomorrowIso())
   const [items, setItems] = useState([])
   const [prodStatus, setProdStatus] = useState({}) // menu_item_id → status
   const [loading, setLoading] = useState(false)
@@ -170,7 +176,7 @@ export default function Production() {
   return (
     <div className="page production-page">
       <div className="page-header">
-        <h1 className="page-title">ייצור היום</h1>
+        <h1 className="page-title">עגלה</h1>
         <div style={{ display: 'flex', gap: 6 }}>
           <button className="btn btn-ghost btn-sm no-print" onClick={exportByDepartment}>
             <FileDown size={15} /> PDF לפי מחלקה
@@ -238,7 +244,7 @@ export default function Production() {
       ) : (
         Object.entries(bySupplier).map(([supplier, supplierItems]) => (
           <div key={supplier} className="supplier-group">
-            <div className="supplier-tag">🏭 {supplier}</div>
+            {supplier !== 'לא ידוע' && <div className="supplier-tag">🏭 {supplier}</div>}
             {supplierItems.map(item => {
               const st = prodStatus[item.menu_item_id] || 'pending'
               const isDone = st === 'done'
