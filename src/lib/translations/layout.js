@@ -19,6 +19,9 @@ export default {
     'header.notifications': 'התראות',
     'header.notificationsTitle': 'עדכוני הזמנות מלקוחות',
     'header.notificationsEmpty': 'אין עדכונים',
+    'header.notificationsNoDetail': 'אין פירוט זמין לשינוי זה',
+    'header.notificationsNewItem': 'חדש',
+    'header.notificationsGoToOrder': 'מעבר להזמנה',
     'header.lang': 'English',
   },
   en: {
@@ -41,6 +44,9 @@ export default {
     'header.notifications': 'Notifications',
     'header.notificationsTitle': 'Customer order updates',
     'header.notificationsEmpty': 'No updates',
+    'header.notificationsNoDetail': 'No detail available for this change',
+    'header.notificationsNewItem': 'New',
+    'header.notificationsGoToOrder': 'Go to order',
     'header.lang': 'עברית',
   },
 }

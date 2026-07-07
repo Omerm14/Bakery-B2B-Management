@@ -160,7 +160,7 @@ export default function Login() {
               fontSize: 15, lineHeight: 1.7, color: '#A8B5AE', maxWidth: 320,
               marginBottom: 28, direction: 'rtl',
             }}>
-              Floory מנהל את כל הזמנות הרצפה שלך — מהלקוח ועד הייצור, בלי Excel, בלי טעויות.
+              Floory מנהל את כל ההזמנות והמלאי שלך — מהלקוח ועד הייצור, בלי Excel, בלי טעויות.
             </p>
 
             {/* Metric strip — connected bordered panel */}
@@ -245,7 +245,7 @@ export default function Login() {
 
           <div style={{ marginBottom: 28, direction: 'rtl' }}>
             <h1 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 28, letterSpacing: '-0.02em', color: '#F2F1EA', marginBottom: 6 }}>ברוכים הבאים</h1>
-            <p style={{ fontSize: 15, color: '#A8B5AE' }}>היכנסו לניהול הרצפה החכם של העסק שלכם.</p>
+            <p style={{ fontSize: 15, color: '#A8B5AE' }}>היכנסו לניהול ההזמנות והמלאי החכם של העסק שלכם.</p>
 
             {/* Feature callout */}
             <div style={{
@@ -264,7 +264,7 @@ export default function Login() {
               </div>
               <div>
                 <div style={{ fontWeight: 800, fontSize: 15, color: '#F2F1EA', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
-                  ניהול <span style={{ color: '#3DD6A3' }}>מלא</span> של הרצפה
+                  ניהול <span style={{ color: '#3DD6A3' }}>מלא</span> של ההזמנות והמלאי
                 </div>
                 <div style={{ fontSize: 12, color: '#6E7B74', marginTop: 3 }}>הזמנות · ייצור · אריזה · היסטוריה</div>
               </div>
