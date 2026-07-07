@@ -3,7 +3,7 @@ import { ChevronRight, ChevronLeft, Download } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useWeek } from '../hooks/useWeek'
-import { WEEK_DAYS } from '../constants/days'
+import { WEEK_DAYS, toLocalISODate } from '../constants/days'
 
 export default function Weekly() {
   const week = useWeek()
@@ -47,7 +47,7 @@ export default function Weekly() {
   function prevWeekIso() {
     const d = new Date(week.weekStartISO)
     d.setDate(d.getDate() - 7)
-    return d.toISOString().slice(0, 10)
+    return toLocalISODate(d)
   }
 
   function aggregate(data) {

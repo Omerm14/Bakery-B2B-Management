@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ChevronRight, ChevronLeft, Printer, FileDown } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { isoToday } from '../constants/days'
+import { isoToday, toLocalISODate } from '../constants/days'
 import { useToast } from '../context/ToastContext'
 import { buildProductionListHtml, openAndPrint } from '../lib/printHtml'
 
@@ -114,7 +114,7 @@ export default function Production() {
   function changeDate(delta) {
     const d = new Date(selectedDate)
     d.setDate(d.getDate() + delta)
-    setSelectedDate(d.toISOString().slice(0, 10))
+    setSelectedDate(toLocalISODate(d))
   }
 
   function printView() {

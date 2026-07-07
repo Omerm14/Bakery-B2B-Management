@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { weekStart, formatWeekLabel } from '../constants/days'
+import { weekStart, formatWeekLabel, toLocalISODate } from '../constants/days'
 
 const TREND_WINDOW = 8
 
@@ -157,7 +157,7 @@ export default function Dashboard() {
   async function loadDashboard(isBackgroundRefresh) {
     if (!isBackgroundRefresh) setLoading(true)
     try {
-      const todayIso = weekStart().toISOString().slice(0, 10)
+      const todayIso = toLocalISODate(weekStart())
       const { data: candidateWeeksDesc } = await supabase
         .from('weeks')
         .select('id, start_date')

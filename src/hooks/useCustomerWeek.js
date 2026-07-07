@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { weekStart, dayDate, formatWeekLabel } from '../constants/days'
+import { weekStart, dayDate, formatWeekLabel, toLocalISODate } from '../constants/days'
 import { supabase } from '../lib/supabase'
 
 // Read-only sibling of useWeek — customers only have SELECT access to
@@ -31,7 +31,7 @@ export function useCustomerWeek() {
   }
 
   async function getWeekId() {
-    const isoStart = currentWeekStart.toISOString().slice(0, 10)
+    const isoStart = toLocalISODate(currentWeekStart)
     const { data } = await supabase.from('weeks').select('id').eq('start_date', isoStart).maybeSingle()
     return data?.id ?? null
   }
@@ -39,7 +39,7 @@ export function useCustomerWeek() {
   return {
     currentWeekStart,
     weekLabel: formatWeekLabel(currentWeekStart),
-    weekStartISO: currentWeekStart.toISOString().slice(0, 10),
+    weekStartISO: toLocalISODate(currentWeekStart),
     prevWeek,
     nextWeek,
     goToToday,

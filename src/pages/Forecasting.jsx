@@ -5,7 +5,7 @@ import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useToast } from '../context/ToastContext'
-import { WEEK_DAYS } from '../constants/days'
+import { WEEK_DAYS, toLocalISODate } from '../constants/days'
 import { ChevronRight, ChevronLeft, Lock } from 'lucide-react'
 
 export default function Forecasting() {
@@ -39,7 +39,7 @@ export default function Forecasting() {
       for (let i = 1; i <= 4; i++) {
         const d = new Date(week.weekStartISO)
         d.setDate(d.getDate() - i * 7)
-        prevWeeks.push(d.toISOString().slice(0, 10))
+        prevWeeks.push(toLocalISODate(d))
       }
 
       const { data: weekRows } = await supabase

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Check, Printer } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { isoToday } from '../constants/days'
+import { isoToday, toLocalISODate } from '../constants/days'
 import { buildPackingListHtml, openAndPrint } from '../lib/printHtml'
 import { useToast } from '../context/ToastContext'
 
@@ -86,7 +86,7 @@ export default function Packing() {
   function changeDate(delta) {
     const d = new Date(selectedDate)
     d.setDate(d.getDate() + delta)
-    setSelectedDate(d.toISOString().slice(0, 10))
+    setSelectedDate(toLocalISODate(d))
   }
 
   function isClientDone(client) {

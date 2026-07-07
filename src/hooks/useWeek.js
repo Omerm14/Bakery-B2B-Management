@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { weekStart, dayDate, formatWeekLabel } from '../constants/days'
+import { weekStart, dayDate, formatWeekLabel, toLocalISODate } from '../constants/days'
 import { supabase } from '../lib/supabase'
 
 export function useWeek() {
@@ -26,7 +26,7 @@ export function useWeek() {
   }
 
   async function getOrCreateWeek() {
-    const isoStart = currentWeekStart.toISOString().slice(0, 10)
+    const isoStart = toLocalISODate(currentWeekStart)
     const label = formatWeekLabel(currentWeekStart)
 
     const { data: existing } = await supabase
@@ -50,7 +50,7 @@ export function useWeek() {
   return {
     currentWeekStart,
     weekLabel: formatWeekLabel(currentWeekStart),
-    weekStartISO: currentWeekStart.toISOString().slice(0, 10),
+    weekStartISO: toLocalISODate(currentWeekStart),
     prevWeek,
     nextWeek,
     goToToday,

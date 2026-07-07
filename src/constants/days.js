@@ -45,5 +45,5 @@ export function formatWeekLabel(weekStartDate) {
 }
 
 export function isoToday() {
-  return new Date().toISOString().slice(0, 10)
+  return toLocalISODate(new Date())
 }
