@@ -7,7 +7,7 @@ import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useToast } from '../context/ToastContext'
-import { WEEK_DAYS, toLocalISODate } from '../constants/days'
+import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
 import SearchInput from '../components/SearchInput'
 
 const REASON_LABELS = {
@@ -339,8 +339,6 @@ export default function Orders() {
                   >
                     <Copy size={13} /> {copying ? '...' : 'העתק שבוע קודם'}
                   </button>
-                  <span className="badge badge-noga">נוגה</span>
-                  <span style={{ fontSize: 12, color: 'var(--t3)' }}>= הוזן אוטומטית</span>
                 </div>
                 {showNoteInput && (
                   <input
@@ -361,7 +359,7 @@ export default function Orders() {
                         <th key={d.key}>
                           <div>{d.short}</div>
                           <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>
-                            {week.dayDate(d.key).slice(5).replace('-', '/')}
+                            {formatShortDate(week.dayDate(d.key))}
                           </div>
                         </th>
                       ))}
@@ -385,7 +383,6 @@ export default function Orders() {
                               const line = orderLines[key]
                               const cls = [
                                 'qty-cell',
-                                line?.source === 'noga' ? 'source-noga' : '',
                                 line?.status === 'needs_review' ? 'needs-review' : '',
                               ].filter(Boolean).join(' ')
                               return (
@@ -400,7 +397,6 @@ export default function Orders() {
                                     onChange={e => handleQtyChange(item.id, date, e.target.value)}
                                     onKeyDown={e => handleKeyDown(e, item.id, d.key, date)}
                                     title={[
-                                      line?.source === 'noga' ? 'הוזן ע"י נוגה' : '',
                                       line?.status === 'needs_review' ? 'דורש בדיקה' : '',
                                       line?.change_reason ? `סיבה: ${REASON_LABELS[line.change_reason] || line.change_reason}` : '',
                                       line?.change_note ? `הערה: ${line.change_note}` : '',
@@ -430,7 +426,6 @@ export default function Orders() {
               </div>
               <div style={{ padding: '10px 20px', borderTop: '1px solid var(--bdr)', display: 'flex', gap: 16, fontSize: 12, color: 'var(--t3)' }}>
                 <span>⬜ ידני</span>
-                <span style={{ color: 'var(--accent)' }}>🟦 נוגה</span>
                 <span style={{ color: 'var(--amber)' }}>🟨 דורש בדיקה</span>
               </div>
             </div>
@@ -482,7 +477,7 @@ export default function Orders() {
               />
             </div>
             <div className="alert alert-warn" style={{ marginBottom: 0 }}>
-              הפעולה תדרוס את כל 6 ימי השבוע עבור פריט זה, כולל תאים שהוזנו אוטומטית ע"י נוגה או מסומנים כדורשים בדיקה.
+              הפעולה תדרוס את כל 6 ימי השבוע עבור פריט זה, כולל תאים המסומנים כדורשים בדיקה.
             </div>
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={() => setBulkFillItem(null)} disabled={bulkFilling}>ביטול</button>

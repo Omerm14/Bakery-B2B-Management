@@ -1,95 +1,48 @@
-import { Fragment } from 'react'
-import { WEEK_DAYS } from '../../constants/days'
+import { WEEK_DAYS, formatShortDate } from '../../constants/days'
 
-// Read-only-at-a-glance overview of the whole week — same wide-table
-// layout as the internal staff grid, kept as a secondary view (behind the
-// day/week toggle) for customers who want to see everything at once
-// instead of paging day by day. Still editable per-cell, gated by the
-// same `canEdit` map the day view uses.
-export default function WeekSummaryView({ dayDate, grouped, orderLines, canEdit, onQtyChange }) {
-  const dayTotals = WEEK_DAYS.map(d => {
-    const date = dayDate(d.key)
-    let total = 0
-    for (const key in orderLines) {
-      if (key.endsWith(`_${date}`)) total += orderLines[key]?.quantity || 0
-    }
-    return total
-  })
+// Read-only weekly overview — a stack of day cards, not an editable grid.
+// A 7-column table never reads well on a phone (small touch targets,
+// forced horizontal scroll), so this view is purely for "what's ordered
+// this week at a glance" — tapping a card jumps into the day view, which
+// is the only place editing happens.
+export default function WeekSummaryView({ dayDate, grouped, orderLines, canEdit, onSelectDay }) {
+  const items = Object.values(grouped).flat()
 
   return (
-    <div className="card" style={{ padding: 0, overflow: 'hidden', marginTop: 16 }}>
-      <div className="order-grid-wrap">
-        <table className="order-grid">
-          <thead>
-            <tr>
-              <th className="item-col sticky-col">פריט</th>
-              {WEEK_DAYS.map(d => {
-                const date = dayDate(d.key)
-                const locked = canEdit[date] === false
-                return (
-                  <th key={d.key}>
-                    <div>{d.short}{locked && ' 🔒'}</div>
-                    <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>
-                      {date.slice(5).replace('-', '/')}
-                    </div>
-                  </th>
-                )
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {Object.entries(grouped).map(([cat, items]) => (
-              <Fragment key={cat}>
-                <tr>
-                  <td colSpan={8} style={{ padding: '8px 16px', background: 'var(--surf2)', fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
-                    {cat}
-                  </td>
-                </tr>
-                {items.map(item => (
-                  <tr key={item.id}>
-                    <td className="item-name sticky-col">
-                      {item.name_he}
-                      {item.price != null && <span style={{ marginInlineStart: 6, fontSize: 11, color: 'var(--t3)' }}>{item.price}₪</span>}
-                    </td>
-                    {WEEK_DAYS.map(d => {
-                      const date = dayDate(d.key)
-                      const key = `${item.id}_${date}`
-                      const line = orderLines[key]
-                      const editable = canEdit[date]
-                      return (
-                        <td key={d.key} style={{ textAlign: 'center' }}>
-                          {editable ? (
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              className="qty-cell"
-                              min="0"
-                              step="0.5"
-                              value={line?.quantity || ''}
-                              placeholder="—"
-                              onChange={e => onQtyChange(item.id, date, e.target.value)}
-                            />
-                          ) : (
-                            <span style={{ color: 'var(--t3)', fontSize: 13 }}>{line?.quantity || '—'}</span>
-                          )}
-                        </td>
-                      )
-                    })}
-                  </tr>
+    <div className="week-card-list">
+      {WEEK_DAYS.map(d => {
+        const date = dayDate(d.key)
+        const locked = canEdit[date] === false
+        const activeItems = items.filter(item => (orderLines[`${item.id}_${date}`]?.quantity || 0) > 0)
+        const total = activeItems.reduce((sum, item) => sum + (orderLines[`${item.id}_${date}`]?.quantity || 0), 0)
+        const hasPending = activeItems.some(item => orderLines[`${item.id}_${date}`]?.pending)
+
+        return (
+          <button key={d.key} type="button" className="week-day-card" onClick={() => onSelectDay(d.key)}>
+            <div className="week-day-card-hdr">
+              <div>
+                <div className="week-day-card-label">
+                  {d.label}{locked && ' 🔒'}
+                  {hasPending && <span className="badge-pending" style={{ marginInlineStart: 6 }}>טרם נשלח</span>}
+                </div>
+                <div className="week-day-card-date">{formatShortDate(date)}</div>
+              </div>
+              {total > 0 && <div className="week-day-card-total">{total}</div>}
+            </div>
+            {activeItems.length === 0 ? (
+              <div className="week-day-card-empty">אין הזמנה</div>
+            ) : (
+              <div className="week-day-card-items">
+                {activeItems.map(item => (
+                  <span key={item.id} className="week-day-card-item">
+                    {item.name_he} ×{orderLines[`${item.id}_${date}`].quantity}
+                  </span>
                 ))}
-              </Fragment>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td className="item-name sticky-col" style={{ fontWeight: 700 }}>סה״כ</td>
-              {dayTotals.map((t, i) => (
-                <td key={i} style={{ textAlign: 'center', fontWeight: 700, color: 'var(--t1)' }}>{t || '—'}</td>
-              ))}
-            </tr>
-          </tfoot>
-        </table>
-      </div>
+              </div>
+            )}
+          </button>
+        )
+      })}
     </div>
   )
 }

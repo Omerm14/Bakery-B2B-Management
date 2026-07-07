@@ -121,6 +121,28 @@ body {
 @media (max-width: 1023px) {
   .hd-menu-btn { display: flex; }
 }
+
+/* ─── NOTIFICATION BELL ─── */
+.notif-badge {
+  position: absolute; top: -4px; inset-inline-end: -4px; min-width: 16px; height: 16px; padding: 0 3px;
+  background: var(--red); color: #fff; border-radius: 999px; font: 700 10px var(--font-ui);
+  display: flex; align-items: center; justify-content: center; line-height: 1;
+}
+.notif-panel {
+  position: absolute; top: calc(100% + 8px); inset-inline-end: 0; width: 300px; max-height: 400px;
+  overflow-y: auto; background: var(--surf); border: 1px solid var(--bdr2); border-radius: var(--r);
+  box-shadow: var(--shadow-pop); z-index: 60; animation: scaleIn .15s cubic-bezier(.16,1,.3,1);
+}
+.notif-panel-title { font: 700 12px var(--font-ui); color: var(--t3); padding: 12px 14px 8px; text-transform: uppercase; letter-spacing: .04em; }
+.notif-empty { padding: 20px 14px; text-align: center; color: var(--t3); font-size: 13px; }
+.notif-item {
+  display: block; width: 100%; text-align: start; padding: 10px 14px; border: none; background: transparent;
+  cursor: pointer; border-top: 1px solid var(--bdr); font-family: var(--font-ui);
+}
+.notif-item:hover { background: var(--surf2); }
+.notif-item.unseen { background: var(--accent-tint); }
+.notif-item-name { font-size: 13.5px; font-weight: 600; color: var(--t1); }
+.notif-item-meta { font-size: 11.5px; color: var(--t3); margin-top: 2px; }
 .hd-search {
   display: flex; align-items: center; gap: 8px; height: 34px;
   padding-inline: 12px; background: var(--surf2); border: 1px solid var(--bdr);
@@ -155,7 +177,6 @@ body {
 /* ─── BADGES ─── */
 .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
 .badge-ok     { background: var(--green-tint); color: var(--green); }
-.badge-noga   { background: var(--accent-tint); color: var(--accent); }
 .badge-review { background: var(--amber-tint); color: var(--amber); }
 .badge-manual { background: var(--blue-tint); color: var(--blue); }
 
@@ -217,7 +238,7 @@ body {
 .itbl tr:hover td.sticky-col { background: var(--surf2); }
 .qty-cell { width: 68px; text-align: center; padding: 6px 4px; background: var(--surf2); border: 1px solid var(--bdr); border-radius: 6px; color: var(--t1); font-size: 14px; font-weight: 600; outline: none; transition: border-color .15s; font-family: var(--font-mono); }
 .qty-cell:focus { border-color: var(--accent-bdr); box-shadow: 0 0 0 2px var(--accent-tint); }
-.qty-cell.source-noga { border-color: var(--accent-bdr); background: var(--accent-tint); }
+.qty-cell.qty-cell-locked { border-color: var(--accent-bdr); background: var(--accent-tint); }
 .qty-cell.needs-review { border-color: var(--amber-bdr); background: var(--amber-tint); animation: amberPulse 2s infinite; }
 .qty-cell::-webkit-inner-spin-button, .qty-cell::-webkit-outer-spin-button { -webkit-appearance: none; }
 
@@ -276,7 +297,13 @@ body {
 
 /* ─── WEEK NAV ─── */
 .week-nav { display: flex; align-items: center; gap: 12px; background: var(--surf); border: 1px solid var(--bdr); border-radius: var(--r); padding: 10px 16px; margin-bottom: 20px; }
-.week-label { font-size: 15px; font-weight: 700; flex: 1; text-align: center; }
+/* dir: ltr — this is a "D.M – D.M.YY" range. Left as plain text inside the
+   page's RTL direction, the browser's bidi algorithm visually reorders the
+   two date segments around the en dash (renders "END – START" instead of
+   "START – END") even though the underlying digits/order are correct.
+   Forcing ltr here (the numbers were always meant to read left-to-right
+   anyway) makes it render in the intended order. */
+.week-label { font-size: 15px; font-weight: 700; flex: 1; text-align: center; direction: ltr; }
 
 /* ─── DAY TABS ─── */
 .day-tabs { display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; }
@@ -488,6 +515,29 @@ body {
   .portal-page { padding: 24px; }
 }
 
+/* Week overview (read-only day cards — tap to jump into day view) */
+.week-card-list { display: flex; flex-direction: column; gap: 10px; }
+.week-day-card {
+  display: block; width: 100%; text-align: start; direction: rtl; cursor: pointer;
+  background: var(--surf); border: 1px solid var(--bdr); border-radius: var(--r);
+  padding: 12px 14px; transition: border-color .15s, background .15s; touch-action: manipulation;
+  font-family: var(--font-ui);
+}
+.week-day-card:hover, .week-day-card:active { border-color: var(--accent-bdr); background: var(--surf2); }
+.week-day-card-hdr { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.week-day-card-label { font: 700 14.5px var(--font-display); color: var(--t1); }
+.week-day-card-date { font-size: 11px; color: var(--t3); margin-top: 1px; }
+.week-day-card-total {
+  font-size: 12px; font-weight: 700; color: var(--accent); background: var(--accent-tint);
+  border: 1px solid var(--accent-bdr); border-radius: 20px; padding: 3px 10px; flex-shrink: 0;
+}
+.week-day-card-empty { font-size: 12.5px; color: var(--t3); margin-top: 8px; }
+.week-day-card-items { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.week-day-card-item {
+  font-size: 12px; color: var(--t2); background: var(--surf2); border: 1px solid var(--bdr);
+  border-radius: 20px; padding: 3px 10px;
+}
+
 /* View toggle (day/week segmented control) */
 .view-toggle {
   display: flex; gap: 4px; background: var(--surf); border: 1px solid var(--bdr);
@@ -515,7 +565,14 @@ body {
 /* Day list (item rows) */
 .day-list { display: flex; flex-direction: column; gap: 18px; touch-action: pan-y; }
 .day-list-group { display: flex; flex-direction: column; gap: 2px; }
-.day-list-cat { font-size: 11px; font-weight: 700; color: var(--t3); text-transform: uppercase; letter-spacing: .05em; padding: 6px 2px; }
+.day-list-cat {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
+  font-size: 11px; font-weight: 700; color: var(--t3); text-transform: uppercase; letter-spacing: .05em;
+  padding: 8px 2px; background: none; border: none; cursor: pointer; touch-action: manipulation;
+  font-family: var(--font-ui);
+}
+.day-list-cat-chevron { transition: transform .15s; flex-shrink: 0; }
+.day-list-cat-chevron.collapsed { transform: rotate(-90deg); }
 .day-list-row {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 12px 4px; border-bottom: 1px solid var(--bdr);
@@ -526,6 +583,10 @@ body {
 .badge-autocopy {
   font-size: 10px; font-weight: 700; color: var(--blue); background: var(--blue-tint);
   border: 1px solid var(--blue-bdr); border-radius: 10px; padding: 2px 8px; white-space: nowrap;
+}
+.badge-pending {
+  font-size: 10px; font-weight: 700; color: var(--amber); background: var(--amber-tint);
+  border: 1px solid var(--amber-bdr); border-radius: 10px; padding: 2px 8px; white-space: nowrap;
 }
 
 /* Qty stepper */

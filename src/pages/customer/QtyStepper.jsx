@@ -5,11 +5,12 @@ function roundToStep(n, step) {
 }
 
 // Big tap-target quantity control for mobile: -/+ buttons flank a numeric
-// input (inputMode="decimal" opens the number pad on phones, not the full
-// keyboard). `saveState` renders a small inline indicator so a customer on
-// a flaky connection can see whether a tap actually went through, instead
-// of silently trusting an autosave they can't observe.
-export default function QtyStepper({ value, onChange, disabled, step = 0.5, min = 0, saveState }) {
+// input (inputMode="numeric" opens the plain number pad on phones — no
+// decimal point, since orders are whole units only). `saveState` renders
+// a small inline indicator so a customer on a flaky connection can see
+// whether a tap actually went through, instead of silently trusting an
+// autosave they can't observe.
+export default function QtyStepper({ value, onChange, disabled, step = 1, min = 0, saveState }) {
   const qty = value || 0
 
   function commit(next) {
@@ -29,14 +30,14 @@ export default function QtyStepper({ value, onChange, disabled, step = 0.5, min 
       </button>
       <input
         type="number"
-        inputMode="decimal"
+        inputMode="numeric"
         className="qty-stepper-input"
         value={qty || ''}
         placeholder="0"
         min={min}
         step={step}
         disabled={disabled}
-        onChange={e => onChange(parseFloat(e.target.value) || 0)}
+        onChange={e => onChange(Math.round(parseFloat(e.target.value)) || 0)}
         onFocus={e => e.target.select()}
       />
       <button

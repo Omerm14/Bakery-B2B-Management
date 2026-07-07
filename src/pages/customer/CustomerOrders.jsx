@@ -1,16 +1,12 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { ChevronRight, ChevronLeft, LogOut } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { ChevronRight, ChevronLeft, LogOut, Copy, Send } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useCustomerWeek } from '../../hooks/useCustomerWeek'
 import { useCustomerMenuItems } from '../../hooks/useCustomerMenuItems'
 import { useToast } from '../../context/ToastContext'
-import { WEEK_DAYS } from '../../constants/days'
+import { WEEK_DAYS, formatShortDate, dayDate, toLocalISODate } from '../../constants/days'
 import DayOrderView from './DayOrderView'
 import WeekSummaryView from './WeekSummaryView'
-import CutoffBlockedNotice from './CutoffBlockedNotice'
-
-const AUTOSAVE_DEBOUNCE_MS = 450
-const SAVED_INDICATOR_MS = 1500
 
 export default function CustomerOrders() {
   const toast = useToast()
@@ -18,20 +14,23 @@ export default function CustomerOrders() {
   const { menuItems, loading: itemsLoading } = useCustomerMenuItems()
   const [customer, setCustomer] = useState(null)
   const [weekId, setWeekId] = useState(null)
-  const [orderLines, setOrderLines] = useState({}) // `${menuItemId}_${date}` -> line
-  const [lockAtByDate, setLockAtByDate] = useState({}) // date -> timestamptz string
+  // `${menuItemId}_${date}` -> { quantity, id?, pending? }. Last week's
+  // amount is carried forward and written through immediately (silently,
+  // same as the existing Wednesday auto-copy) — the customer never needs
+  // to "confirm" an unchanged default. `pending: true` marks only a value
+  // the customer has actually typed this session, which stays local-only
+  // until שלח הזמנה sends it.
+  const [orderLines, setOrderLines] = useState({})
+  const [lockAtByDate, setLockAtByDate] = useState({})
   const [loading, setLoading] = useState(false)
-  const [saveStates, setSaveStates] = useState({}) // key -> 'saving' | 'saved'
+  const [loadError, setLoadError] = useState(false)
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('floory_portal_view') || 'day')
   const [dayOffset, setDayOffset] = useState(() => new Date().getDay())
   const [nowTick, setNowTick] = useState(() => Date.now())
-  const pendingTimers = useRef({})
+  const [resetting, setResetting] = useState(false)
+  const [sending, setSending] = useState(false)
 
   useEffect(() => { localStorage.setItem('floory_portal_view', viewMode) }, [viewMode])
-
-  useEffect(() => () => {
-    Object.values(pendingTimers.current).forEach(clearTimeout)
-  }, [])
 
   // Ticks every minute so a day that's currently editable locks itself in
   // the UI at the exact cutoff instant, without needing a page refresh.
@@ -53,11 +52,47 @@ export default function CustomerOrders() {
     document.title = customer ? `הזמנות — ${customer.name}` : 'הזמנות'
   }, [customer])
 
+  // Previous week's quantities (qty > 0 only), keyed by `${menuItemId}_${dayOffset}`
+  // (0-6) rather than a date string, so the caller can shift it onto
+  // whichever week is currently being viewed.
+  const fetchPreviousWeekQtyByOffset = useCallback(async () => {
+    if (!customer) return {}
+    const prevWeekStart = new Date(week.weekStartISO)
+    prevWeekStart.setDate(prevWeekStart.getDate() - 7)
+    const prevWeekStartIso = toLocalISODate(prevWeekStart)
+
+    const { data: prevWeekRow } = await supabase.from('weeks').select('id').eq('start_date', prevWeekStartIso).maybeSingle()
+    if (!prevWeekRow) return {}
+
+    const { data: prevLines } = await supabase
+      .from('order_lines')
+      .select('menu_item_id, delivery_date, quantity')
+      .eq('week_id', prevWeekRow.id)
+      .eq('customer_id', customer.id)
+      .gt('quantity', 0)
+
+    const dateToOffset = {}
+    WEEK_DAYS.forEach(d => { dateToOffset[dayDate(prevWeekStart, d.key)] = d.key })
+
+    const result = {}
+    for (const l of prevLines || []) {
+      const offset = dateToOffset[l.delivery_date]
+      if (offset != null) result[`${l.menu_item_id}_${offset}`] = l.quantity
+    }
+    return result
+  }, [customer, week.weekStartISO])
+
   const loadWeek = useCallback(async () => {
     if (!customer) return
     setLoading(true)
+    setLoadError(false)
     try {
-      const wid = await week.getWeekId()
+      const { id: wid, error: weekIdError } = await week.getWeekId()
+      if (weekIdError) {
+        setLoadError(true)
+        toast.error('טעינת השבוע נכשלה — נסו שוב')
+        return
+      }
       setWeekId(wid)
 
       const lockAts = {}
@@ -69,24 +104,68 @@ export default function CustomerOrders() {
         lockAts[date] = data
       }))
       setLockAtByDate(lockAts)
-      if (lockAtFailed) toast.error('בדיקת מועדי העדכון נכשלה — רעננו ונסו שוב')
-
-      if (!wid) { setOrderLines({}); return }
-
-      const { data: lines, error: linesError } = await supabase
-        .from('order_lines')
-        .select('id, menu_item_id, delivery_date, quantity, change_reason')
-        .eq('week_id', wid)
-        .eq('customer_id', customer.id)
-      if (linesError) toast.error('טעינת ההזמנה נכשלה — רעננו ונסו שוב')
+      if (lockAtFailed) { setLoadError(true); toast.error('בדיקת מועדי העדכון נכשלה — נסו שוב') }
 
       const map = {}
-      for (const l of lines || []) map[`${l.menu_item_id}_${l.delivery_date}`] = l
+      if (wid) {
+        const { data: lines, error: linesError } = await supabase
+          .from('order_lines')
+          .select('id, menu_item_id, delivery_date, quantity, change_reason')
+          .eq('week_id', wid)
+          .eq('customer_id', customer.id)
+        if (linesError) { setLoadError(true); toast.error('טעינת ההזמנה נכשלה — נסו שוב') }
+        for (const l of lines || []) map[`${l.menu_item_id}_${l.delivery_date}`] = l
+
+        // Carry last week's quantities into any cell with no real row yet
+        // — written through immediately (same as the Wednesday auto-copy,
+        // just triggered by a view instead of a schedule), not just shown
+        // locally, so the customer never has to "confirm" a default that
+        // hasn't changed. Only touches days still open for editing.
+        const prevQtyByItemOffset = await fetchPreviousWeekQtyByOffset()
+        const autoDefaults = []
+        for (const item of menuItems) {
+          for (const d of WEEK_DAYS) {
+            const date = week.dayDate(d.key)
+            // Use the lock times just fetched above directly — the
+            // memoized `canEdit` in component scope reflects the PREVIOUS
+            // render's lockAtByDate, not what this same load just computed.
+            const lockAt = lockAts[date]
+            const dateCanEdit = lockAt ? Date.now() < new Date(lockAt).getTime() : true
+            if (!dateCanEdit) continue
+            const key = `${item.id}_${date}`
+            if (map[key]) continue
+            const prevQty = prevQtyByItemOffset[`${item.id}_${d.key}`]
+            if (!(prevQty > 0)) continue
+            map[key] = { quantity: prevQty, change_reason: 'auto_copy' }
+            autoDefaults.push({
+              week_id: wid,
+              customer_id: customer.id,
+              menu_item_id: item.id,
+              delivery_date: date,
+              quantity: prevQty,
+              source: 'manual',
+              status: 'ok',
+              change_reason: 'auto_copy',
+              change_note: 'הועתק אוטומטית משבוע קודם בעת צפיית הלקוח',
+              changed_by: customer.phone || customer.name,
+              changed_via: 'customer_portal',
+              updated_at: new Date().toISOString(),
+            })
+          }
+        }
+        if (autoDefaults.length) {
+          const { error: defaultsErr } = await supabase
+            .from('order_lines')
+            .upsert(autoDefaults, { onConflict: 'week_id,customer_id,menu_item_id,delivery_date' })
+          if (defaultsErr) console.error('[CustomerOrders.loadWeek] auto-default write-through failed', defaultsErr)
+        }
+      }
+
       setOrderLines(map)
     } finally {
       setLoading(false)
     }
-  }, [customer, week.weekStartISO])
+  }, [customer, week.weekStartISO, menuItems, fetchPreviousWeekQtyByOffset])
 
   useEffect(() => { loadWeek() }, [loadWeek])
 
@@ -100,54 +179,104 @@ export default function CustomerOrders() {
     return map
   }, [lockAtByDate, nowTick, week.weekStartISO])
 
-  async function commitQty(menuItemId, date, qty, key) {
-    if (!weekId || !customer) return
-    setSaveStates(prev => ({ ...prev, [key]: 'saving' }))
+  // Local-only edit — nothing is written to the database here. The value
+  // just becomes part of this tab's draft until שלח הזמנה is pressed.
+  function handleQtyChange(menuItemId, date, rawValue) {
+    if (!canEdit[date] || !customer) return
+    const qty = Math.round(parseFloat(rawValue)) || 0
+    const key = `${menuItemId}_${date}`
+    setOrderLines(prev => ({ ...prev, [key]: { ...prev[key], quantity: qty, pending: true } }))
+  }
+
+  // Overwrites the current draft (not-yet-sent editable days only) with
+  // last week's quantities — a manual "start over from last week" reset,
+  // on top of the automatic per-cell suggestion loadWeek() already does
+  // for empty cells. Still doesn't touch the database; the customer
+  // reviews and sends afterward like any other edit.
+  async function resetDraftToPreviousWeek() {
+    if (!customer || !weekId || resetting) return
+    if (!window.confirm('הכמויות המוצגות (שטרם נשלחו) יוחלפו בכמויות מהשבוע הקודם. השינוי לא יישלח עד שתלחצו על "שלח הזמנה". להמשיך?')) return
+
+    setResetting(true)
     try {
-      const { data, error } = await supabase
-        .from('order_lines')
-        .upsert({
+      const prevQtyByItemOffset = await fetchPreviousWeekQtyByOffset()
+      if (!Object.keys(prevQtyByItemOffset).length) { toast.info('אין הזמנה בשבוע הקודם להעתקה'); return }
+
+      setOrderLines(prev => {
+        const next = { ...prev }
+        for (const item of menuItems) {
+          for (const d of WEEK_DAYS) {
+            const date = week.dayDate(d.key)
+            if (canEdit[date] === false) continue
+            const key = `${item.id}_${date}`
+            const prevQty = prevQtyByItemOffset[`${item.id}_${d.key}`] || 0
+            next[key] = { ...next[key], quantity: prevQty, pending: true }
+          }
+        }
+        return next
+      })
+      toast.success('הכמויות מהשבוע הקודם נטענו — בדקו ולחצו על "שלח הזמנה" לאישור')
+    } catch (err) {
+      console.error('[CustomerOrders.resetDraftToPreviousWeek]', err)
+      toast.error('טעינת השבוע הקודם נכשלה')
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  // The one action that actually updates the real order for anything the
+  // customer has genuinely touched this session — untouched defaults are
+  // already real (loadWeek writes those through immediately), so this
+  // only ever sends `pending` entries, not the whole week.
+  async function sendOrder() {
+    if (!customer || !weekId || sending) return
+
+    setSending(true)
+    try {
+      let skippedLocked = 0
+      const upserts = []
+      for (const [key, line] of Object.entries(orderLines)) {
+        if (!line.pending) continue
+        const [menuItemId, date] = key.split('_')
+        if (canEdit[date] === false) { skippedLocked++; continue }
+        upserts.push({
           week_id: weekId,
           customer_id: customer.id,
           menu_item_id: menuItemId,
           delivery_date: date,
-          quantity: qty,
+          quantity: line.quantity,
           source: 'manual',
           status: 'ok',
           change_reason: 'customer_request',
           changed_by: customer.phone || customer.name,
           changed_via: 'customer_portal',
           updated_at: new Date().toISOString(),
-        }, { onConflict: 'week_id,customer_id,menu_item_id,delivery_date' })
-        .select('id')
-        .single()
-      if (error) throw error
-      setOrderLines(prev => ({ ...prev, [key]: { ...prev[key], id: data?.id } }))
-      setSaveStates(prev => ({ ...prev, [key]: 'saved' }))
-      setTimeout(() => {
-        setSaveStates(prev => {
-          if (prev[key] !== 'saved') return prev
-          const next = { ...prev }
-          delete next[key]
-          return next
         })
-      }, SAVED_INDICATOR_MS)
+      }
+
+      if (!upserts.length) {
+        toast.info(skippedLocked > 0 ? 'כל הימים הרלוונטיים נעולים לעדכון' : 'אין שינויים לשליחה')
+        return
+      }
+
+      const { error } = await supabase
+        .from('order_lines')
+        .upsert(upserts, { onConflict: 'week_id,customer_id,menu_item_id,delivery_date' })
+      if (error) throw error
+
+      const { error: notifyErr } = await supabase
+        .from('order_change_notifications')
+        .insert({ customer_id: customer.id, week_id: weekId })
+      if (notifyErr) console.error('[CustomerOrders.sendOrder] notification insert failed', notifyErr)
+
+      await loadWeek()
+      toast.success(skippedLocked > 0 ? `ההזמנה נשלחה — ${skippedLocked} ימים נעולים לא עודכנו` : 'ההזמנה נשלחה בהצלחה')
     } catch (err) {
-      console.error('[CustomerOrders.commitQty]', err)
-      toast.error('השמירה נכשלה — נסו שוב')
-      setSaveStates(prev => { const next = { ...prev }; delete next[key]; return next })
+      console.error('[CustomerOrders.sendOrder]', err)
+      toast.error('שליחת ההזמנה נכשלה — נסו שוב')
+    } finally {
+      setSending(false)
     }
-  }
-
-  function handleQtyChange(menuItemId, date, rawValue) {
-    if (!canEdit[date] || !customer) return
-    const qty = parseFloat(rawValue) || 0
-    const key = `${menuItemId}_${date}`
-
-    setOrderLines(prev => ({ ...prev, [key]: { ...prev[key], quantity: qty, change_reason: 'customer_request' } }))
-
-    if (pendingTimers.current[key]) clearTimeout(pendingTimers.current[key])
-    pendingTimers.current[key] = setTimeout(() => commitQty(menuItemId, date, qty, key), AUTOSAVE_DEBOUNCE_MS)
   }
 
   function dayTotal(date) {
@@ -189,7 +318,6 @@ export default function CustomerOrders() {
   }, {})
 
   const selectedDate = week.dayDate(dayOffset)
-  const allDaysLocked = WEEK_DAYS.every(d => canEdit[week.dayDate(d.key)] === false)
 
   return (
     <div className="page portal-page" style={{ maxWidth: 900, margin: '0 auto' }}>
@@ -216,38 +344,51 @@ export default function CustomerOrders() {
         <button className="btn btn-ghost btn-sm" onClick={goToToday} style={{ fontSize: 12 }}>השבוע</button>
       </div>
 
+      {weekId && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+          <button className="btn btn-ghost btn-sm" onClick={resetDraftToPreviousWeek} disabled={resetting}>
+            <Copy size={14} /> {resetting ? 'טוען...' : 'העתק מהשבוע שעבר'}
+          </button>
+          <button className="btn btn-primary btn-sm" onClick={sendOrder} disabled={sending}>
+            <Send size={14} /> {sending ? 'שולח...' : 'שלח הזמנה'}
+          </button>
+        </div>
+      )}
+
       {loading || itemsLoading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
           {[...Array(6)].map((_, i) => <div key={i} className="shimmer" style={{ height: 48 }} />)}
+        </div>
+      ) : loadError ? (
+        <div className="empty">
+          <div className="empty-icon">⚠️</div>
+          <div className="empty-text">משהו השתבש בטעינת ההזמנה</div>
+          <button className="btn btn-secondary btn-sm" style={{ marginTop: 12 }} onClick={loadWeek}>נסה שוב</button>
         </div>
       ) : !weekId ? (
         <div className="empty"><div className="empty-icon">📋</div><div className="empty-text">ההזמנות לשבוע זה עדיין לא נפתחו</div></div>
       ) : viewMode === 'day' ? (
         <DayOrderView
           dayLabel={WEEK_DAYS[dayOffset].label}
-          dateLabel={selectedDate.slice(5).replace('-', '/')}
+          dateLabel={formatShortDate(selectedDate)}
           date={selectedDate}
           grouped={grouped}
           orderLines={orderLines}
           canEdit={canEdit[selectedDate]}
           lockAt={lockAtByDate[selectedDate]}
-          saveStates={saveStates}
           onQtyChange={handleQtyChange}
           onPrevDay={prevDay}
           onNextDay={nextDay}
           dayTotal={dayTotal(selectedDate)}
         />
       ) : (
-        <>
-          <WeekSummaryView
-            dayDate={week.dayDate}
-            grouped={grouped}
-            orderLines={orderLines}
-            canEdit={canEdit}
-            onQtyChange={handleQtyChange}
-          />
-          {allDaysLocked && <div style={{ marginTop: 12 }}><CutoffBlockedNotice /></div>}
-        </>
+        <WeekSummaryView
+          dayDate={week.dayDate}
+          grouped={grouped}
+          orderLines={orderLines}
+          canEdit={canEdit}
+          onSelectDay={offset => { setDayOffset(offset); setViewMode('day') }}
+        />
       )}
     </div>
   )

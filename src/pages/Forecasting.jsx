@@ -5,7 +5,7 @@ import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useToast } from '../context/ToastContext'
-import { WEEK_DAYS, toLocalISODate } from '../constants/days'
+import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
 import { ChevronRight, ChevronLeft, Lock } from 'lucide-react'
 
 export default function Forecasting() {
@@ -275,7 +275,7 @@ export default function Forecasting() {
                           <th key={d.key}>
                             <div>{d.short}</div>
                             <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 2 }}>
-                              {week.dayDate(d.key).slice(5).replace('-', '/')}
+                              {formatShortDate(week.dayDate(d.key))}
                             </div>
                           </th>
                         ))}
@@ -320,7 +320,7 @@ export default function Forecasting() {
                                       <td key={d.key} style={{ textAlign: 'center' }}>
                                         <input
                                           type="number"
-                                          className={'qty-cell' + (isLocked ? ' source-noga' : '')}
+                                          className={'qty-cell' + (isLocked ? ' qty-cell-locked' : '')}
                                           min="0"
                                           step="0.5"
                                           value={displayVal}
