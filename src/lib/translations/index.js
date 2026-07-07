@@ -6,11 +6,12 @@ import production from './production'
 import dashboard from './dashboard'
 import history from './history'
 import forecasting from './forecasting'
+import orders from './orders'
 
 // Each page contributes its own { he: {...}, en: {...} } dictionary --
 // merged here into one flat lookup table per language. Keys are
 // dot-namespaced by page (e.g. 'dashboard.title') to avoid collisions.
-const sources = [common, layout, packing, weekly, production, dashboard, history, forecasting]
+const sources = [common, layout, packing, weekly, production, dashboard, history, forecasting, orders]
 
 function merge(langKey) {
   return sources.reduce((acc, src) => ({ ...acc, ...src[langKey] }), {})
