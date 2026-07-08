@@ -62,7 +62,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
             aria-label={collapsed ? t('nav.expand') : t('nav.collapse')}
             title={collapsed ? t('nav.expand') : t('nav.collapse')}
           >
-            <ChevronLeft size={13} style={{ transform: collapsed ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
+            <ChevronLeft size={13} style={{ transform: collapsed ? 'none' : 'rotate(180deg)', transition: 'transform .2s' }} />
           </button>
         )}
 
