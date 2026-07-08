@@ -115,7 +115,7 @@ function ProtectedLayout({ children, isDark, onToggleTheme }) {
   return (
     <LanguageProvider>
       <div className="app-shell">
-        <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} />
+        <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} isDark={isDark} />
         <div className="app-main">
           <GlobalHeader isDark={isDark} onToggleTheme={onToggleTheme} onMenuOpen={() => setMobileOpen(true)} onSearchOpen={() => setSearchOpen(true)} />
           {children}
