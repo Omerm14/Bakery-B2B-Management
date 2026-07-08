@@ -153,6 +153,44 @@ export default function Settings() {
     }
   }
 
+  async function updateItemNameHe(id, nameHe) {
+    const value = nameHe.trim()
+    const prevNameHe = menuItems.find(i => i.id === id)?.name_he
+    if (!value || value === prevNameHe) return
+    setMenuItems(prev => prev.map(i => i.id === id ? { ...i, name_he: value } : i))
+    const { error } = await supabase.from('menu_items').update({ name_he: value }).eq('id', id)
+    if (error) {
+      setMenuItems(prev => prev.map(i => i.id === id ? { ...i, name_he: prevNameHe } : i))
+      toast.error(t('settings.toast.nameHeUpdateFailed'))
+    }
+  }
+
+  async function updateItemUnit(id, unit) {
+    const prevUnit = menuItems.find(i => i.id === id)?.unit
+    if (unit === prevUnit) return
+    setMenuItems(prev => prev.map(i => i.id === id ? { ...i, unit } : i))
+    const { error } = await supabase.from('menu_items').update({ unit }).eq('id', id)
+    if (error) {
+      setMenuItems(prev => prev.map(i => i.id === id ? { ...i, unit: prevUnit } : i))
+      toast.error(t('settings.toast.unitUpdateFailed'))
+    }
+  }
+
+  async function updateItemSupplier(id, supplierId) {
+    const prevItem = menuItems.find(i => i.id === id)
+    const prevSupplierId = prevItem?.supplier_id ?? null
+    const prevSupplier = prevItem?.suppliers ?? null
+    const value = supplierId || null
+    if (value === prevSupplierId) return
+    const nextSupplier = value ? suppliers.find(s => s.id === value) : null
+    setMenuItems(prev => prev.map(i => i.id === id ? { ...i, supplier_id: value, suppliers: nextSupplier ? { name: nextSupplier.name } : null } : i))
+    const { error } = await supabase.from('menu_items').update({ supplier_id: value }).eq('id', id)
+    if (error) {
+      setMenuItems(prev => prev.map(i => i.id === id ? { ...i, supplier_id: prevSupplierId, suppliers: prevSupplier } : i))
+      toast.error(t('settings.toast.supplierUpdateFailed'))
+    }
+  }
+
   async function updateItemNameEn(id, nameEn) {
     const prevNameEn = menuItems.find(i => i.id === id)?.name_en ?? null
     const value = nameEn.trim() || null
@@ -466,7 +504,14 @@ function AuditLogTab({ filterText }) {
               <tbody>
                 {sortedMenuItems.filter(item => item.name_he.includes(filterText.trim())).map(item => (
                   <tr key={item.id} style={{ opacity: item.active ? 1 : 0.45 }}>
-                    <td style={{ fontWeight: 500 }}>{item.name_he}</td>
+                    <td>
+                      <input
+                        className="input"
+                        style={{ width: 130, padding: '4px 8px', fontWeight: 500 }}
+                        defaultValue={item.name_he}
+                        onBlur={e => updateItemNameHe(item.id, e.target.value)}
+                      />
+                    </td>
                     <td>
                       <input
                         className="input"
@@ -477,7 +522,16 @@ function AuditLogTab({ filterText }) {
                         onBlur={e => updateItemNameEn(item.id, e.target.value)}
                       />
                     </td>
-                    <td>{item.unit}</td>
+                    <td>
+                      <select
+                        className="input"
+                        style={{ fontSize: 12, padding: '4px 8px', minWidth: 90 }}
+                        value={item.unit}
+                        onChange={e => updateItemUnit(item.id, e.target.value)}
+                      >
+                        {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                      </select>
+                    </td>
                     <td>
                       <select
                         className="input"
@@ -490,7 +544,17 @@ function AuditLogTab({ filterText }) {
                         <option value="__new__">{t('settings.newCategoryOption')}</option>
                       </select>
                     </td>
-                    <td>{item.suppliers?.name || '—'}</td>
+                    <td>
+                      <select
+                        className="input"
+                        style={{ fontSize: 12, padding: '4px 8px', minWidth: 130 }}
+                        value={item.supplier_id || ''}
+                        onChange={e => updateItemSupplier(item.id, e.target.value)}
+                      >
+                        <option value="">{t('settings.noSupplierOption')}</option>
+                        {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    </td>
                     <td>
                       <input
                         className="input"

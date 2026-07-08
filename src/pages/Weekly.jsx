@@ -297,27 +297,28 @@ export default function Weekly() {
                     {weekChange === null ? '—' : `${weekChange > 0 ? '+' : ''}${weekChange}%`}
                   </td>
                 </tr>
-                {Object.entries(grouped).map(([group, items]) => {
+                {Object.entries(grouped).map(([group, items], groupIdx) => {
                   const groupTotal = items.reduce((s, r) => s + r.total, 0)
                   const groupPrev = items.reduce((s, r) => s + (prevRows[r.menu_item_id] || 0), 0)
                   const gChange = groupPrev > 0 ? Math.round(((groupTotal - groupPrev) / groupPrev) * 100) : null
                   return (
                     <>
                       <tr key={`g-${group}`}>
-                        <td colSpan={12} style={{ background: 'var(--accent-tint)', padding: '8px 14px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span className="supplier-tag" style={{ marginBottom: 0 }}>
-                              {viewMode === 'trend' ? TREND_ICONS[group] : '📦'} {groupLabel(group)}
-                            </span>
-                            <span style={{ fontSize: 12, color: 'var(--t2)', fontWeight: 600 }}>
-                              {groupTotal.toLocaleString(locale)}
-                              {gChange !== null && (
-                                <span style={{ marginInlineStart: 8, color: gChange >= 0 ? 'var(--green)' : 'var(--red)' }}>
-                                  {gChange > 0 ? '+' : ''}{gChange}%
-                                </span>
-                              )}
-                            </span>
-                          </div>
+                        <td className="sticky-col" colSpan={2} style={{ background: 'var(--accent-tint)', padding: '8px 14px' }}>
+                          <span className="supplier-tag" style={{ marginBottom: 0 }}>
+                            {viewMode === 'trend' ? TREND_ICONS[group] : '📦'} {groupLabel(group)}
+                          </span>
+                        </td>
+                        {WEEK_DAYS.map(d => (
+                          <td key={d.key} style={{ textAlign: 'center', fontSize: 11, color: 'var(--t3)', background: 'var(--accent-tint)' }}>
+                            {groupIdx > 0 && `${lang === 'en' ? d.short_en : d.short} ${formatShortDate(week.dayDate(d.key))}`}
+                          </td>
+                        ))}
+                        <td style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, color: 'var(--t2)', background: 'var(--accent-tint)' }}>
+                          {groupTotal.toLocaleString(locale)}
+                        </td>
+                        <td style={{ textAlign: 'center', fontSize: 12, background: 'var(--accent-tint)', color: gChange === null ? 'var(--t3)' : gChange >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                          {gChange === null ? '—' : `${gChange > 0 ? '+' : ''}${gChange}%`}
                         </td>
                       </tr>
                       {items.map(row => {

@@ -13,6 +13,8 @@ export default {
     'packing.packedAt': 'נארז',
     'packing.printTitleClient': 'שליחה',
     'packing.printTitleAll': 'רשימות אריזה',
+    'packing.markAll': 'סמן הכל כנארז',
+    'packing.unmarkAll': 'בטל סימון הכל',
   },
   en: {
     'packing.title': 'Daily Packing',
@@ -28,5 +30,7 @@ export default {
     'packing.packedAt': 'Packed at',
     'packing.printTitleClient': 'Delivery',
     'packing.printTitleAll': 'Packing lists',
+    'packing.markAll': 'Mark all as packed',
+    'packing.unmarkAll': 'Unmark all',
   },
 }

@@ -6,6 +6,23 @@ import { useToast } from '../context/ToastContext'
 import { buildProductionListHtml, openAndPrint } from '../lib/printHtml'
 import { useTranslation } from '../context/LanguageContext'
 import { customerDisplayName } from '../lib/displayName'
+import { CATEGORY_ORDER, displayCategoryLabel } from '../constants/categories'
+
+// Ordered-bucket grouping (same pattern as Weekly.jsx's groupRows()): fixed
+// CATEGORY_ORDER first, then any leftover categories sorted alphabetically.
+function groupByCategory(itemList) {
+  const buckets = {}
+  for (const item of itemList) {
+    const k = item.category
+    if (!buckets[k]) buckets[k] = []
+    buckets[k].push(item)
+  }
+  const result = {}
+  for (const k of CATEGORY_ORDER) if (buckets[k]?.length) result[k] = buckets[k]
+  const rest = Object.keys(buckets).filter(k => !CATEGORY_ORDER.includes(k)).sort((a, b) => a.localeCompare(b, 'he'))
+  for (const k of rest) result[k] = buckets[k]
+  return result
+}
 
 function AnimatedNumber({ value, loading, locale }) {
   const [display, setDisplay] = useState(0)
@@ -99,11 +116,7 @@ export default function Production() {
         map[id].customers.push({ name: line.customers?.name, name_en: line.customers?.name_en, qty: line.quantity })
       }
 
-      const sorted = Object.values(map).sort((a, b) => {
-        if (a.supplier !== b.supplier) return a.supplier.localeCompare(b.supplier, 'he')
-        if (a.category !== b.category) return a.category.localeCompare(b.category, 'he')
-        return a.name_he.localeCompare(b.name_he, 'he')
-      })
+      const sorted = Object.values(map).sort((a, b) => a.name_he.localeCompare(b.name_he, 'he'))
       setItems(sorted)
     } finally {
       setLoading(false)
@@ -136,15 +149,10 @@ export default function Production() {
   }
 
   function exportByDepartment() {
-    const byCategory = items.reduce((acc, item) => {
-      if (!acc[item.category]) acc[item.category] = []
-      acc[item.category].push(item)
-      return acc
-    }, {})
-    const categories = Object.keys(byCategory).sort((a, b) => a.localeCompare(b, 'he'))
-    const sections = categories.map(cat => ({
-      heading: cat,
-      items: byCategory[cat]
+    const byCategory = groupByCategory(items)
+    const sections = Object.entries(byCategory).map(([cat, catItems]) => ({
+      heading: displayCategoryLabel(cat),
+      items: catItems
         .slice()
         .sort((a, b) => a.name_he.localeCompare(b.name_he, 'he'))
         .map(i => ({
@@ -168,11 +176,7 @@ export default function Production() {
   const suppliers = ['all', ...new Set(items.map(i => i.supplier))]
   const filtered = filterSupplier === 'all' ? items : items.filter(i => i.supplier === filterSupplier)
 
-  const bySupplier = filtered.reduce((acc, item) => {
-    if (!acc[item.supplier]) acc[item.supplier] = []
-    acc[item.supplier].push(item)
-    return acc
-  }, {})
+  const byCategory = groupByCategory(filtered)
 
   const totalItems = filtered.length
   const totalQty = filtered.reduce((s, i) => s + i.total_qty, 0)
@@ -252,10 +256,10 @@ export default function Production() {
           <div className="empty-text">{t('production.emptyText')}</div>
         </div>
       ) : (
-        Object.entries(bySupplier).map(([supplier, supplierItems]) => (
-          <div key={supplier} className="supplier-group">
-            {supplier !== 'לא ידוע' && <div className="supplier-tag">🏭 {supplier}</div>}
-            {supplierItems.map(item => {
+        Object.entries(byCategory).map(([category, categoryItems]) => (
+          <div key={category} className="supplier-group">
+            {category !== 'כללי' && <div className="supplier-tag">📦 {displayCategoryLabel(category)}</div>}
+            {categoryItems.map(item => {
               const st = prodStatus[item.menu_item_id] || 'pending'
               const isDone = st === 'done'
               return (

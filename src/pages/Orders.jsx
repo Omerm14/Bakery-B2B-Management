@@ -59,6 +59,7 @@ export default function Orders() {
     if (wantedId) {
       const match = customers.find(c => c.id === wantedId)
       if (match) setSelectedCustomer(match)
+      if (location.state?.weekStart) week.goToWeekStart(location.state.weekStart)
       navigate(location.pathname, { replace: true, state: null })
       return
     }
@@ -388,12 +389,18 @@ export default function Orders() {
                     </tr>
                   </thead>
                   <tbody>
-                    {Object.entries(grouped).map(([cat, items]) => (
+                    {Object.entries(grouped).map(([cat, items], catIdx) => (
                       <>
                         <tr key={`cat-${cat}`}>
-                          <td colSpan={9} style={{ padding: '8px 16px', background: 'var(--surf2)', fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                          <td className="item-name sticky-col" style={{ padding: '8px 16px', background: 'var(--surf2)', fontSize: 11, fontWeight: 700, color: 'var(--t3)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
                             {cat}
                           </td>
+                          {WEEK_DAYS.map(d => (
+                            <td key={d.key} style={{ textAlign: 'center', background: 'var(--surf2)', fontSize: 10, color: 'var(--t3)' }}>
+                              {catIdx > 0 && `${lang === 'en' ? d.short_en : d.short} ${formatShortDate(week.dayDate(d.key))}`}
+                            </td>
+                          ))}
+                          <td style={{ background: 'var(--surf2)' }} />
                         </tr>
                         {items.map(item => (
                           <tr key={item.id}>

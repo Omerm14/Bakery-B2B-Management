@@ -127,7 +127,7 @@ body {
 .hd {
   height: 54px; flex-shrink: 0; display: flex; align-items: center; gap: 10px;
   padding-inline: 20px; background: var(--surf); border-bottom: 1px solid var(--bdr);
-  position: sticky; top: 0; z-index: 50;
+  position: sticky; top: 0; z-index: 100;
 }
 .hd-title { font: 600 15px var(--font-display); letter-spacing: -0.015em; color: var(--t1); }
 .hd-btn {
@@ -274,14 +274,17 @@ body {
 /* ─── PACKING CHECKLIST ─── */
 /* Compact multi-column "game board" of customer tiles — small enough that
    several fit per row on a desktop/tablet screen, so staff can scan
-   progress across many customers at a glance and click through fast. */
+   progress across many customers at a glance and click through fast.
+   Native CSS multi-column masonry (not CSS Grid) packs cards of very
+   different heights tightly with no ragged empty gaps — the tradeoff
+   (accepted) is that reading order becomes top-to-bottom per column
+   instead of left-to-right by row, and cards can shift columns as the
+   browser rebalances heights when one is expanded/collapsed. */
 .packing-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 10px;
-  align-items: start;
+  column-width: 260px;
+  column-gap: 10px;
 }
-.client-block { background: var(--surf); border: 1px solid var(--bdr); border-radius: var(--r); margin-bottom: 0; overflow: hidden; transition: border-color .2s, transform .15s, box-shadow .15s; }
+.client-block { background: var(--surf); border: 1px solid var(--bdr); border-radius: var(--r); margin-bottom: 10px; overflow: hidden; break-inside: avoid; transition: border-color .2s, transform .15s, box-shadow .15s; }
 .client-block:hover { box-shadow: var(--shadow-pop); transform: translateY(-1px); }
 .client-block.done { border-color: var(--green-bdr); animation: donePulse .3s ease; }
 .client-hdr { display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer; transition: background .15s; user-select: none; font-size: 15px; }
@@ -517,6 +520,8 @@ body {
 @media print {
   .no-print { display: none !important; }
   body       { background: #fff; color: #111; }
+  .app-shell { height: auto !important; min-height: 0 !important; display: block !important; }
+  .app-main  { height: auto !important; overflow: visible !important; }
   .page      { padding: 0; max-width: 100%; }
   .card      { background: #fff; border: 1px solid #ddd; }
   .produce-item { border-color: #ddd; }
@@ -540,7 +545,7 @@ body {
 
 /* ─── MOBILE PACKING ─── */
 @media (max-width: 600px) {
-  .packing-grid { grid-template-columns: 1fr; }
+  .packing-grid { column-width: auto; column-count: 1; }
   .client-hdr { padding: 16px 14px; min-height: 64px; font-size: 16px; }
   .pack-item  { padding: 16px 14px; min-height: 52px; }
   .pack-check { width: 26px; height: 26px; }
