@@ -73,18 +73,17 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isDark }) {
               )}
             </div>
           ) : (
-            <div style={{ padding: '4px 10px 18px' }}>
+            <div style={{ padding: '8px 10px 22px' }}>
               {branding.logo_url && (
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
                   <img src={branding.logo_url} alt="" style={{ height: 40, maxWidth: 180, objectFit: 'contain' }} />
                 </div>
               )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <img src={isDark ? flooryLogoOnDark : flooryLogoOnLight} alt="Floory" style={{ height: 24, width: 'auto' }} />
-                <div style={{ flex: 1 }} />
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 36 }}>
+                <img src={isDark ? flooryLogoOnDark : flooryLogoOnLight} alt="Floory" style={{ height: 36, width: 'auto' }} />
                 {mobileOpen && (
                   <button onClick={closeMenu} aria-label={t('nav.close')}
-                    style={{ background: 'none', border: 'none', color: 'var(--t3)', cursor: 'pointer', display: 'flex', padding: 4 }}>
+                    style={{ position: 'absolute', insetInlineEnd: 0, background: 'none', border: 'none', color: 'var(--t3)', cursor: 'pointer', display: 'flex', padding: 4 }}>
                     <X size={16} />
                   </button>
                 )}
