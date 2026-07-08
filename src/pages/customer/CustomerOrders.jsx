@@ -3,11 +3,14 @@ import { ChevronRight, ChevronLeft, LogOut, Send } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useCustomerWeek } from '../../hooks/useCustomerWeek'
 import { useCustomerMenuItems } from '../../hooks/useCustomerMenuItems'
+import { useBranding } from '../../hooks/useBranding'
 import { useToast } from '../../context/ToastContext'
 import { WEEK_DAYS, formatShortDate, dayDate, toLocalISODate } from '../../constants/days'
 import { CATEGORY_ORDER } from '../../constants/categories'
 import DayOrderView from './DayOrderView'
 import WeekSummaryView from './WeekSummaryView'
+import SendOrderModal from '../../components/customer/SendOrderModal'
+import flooryLogoOnDark from '../../assets/floory/logo-horizontal-ondark.png'
 
 const FAVORITES_KEY = '__favorites__'
 
@@ -15,6 +18,7 @@ export default function CustomerOrders() {
   const toast = useToast()
   const week = useCustomerWeek()
   const { menuItems, loading: itemsLoading } = useCustomerMenuItems()
+  const branding = useBranding()
   const [customer, setCustomer] = useState(null)
   const [weekId, setWeekId] = useState(null)
   // `${menuItemId}_${date}` -> { quantity, id?, pending? }. Last week's
@@ -31,6 +35,9 @@ export default function CustomerOrders() {
   const [dayOffset, setDayOffset] = useState(() => new Date().getDay())
   const [nowTick, setNowTick] = useState(() => Date.now())
   const [sending, setSending] = useState(false)
+  // null = modal closed; array (possibly empty) = show the post-send
+  // confetti/summary modal with these changes.
+  const [sendSummary, setSendSummary] = useState(null)
   // Optimistic overrides for is_favorite, keyed by menu_item_id — simpler
   // than threading a setter through useCustomerMenuItems, which owns the
   // base list. Merged over each item's server-fetched is_favorite.
@@ -187,11 +194,19 @@ export default function CustomerOrders() {
 
   // Local-only edit — nothing is written to the database here. The value
   // just becomes part of this tab's draft until שלח הזמנה is pressed.
+  // original_quantity is captured only on the FIRST edit of a cell (not
+  // overwritten by further edits within the same session) so the eventual
+  // send-confirmation summary can show what actually changed since the
+  // last real send, not just since the previous keystroke.
   function handleQtyChange(menuItemId, date, rawValue) {
     if (!canEdit[date] || !customer) return
     const qty = Math.round(parseFloat(rawValue)) || 0
     const key = `${menuItemId}_${date}`
-    setOrderLines(prev => ({ ...prev, [key]: { ...prev[key], quantity: qty, pending: true } }))
+    setOrderLines(prev => {
+      const existing = prev[key]
+      const originalQuantity = existing?.pending ? existing.original_quantity : (existing?.quantity ?? 0)
+      return { ...prev, [key]: { ...existing, quantity: qty, pending: true, original_quantity: originalQuantity } }
+    })
   }
 
   // The one action that actually updates the real order for anything the
@@ -205,6 +220,7 @@ export default function CustomerOrders() {
     try {
       let skippedLocked = 0
       const upserts = []
+      const changes = []
       for (const [key, line] of Object.entries(orderLines)) {
         if (!line.pending) continue
         const [menuItemId, date] = key.split('_')
@@ -222,6 +238,15 @@ export default function CustomerOrders() {
           changed_via: 'customer_portal',
           updated_at: new Date().toISOString(),
         })
+        const item = menuItems.find(i => i.id === menuItemId)
+        if (line.quantity !== (line.original_quantity ?? 0)) {
+          changes.push({
+            itemName: item ? (item.name_he || item.name_en) : '—',
+            dateLabel: formatShortDate(date),
+            from: line.original_quantity ?? 0,
+            to: line.quantity,
+          })
+        }
       }
 
       if (!upserts.length) {
@@ -240,6 +265,7 @@ export default function CustomerOrders() {
       if (notifyErr) console.error('[CustomerOrders.sendOrder] notification insert failed', notifyErr)
 
       await loadWeek()
+      setSendSummary(changes)
       toast.success(skippedLocked > 0 ? `ההזמנה נשלחה — ${skippedLocked} ימים נעולים לא עודכנו` : 'ההזמנה נשלחה בהצלחה')
     } catch (err) {
       console.error('[CustomerOrders.sendOrder]', err)
@@ -321,6 +347,13 @@ export default function CustomerOrders() {
 
   return (
     <div className="page portal-page" style={{ maxWidth: 900, margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+        <img src={flooryLogoOnDark} alt="Floory" style={{ height: 22, width: 'auto' }} />
+        {branding.logo_url && (
+          <img src={branding.logo_url} alt={branding.business_name || ''} style={{ height: 34, maxWidth: 150, objectFit: 'contain' }} />
+        )}
+      </div>
+
       <div className="page-header">
         <h1 className="page-title">{customer ? `הזמנות — ${customer.name}` : 'הזמנות'}</h1>
         <button className="btn btn-ghost btn-sm" onClick={signOut}>
@@ -388,6 +421,8 @@ export default function CustomerOrders() {
           onSelectDay={offset => { setDayOffset(offset); setViewMode('day') }}
         />
       )}
+
+      {sendSummary && <SendOrderModal changes={sendSummary} onClose={() => setSendSummary(null)} />}
     </div>
   )
 }

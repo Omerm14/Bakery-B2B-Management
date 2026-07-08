@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Menu, Sun, Moon, Search, Bell, Languages } from 'lucide-react'
+import { Menu, Sun, Moon, Search, Bell, Languages, ArrowUp, ArrowDown } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { useTranslation } from '../../context/LanguageContext'
@@ -156,14 +156,20 @@ function NotificationBell() {
                       rows.map((r, i) => {
                         const isNew = r.old_quantity === null
                         const increasing = !isNew && r.new_quantity > r.old_quantity
-                        const color = isNew ? 'var(--accent)' : increasing ? 'var(--green)' : 'var(--red)'
+                        const color = isNew || increasing ? 'var(--green)' : 'var(--red)'
+                        const Arrow = isNew || increasing ? ArrowUp : ArrowDown
                         const itemName = r.menu_items
                           ? (lang === 'en' ? (r.menu_items.name_en || r.menu_items.name_he) : r.menu_items.name_he)
                           : r.item_name_he
                         return (
                           <div key={i} className="notif-detail-row">
                             <span>{itemName || '—'}</span>
-                            <span style={{ color }}>
+                            {/* dir="ltr" is load-bearing: inside this RTL flex row,
+                                "30 → 15" otherwise gets bidi-reordered to "15 → 30"
+                                — the numbers swap position even though the DOM
+                                content is correct. */}
+                            <span dir="ltr" style={{ color, display: 'flex', alignItems: 'center', gap: 3 }}>
+                              <Arrow size={12} />
                               {isNew ? `${t('header.notificationsNewItem')}: ${r.new_quantity}` : `${r.old_quantity} → ${r.new_quantity}`}
                             </span>
                           </div>

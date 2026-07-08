@@ -440,7 +440,7 @@ function AuditLogTab({ filterText }) {
               <td style={{ fontWeight: 500 }}>{row.customer_name || '—'}</td>
               <td>{row.item_name_he || '—'}</td>
               <td dir="ltr" style={{ fontSize: 12, color: 'var(--t3)' }}>{row.delivery_date}</td>
-              <td style={{ textAlign: 'center', fontSize: 12 }}>
+              <td dir="ltr" style={{ textAlign: 'center', fontSize: 12 }}>
                 {row.old_quantity ?? '—'} → {row.new_quantity}
               </td>
               <td style={{ fontSize: 12, color: 'var(--t3)' }}>{row.source}</td>
