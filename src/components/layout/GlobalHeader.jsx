@@ -97,7 +97,7 @@ function NotificationBell() {
     setLoadingItems(true)
     const { data } = await supabase
       .from('order_change_notifications')
-      .select('id, customer_id, week_id, created_at, seen_at, customers(name, name_en), weeks(label)')
+      .select('id, customer_id, week_id, created_at, seen_at, customers(name, name_en), weeks(label, start_date)')
       .order('created_at', { ascending: false })
       .limit(20)
     const list = data || []
@@ -122,7 +122,7 @@ function NotificationBell() {
 
   function goToOrder(n) {
     setOpen(false)
-    navigate('/orders', { state: { customerId: n.customer_id } })
+    navigate('/orders', { state: { customerId: n.customer_id, weekStart: n.weeks?.start_date } })
   }
 
   return (

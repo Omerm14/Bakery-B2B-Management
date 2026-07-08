@@ -59,6 +59,7 @@ export default function Orders() {
     if (wantedId) {
       const match = customers.find(c => c.id === wantedId)
       if (match) setSelectedCustomer(match)
+      if (location.state?.weekStart) week.goToWeekStart(location.state.weekStart)
       navigate(location.pathname, { replace: true, state: null })
       return
     }

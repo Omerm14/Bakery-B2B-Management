@@ -25,6 +25,12 @@ export function useWeek() {
     setCurrentWeekStart(weekStart())
   }
 
+  // Jumps straight to the week containing an arbitrary date (e.g. a week's
+  // start_date from a notification), instead of stepping via prev/next.
+  function goToWeekStart(dateOrIso) {
+    setCurrentWeekStart(weekStart(new Date(dateOrIso)))
+  }
+
   async function getOrCreateWeek() {
     const isoStart = toLocalISODate(currentWeekStart)
     const label = formatWeekLabel(currentWeekStart)
@@ -54,6 +60,7 @@ export function useWeek() {
     prevWeek,
     nextWeek,
     goToToday,
+    goToWeekStart,
     getOrCreateWeek,
     dayDate: (offset) => dayDate(currentWeekStart, offset),
   }
