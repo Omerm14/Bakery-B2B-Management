@@ -1,7 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useTranslation } from '../../context/LanguageContext'
-import { useBranding } from '../../hooks/useBranding'
 import {
   LayoutDashboard, ClipboardList, Factory, PackageCheck, CalendarDays, History, TrendingUp, Settings, X, LogOut,
 } from 'lucide-react'
@@ -32,7 +31,6 @@ export function BrandMark({ size = 28 }) {
 export default function Sidebar({ mobileOpen, setMobileOpen }) {
   const navigate = useNavigate()
   const { t } = useTranslation()
-  const branding = useBranding()
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -45,34 +43,16 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
     <>
       {mobileOpen && <button className="sb-scrim no-print" aria-label={t('nav.closeMenu')} onClick={closeMenu} />}
       <nav className={'sb no-print' + (mobileOpen ? ' sb-drawer drawer-anim' : '')} aria-label={t('nav.main')}>
-        {branding.logo_url ? (
-          // White-label logo gets the dominant slot — a real-sized image,
-          // not squeezed next to the product wordmark — with "Floory"
-          // demoted to a small attribution caption underneath.
-          <div style={{ padding: '8px 10px 16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <img src={branding.logo_url} alt="" style={{ height: 40, maxWidth: 180, objectFit: 'contain' }} />
-              {mobileOpen && (
-                <button onClick={closeMenu} aria-label={t('nav.close')}
-                  style={{ background: 'none', border: 'none', color: 'var(--t3)', cursor: 'pointer', display: 'flex', padding: 4, flexShrink: 0 }}>
-                  <X size={16} />
-                </button>
-              )}
-            </div>
-            <span style={{ fontSize: 10.5, color: 'var(--t3)', letterSpacing: '.01em', display: 'block', marginTop: 6 }}>Powered by Floory</span>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 10px 18px' }}>
-            <BrandMark />
-            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15.5, letterSpacing: '-0.01em', color: 'var(--t1)', flex: 1 }}>Floory</span>
-            {mobileOpen && (
-              <button onClick={closeMenu} aria-label={t('nav.close')}
-                style={{ background: 'none', border: 'none', color: 'var(--t3)', cursor: 'pointer', display: 'flex', padding: 4 }}>
-                <X size={16} />
-              </button>
-            )}
-          </div>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 10px 18px' }}>
+          <BrandMark />
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15.5, letterSpacing: '-0.01em', color: 'var(--t1)', flex: 1 }}>Floory</span>
+          {mobileOpen && (
+            <button onClick={closeMenu} aria-label={t('nav.close')}
+              style={{ background: 'none', border: 'none', color: 'var(--t3)', cursor: 'pointer', display: 'flex', padding: 4 }}>
+              <X size={16} />
+            </button>
+          )}
+        </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           {links.map(({ to, key, Icon }) => (

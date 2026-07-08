@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { useTranslation } from '../../context/LanguageContext'
 import { customerDisplayName } from '../../lib/displayName'
+import { useBranding } from '../../hooks/useBranding'
 
 const TITLE_KEYS = {
   '/dashboard': 'nav.dashboard',
@@ -47,7 +48,6 @@ function NotificationBell() {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState([])
   const [loadingItems, setLoadingItems] = useState(false)
-  const [expandedId, setExpandedId] = useState(null)
   const [auditRows, setAuditRows] = useState({})
   const wrapRef = useRef(null)
 
@@ -73,6 +73,24 @@ function NotificationBell() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // A ±10s window around each notification's created_at reliably isolates
+  // just that send's changes in order_line_audit, since sendOrder() in
+  // CustomerOrders.jsx does one batched upsert immediately followed by
+  // the notification insert, all in the same request.
+  async function fetchAuditRows(n) {
+    const center = new Date(n.created_at).getTime()
+    const { data, error } = await supabase
+      .from('order_line_audit')
+      .select('item_name_he, old_quantity, new_quantity, menu_items(name_he, name_en)')
+      .eq('customer_id', n.customer_id)
+      .eq('week_id', n.week_id)
+      .eq('changed_via', 'customer_portal')
+      .gte('created_at', new Date(center - 10000).toISOString())
+      .lte('created_at', new Date(center + 10000).toISOString())
+    if (error) { console.error('[NotificationBell audit]', error); return [] }
+    return data || []
+  }
+
   async function toggleOpen() {
     const next = !open
     setOpen(next)
@@ -83,38 +101,24 @@ function NotificationBell() {
       .select('id, customer_id, week_id, created_at, seen_at, customers(name, name_en), weeks(label)')
       .order('created_at', { ascending: false })
       .limit(20)
-    setItems(data || [])
+    const list = data || []
+    setItems(list)
     setLoadingItems(false)
-  }
 
-  // Expands in place instead of navigating away immediately, so staff can
-  // see the itemized old->new breakdown before deciding whether to jump
-  // into the order. A ±10s window around created_at reliably isolates
-  // just this notification's changes in order_line_audit, since
-  // sendOrder() does one batched upsert immediately followed by the
-  // notification insert, all in the same request.
-  async function toggleExpand(n) {
-    if (!n.seen_at) {
+    // The itemized breakdown is shown immediately, not behind a click — so
+    // fetch every notification's rows up front instead of lazily on expand.
+    const entries = await Promise.all(list.map(async n => [n.id, await fetchAuditRows(n)]))
+    setAuditRows(Object.fromEntries(entries))
+
+    // Viewing the list now IS viewing the detail, so mark everything unseen
+    // as seen as soon as the panel opens instead of per-item on click.
+    const unseenIds = list.filter(n => !n.seen_at).map(n => n.id)
+    if (unseenIds.length) {
       const seenAt = new Date().toISOString()
-      await supabase.from('order_change_notifications').update({ seen_at: seenAt, seen_by: userEmail }).eq('id', n.id)
-      setItems(prev => prev.map(i => i.id === n.id ? { ...i, seen_at: seenAt } : i))
+      await supabase.from('order_change_notifications').update({ seen_at: seenAt, seen_by: userEmail }).in('id', unseenIds)
+      setItems(prev => prev.map(i => unseenIds.includes(i.id) ? { ...i, seen_at: seenAt } : i))
       refreshCount()
     }
-    if (expandedId === n.id) { setExpandedId(null); return }
-    setExpandedId(n.id)
-    if (auditRows[n.id]) return
-    setAuditRows(prev => ({ ...prev, [n.id]: 'loading' }))
-    const center = new Date(n.created_at).getTime()
-    const { data, error } = await supabase
-      .from('order_line_audit')
-      .select('item_name_he, old_quantity, new_quantity, menu_items(name_he, name_en)')
-      .eq('customer_id', n.customer_id)
-      .eq('week_id', n.week_id)
-      .eq('changed_via', 'customer_portal')
-      .gte('created_at', new Date(center - 10000).toISOString())
-      .lte('created_at', new Date(center + 10000).toISOString())
-    if (error) { console.error('[NotificationBell audit]', error); setAuditRows(prev => ({ ...prev, [n.id]: [] })); return }
-    setAuditRows(prev => ({ ...prev, [n.id]: data || [] }))
   }
 
   function goToOrder(n) {
@@ -137,43 +141,40 @@ function NotificationBell() {
             <div className="notif-empty">{t('header.notificationsEmpty')}</div>
           ) : (
             items.map(n => {
-              const isExpanded = expandedId === n.id
               const rows = auditRows[n.id]
               return (
                 <div key={n.id} className={`notif-item${!n.seen_at ? ' unseen' : ''}`}>
-                  <button type="button" className="notif-item-header" onClick={() => toggleExpand(n)}>
+                  <div className="notif-item-header">
                     <div className="notif-item-name">{n.customers ? customerDisplayName(n.customers, lang) : t('common.customer')}</div>
                     <div className="notif-item-meta">{n.weeks?.label || ''} · {timeAgo(n.created_at, lang)}</div>
-                  </button>
-                  {isExpanded && (
-                    <div className="notif-item-detail">
-                      {rows === 'loading' || rows === undefined ? (
-                        <div className="notif-empty">{t('common.loading')}</div>
-                      ) : rows.length === 0 ? (
-                        <div className="notif-empty">{t('header.notificationsNoDetail')}</div>
-                      ) : (
-                        rows.map((r, i) => {
-                          const isNew = r.old_quantity === null
-                          const increasing = !isNew && r.new_quantity > r.old_quantity
-                          const color = isNew ? 'var(--accent)' : increasing ? 'var(--green)' : 'var(--red)'
-                          const itemName = r.menu_items
-                            ? (lang === 'en' ? (r.menu_items.name_en || r.menu_items.name_he) : r.menu_items.name_he)
-                            : r.item_name_he
-                          return (
-                            <div key={i} className="notif-detail-row">
-                              <span>{itemName || '—'}</span>
-                              <span style={{ color }}>
-                                {isNew ? `${t('header.notificationsNewItem')}: ${r.new_quantity}` : `${r.old_quantity} → ${r.new_quantity}`}
-                              </span>
-                            </div>
-                          )
-                        })
-                      )}
-                      <button type="button" className="notif-detail-goto" onClick={() => goToOrder(n)}>
-                        {t('header.notificationsGoToOrder')}
-                      </button>
-                    </div>
-                  )}
+                  </div>
+                  <div className="notif-item-detail">
+                    {rows === undefined ? (
+                      <div className="notif-empty">{t('common.loading')}</div>
+                    ) : rows.length === 0 ? (
+                      <div className="notif-empty">{t('header.notificationsNoDetail')}</div>
+                    ) : (
+                      rows.map((r, i) => {
+                        const isNew = r.old_quantity === null
+                        const increasing = !isNew && r.new_quantity > r.old_quantity
+                        const color = isNew ? 'var(--accent)' : increasing ? 'var(--green)' : 'var(--red)'
+                        const itemName = r.menu_items
+                          ? (lang === 'en' ? (r.menu_items.name_en || r.menu_items.name_he) : r.menu_items.name_he)
+                          : r.item_name_he
+                        return (
+                          <div key={i} className="notif-detail-row">
+                            <span>{itemName || '—'}</span>
+                            <span style={{ color }}>
+                              {isNew ? `${t('header.notificationsNewItem')}: ${r.new_quantity}` : `${r.old_quantity} → ${r.new_quantity}`}
+                            </span>
+                          </div>
+                        )
+                      })
+                    )}
+                    <button type="button" className="notif-detail-goto" onClick={() => goToOrder(n)}>
+                      {t('header.notificationsGoToOrder')}
+                    </button>
+                  </div>
                 </div>
               )
             })
@@ -187,6 +188,7 @@ function NotificationBell() {
 export default function GlobalHeader({ isDark, onToggleTheme, onMenuOpen, onSearchOpen }) {
   const { pathname } = useLocation()
   const { t, toggleLang } = useTranslation()
+  const branding = useBranding()
   const title = t(TITLE_KEYS[pathname] || '')
 
   return (
@@ -194,6 +196,9 @@ export default function GlobalHeader({ isDark, onToggleTheme, onMenuOpen, onSear
       <button className="hd-btn hd-menu-btn" style={{ border: 'none' }} onClick={onMenuOpen} aria-label={t('header.menu')}>
         <Menu size={18} />
       </button>
+      {branding.logo_url && (
+        <img src={branding.logo_url} alt="" style={{ height: 36, maxWidth: 160, objectFit: 'contain', flexShrink: 0 }} />
+      )}
       <span className="hd-title">{TITLE_KEYS[pathname] ? title : ''}</span>
       <div style={{ flex: 1 }} />
       <button className="hd-search" onClick={onSearchOpen} aria-label={t('header.search')}>

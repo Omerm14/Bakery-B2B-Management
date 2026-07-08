@@ -152,6 +152,18 @@ export default function Settings() {
     }
   }
 
+  async function updateItemNameEn(id, nameEn) {
+    const prevNameEn = menuItems.find(i => i.id === id)?.name_en ?? null
+    const value = nameEn.trim() || null
+    if (value === prevNameEn) return
+    setMenuItems(prev => prev.map(i => i.id === id ? { ...i, name_en: value } : i))
+    const { error } = await supabase.from('menu_items').update({ name_en: value }).eq('id', id)
+    if (error) {
+      setMenuItems(prev => prev.map(i => i.id === id ? { ...i, name_en: prevNameEn } : i))
+      toast.error(t('settings.toast.nameEnUpdateFailed'))
+    }
+  }
+
   async function toggleCustomerActive(id, current) {
     setCustomers(prev => prev.map(c => c.id === id ? { ...c, active: !current } : c))
     const { error } = await supabase.from('customers').update({ active: !current }).eq('id', id)
@@ -454,7 +466,16 @@ function AuditLogTab({ filterText }) {
                 {sortedMenuItems.filter(item => item.name_he.includes(filterText.trim())).map(item => (
                   <tr key={item.id} style={{ opacity: item.active ? 1 : 0.45 }}>
                     <td style={{ fontWeight: 500 }}>{item.name_he}</td>
-                    <td style={{ color: 'var(--t3)' }}>{item.name_en || '—'}</td>
+                    <td>
+                      <input
+                        className="input"
+                        dir="ltr"
+                        style={{ width: 130, padding: '4px 8px' }}
+                        defaultValue={item.name_en ?? ''}
+                        placeholder="Item Name"
+                        onBlur={e => updateItemNameEn(item.id, e.target.value)}
+                      />
+                    </td>
                     <td>{item.unit}</td>
                     <td>
                       <select
