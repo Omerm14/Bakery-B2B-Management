@@ -315,6 +315,17 @@ body {
 .modal-title { font-size: 18px; font-weight: 800; margin-bottom: 20px; }
 .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
 
+/* ─── CONFETTI (send-order confirmation) ─── */
+.confetti-layer { position: fixed; inset: 0; z-index: 301; pointer-events: none; overflow: hidden; }
+.confetti-piece {
+  position: absolute; top: -5%; border-radius: 1px; opacity: 0;
+  animation-name: confettiFall; animation-timing-function: ease-in; animation-fill-mode: forwards;
+}
+@keyframes confettiFall {
+  0%   { opacity: 1; transform: translateY(0) rotate(0deg); }
+  100% { opacity: 0; transform: translateY(105vh) rotate(540deg); }
+}
+
 /* ─── SEARCH OVERLAY (Cmd/Ctrl+K) ─── */
 .search-overlay { align-items: flex-start; padding-top: 12vh; }
 .search-modal { width: 480px; padding: 0; max-height: 60vh; display: flex; flex-direction: column; overflow: hidden; }
