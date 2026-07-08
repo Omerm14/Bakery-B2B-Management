@@ -140,7 +140,7 @@ export default function Login() {
         <div style={{ position: 'relative', zIndex: 3, display: 'flex', flexDirection: 'column', height: '100%', padding: '40px 48px' }}>
           {/* Logo */}
           <div className="login-fade-in" style={{ display: 'flex', alignItems: 'center' }}>
-            <img src={flooryLogoOnDark} alt="Floory" style={{ height: 24, width: 'auto' }} />
+            <img src={flooryLogoOnDark} alt="Floory" style={{ height: 40, width: 'auto' }} />
           </div>
 
           {/* Hero copy */}
@@ -231,7 +231,7 @@ export default function Login() {
         <div style={{ width: '100%', maxWidth: 400, position: 'relative', zIndex: 1 }}>
           {/* Mobile logo */}
           <div className="login-mobile-logo" style={{ display: 'flex', alignItems: 'center', marginBottom: 32 }}>
-            <img src={flooryLogoOnDark} alt="Floory" style={{ height: 22, width: 'auto' }} />
+            <img src={flooryLogoOnDark} alt="Floory" style={{ height: 34, width: 'auto' }} />
           </div>
 
           <div style={{ marginBottom: 28, direction: 'rtl' }}>
