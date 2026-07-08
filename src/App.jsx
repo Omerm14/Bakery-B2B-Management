@@ -149,6 +149,12 @@ export default function App() {
   const isStaff = role === 'staff'
   const homeFor = isCustomer ? '/portal/orders' : isStaff ? '/dashboard' : '/access-pending'
 
+  // A client's branded custom domain (e.g. portal.urbanbakery.co, wired up
+  // in Vercel per client) always means "customer ordering portal", never
+  // the marketing site or staff login — regardless of which path a logged-
+  // out visitor lands on.
+  const isPortalHost = window.location.hostname.startsWith('portal.')
+
   if (session === undefined) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -162,7 +168,11 @@ export default function App() {
       <ImportProvider>
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={session ? <Navigate to={homeFor} replace /> : <Landing />} />
+            <Route path="/" element={
+              session ? <Navigate to={homeFor} replace />
+                : isPortalHost ? <Navigate to="/portal/login" replace />
+                : <Landing />
+            } />
             <Route path="/login" element={session ? <Navigate to={homeFor} replace /> : <Login />} />
             <Route path="/portal/login" element={session ? <Navigate to={homeFor} replace /> : <CustomerLogin />} />
             <Route path="/portal/preview" element={<CustomerPortalDemo />} />
@@ -189,7 +199,7 @@ export default function App() {
                 <Route path="*" element={<Navigate to="/access-pending" replace />} />
               </>
             ) : (
-              <Route path="*" element={<Navigate to="/login" replace />} />
+              <Route path="*" element={<Navigate to={isPortalHost ? '/portal/login' : '/login'} replace />} />
             )}
           </Routes>
         </BrowserRouter>
