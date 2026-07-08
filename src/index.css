@@ -77,12 +77,16 @@ body {
 
 /* ─── SIDEBAR ─── */
 .sb {
-  width: 232px; flex-shrink: 0; height: 100vh; overflow-y: auto;
+  width: 232px; flex-shrink: 0; height: 100vh; overflow: visible;
   background: var(--surf); border-inline-end: 1px solid var(--bdr);
   display: flex; flex-direction: column; padding: 16px 12px;
   position: sticky; top: 0; transition: width .2s ease;
 }
 .sb-collapsed { width: 64px; }
+/* Scrolling lives here, not on .sb — .sb must stay overflow: visible so
+   the collapse button (positioned just past .sb's own edge) never gets
+   clipped by a scroll container. */
+.sb-scroll { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
 .sb-drawer { position: fixed; top: 0; inset-inline-start: 0; z-index: 200; animation: slideInStart .25s ease; }
 .sb-scrim { position: fixed; inset: 0; background: rgba(4,8,6,.55); z-index: 199; animation: fadeIn .2s; border: none; }
 .sb-collapse-btn {

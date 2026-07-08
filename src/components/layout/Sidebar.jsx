@@ -66,64 +66,69 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
           </button>
         )}
 
-        {collapsed ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0 18px' }}>
-            {branding.logo_url ? (
-              <img src={branding.logo_url} alt="" style={{ width: 28, height: 28, objectFit: 'contain' }} />
-            ) : (
-              <BrandMark />
-            )}
-          </div>
-        ) : (
-          <div style={{ padding: '4px 10px 18px' }}>
-            {branding.logo_url && (
-              <div style={{ marginBottom: 10 }}>
-                <img src={branding.logo_url} alt="" style={{ height: 40, maxWidth: 180, objectFit: 'contain' }} />
-              </div>
-            )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <BrandMark />
-              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15.5, letterSpacing: '-0.01em', color: 'var(--t1)', flex: 1 }}>Floory</span>
-              {mobileOpen && (
-                <button onClick={closeMenu} aria-label={t('nav.close')}
-                  style={{ background: 'none', border: 'none', color: 'var(--t3)', cursor: 'pointer', display: 'flex', padding: 4 }}>
-                  <X size={16} />
-                </button>
+        {/* Scrolling happens in this inner wrapper, not on .sb itself —
+            .sb needs overflow: visible so the collapse button (positioned
+            just outside .sb's own edge) never gets clipped. */}
+        <div className="sb-scroll">
+          {collapsed ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0 18px' }}>
+              {branding.logo_url ? (
+                <img src={branding.logo_url} alt="" style={{ width: 28, height: 28, objectFit: 'contain' }} />
+              ) : (
+                <BrandMark />
               )}
             </div>
-          </div>
-        )}
+          ) : (
+            <div style={{ padding: '4px 10px 18px' }}>
+              {branding.logo_url && (
+                <div style={{ marginBottom: 10 }}>
+                  <img src={branding.logo_url} alt="" style={{ height: 40, maxWidth: 180, objectFit: 'contain' }} />
+                </div>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <BrandMark />
+                <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15.5, letterSpacing: '-0.01em', color: 'var(--t1)', flex: 1 }}>Floory</span>
+                {mobileOpen && (
+                  <button onClick={closeMenu} aria-label={t('nav.close')}
+                    style={{ background: 'none', border: 'none', color: 'var(--t3)', cursor: 'pointer', display: 'flex', padding: 4 }}>
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          {links.map(({ to, key, Icon }) => (
-            <NavLink key={to} to={to} onClick={closeMenu} title={t(key)}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {links.map(({ to, key, Icon }) => (
+              <NavLink key={to} to={to} onClick={closeMenu} title={t(key)}
+                className={({ isActive }) => 'sb-nav-item' + (isActive ? ' active' : '') + (collapsed ? ' sb-nav-item-collapsed' : '')}>
+                {({ isActive }) => (
+                  <>
+                    <Icon size={15} strokeWidth={1.75} color={isActive ? 'var(--accent)' : 'currentColor'} style={{ flexShrink: 0 }} aria-hidden="true" />
+                    {!collapsed && <span style={{ flex: 1 }}>{t(key)}</span>}
+                  </>
+                )}
+              </NavLink>
+            ))}
+          </div>
+
+          <div style={{ flex: 1 }} />
+
+          <div style={{ padding: '12px 2px 0', display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <NavLink to="/settings" onClick={closeMenu} title={t('nav.settings')}
               className={({ isActive }) => 'sb-nav-item' + (isActive ? ' active' : '') + (collapsed ? ' sb-nav-item-collapsed' : '')}>
               {({ isActive }) => (
                 <>
-                  <Icon size={15} strokeWidth={1.75} color={isActive ? 'var(--accent)' : 'currentColor'} style={{ flexShrink: 0 }} aria-hidden="true" />
-                  {!collapsed && <span style={{ flex: 1 }}>{t(key)}</span>}
+                  <Settings size={15} strokeWidth={1.75} color={isActive ? 'var(--accent)' : 'currentColor'} style={{ flexShrink: 0 }} aria-hidden="true" />
+                  {!collapsed && <span style={{ flex: 1 }}>{t('nav.settings')}</span>}
                 </>
               )}
             </NavLink>
-          ))}
-        </div>
-
-        <div style={{ flex: 1 }} />
-
-        <div style={{ padding: '12px 2px 0', display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <NavLink to="/settings" onClick={closeMenu} title={t('nav.settings')}
-            className={({ isActive }) => 'sb-nav-item' + (isActive ? ' active' : '') + (collapsed ? ' sb-nav-item-collapsed' : '')}>
-            {({ isActive }) => (
-              <>
-                <Settings size={15} strokeWidth={1.75} color={isActive ? 'var(--accent)' : 'currentColor'} style={{ flexShrink: 0 }} aria-hidden="true" />
-                {!collapsed && <span style={{ flex: 1 }}>{t('nav.settings')}</span>}
-              </>
-            )}
-          </NavLink>
-          <button className={'sb-nav-item' + (collapsed ? ' sb-nav-item-collapsed' : '')} onClick={handleLogout} style={{ color: 'var(--red)' }} title={t('nav.logout')}>
-            <LogOut size={15} strokeWidth={1.75} style={{ flexShrink: 0, opacity: .8 }} aria-hidden="true" />
-            {!collapsed && <span style={{ flex: 1 }}>{t('nav.logout')}</span>}
-          </button>
+            <button className={'sb-nav-item' + (collapsed ? ' sb-nav-item-collapsed' : '')} onClick={handleLogout} style={{ color: 'var(--red)' }} title={t('nav.logout')}>
+              <LogOut size={15} strokeWidth={1.75} style={{ flexShrink: 0, opacity: .8 }} aria-hidden="true" />
+              {!collapsed && <span style={{ flex: 1 }}>{t('nav.logout')}</span>}
+            </button>
+          </div>
         </div>
       </nav>
     </>
