@@ -348,7 +348,7 @@ export default function CustomerOrders() {
   return (
     <div className="page portal-page" style={{ maxWidth: 900, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-        <img src={flooryLogoOnDark} alt="Floory" style={{ height: 22, width: 'auto' }} />
+        <img src={flooryLogoOnDark} alt="Floory" style={{ height: 34, width: 'auto' }} />
         {branding.logo_url && (
           <img src={branding.logo_url} alt={branding.business_name || ''} style={{ height: 34, maxWidth: 150, objectFit: 'contain' }} />
         )}
