@@ -90,7 +90,12 @@ body {
 .sb-drawer { position: fixed; top: 0; inset-inline-start: 0; z-index: 200; animation: slideInStart .25s ease; }
 .sb-scrim { position: fixed; inset: 0; background: rgba(4,8,6,.55); z-index: 199; animation: fadeIn .2s; border: none; }
 .sb-collapse-btn {
-  position: absolute; top: 46px; inset-inline-end: -12px; width: 24px; height: 24px;
+  /* Vertically centered on the whole sidebar (not pinned near the top
+     nav items) so it lands in the empty flex-spacer between the nav
+     list and Settings/Logout, never overlapping the active page's
+     highlighted pill. */
+  position: absolute; top: 50%; transform: translateY(-50%); inset-inline-end: -12px;
+  width: 24px; height: 24px;
   border-radius: 50%; background: var(--surf); border: 1px solid var(--bdr2); color: var(--t2);
   cursor: pointer; display: flex; align-items: center; justify-content: center;
   z-index: 210; box-shadow: var(--shadow-pop); transition: color .12s, border-color .12s;
