@@ -4,6 +4,7 @@ import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { weekStart, formatWeekLabel, toLocalISODate } from '../constants/days'
 import { useTranslation } from '../context/LanguageContext'
+import { customerDisplayName } from '../lib/displayName'
 
 const TREND_WINDOW = 8
 
@@ -73,6 +74,24 @@ async function fetchWeekData(weekIds) {
   return all
 }
 
+// Sibling of fetchWeekData, backed by dashboard_week_customer_data
+// (migration 044) — same shape/pagination, grouped by customer instead
+// of item, for the Dashboard's "top customers" chart view.
+async function fetchWeekCustomerData(weekIds) {
+  const all = []
+  let from = 0
+  while (true) {
+    const { data, error } = await supabase
+      .rpc('dashboard_week_customer_data', { p_week_ids: weekIds })
+      .range(from, from + PAGE_SIZE - 1)
+    if (error) { console.error('[Dashboard] dashboard_week_customer_data', error); break }
+    all.push(...(data || []))
+    if (!data || data.length < PAGE_SIZE) break
+    from += PAGE_SIZE
+  }
+  return all
+}
+
 // Only 8 weeks are ever shown at once (TREND_WINDOW) — fetching a batch of
 // HISTORY_BATCH gives comfortable headroom for a few "prev" clicks without
 // eagerly pulling much more than the page will actually render. Loading
@@ -80,15 +99,21 @@ async function fetchWeekData(weekIds) {
 // everything up front.
 const HISTORY_BATCH = 20
 
-// Turns a page of `weeks` rows (descending) + their aggregated order rows
-// into the ascending, pre-computed history entries the UI navigates over.
-function buildHistorySegment(weeksDesc, weekRows) {
+// Turns a page of `weeks` rows (descending) + their aggregated item and
+// customer rows into the ascending, pre-computed history entries the UI
+// navigates over.
+function buildHistorySegment(weeksDesc, itemRows, customerRows) {
   const itemsByWeek = new Map() // week_id → [{name_he, name_en, qty}]
+  const customersByWeek = new Map() // week_id → [{name, name_en, qty}]
   const activeCustomersByWeek = new Map() // week_id → count
-  for (const row of weekRows || []) {
+  for (const row of itemRows || []) {
     if (!itemsByWeek.has(row.week_id)) itemsByWeek.set(row.week_id, [])
     itemsByWeek.get(row.week_id).push({ name_he: row.item_name, name_en: row.item_name_en, qty: parseFloat(row.item_qty) })
     activeCustomersByWeek.set(row.week_id, row.active_customers)
+  }
+  for (const row of customerRows || []) {
+    if (!customersByWeek.has(row.week_id)) customersByWeek.set(row.week_id, [])
+    customersByWeek.get(row.week_id).push({ name: row.customer_name, name_en: row.customer_name_en, qty: parseFloat(row.qty) })
   }
 
   return (weeksDesc || [])
@@ -96,6 +121,7 @@ function buildHistorySegment(weeksDesc, weekRows) {
     .reverse()
     .map(w => {
       const items = itemsByWeek.get(w.id) || []
+      const customers = customersByWeek.get(w.id) || []
       const qty = items.reduce((s, i) => s + i.qty, 0)
       const activeCustomers = activeCustomersByWeek.get(w.id) || 0
 
@@ -103,11 +129,14 @@ function buildHistorySegment(weeksDesc, weekRows) {
       const top10 = sortedItems.slice(0, 10).map(i => ({ name_he: i.name_he, name_en: i.name_en, qty: Math.round(i.qty * 10) / 10 }))
       const topItem = sortedItems[0] ? { name_he: sortedItems[0].name_he, name_en: sortedItems[0].name_en, qty: Math.round(sortedItems[0].qty * 10) / 10 } : null
 
+      const sortedCustomers = [...customers].sort((a, b) => b.qty - a.qty)
+      const top10Customers = sortedCustomers.slice(0, 10).map(c => ({ name: c.name, name_en: c.name_en, qty: Math.round(c.qty * 10) / 10 }))
+
       // `label` is the compact single-date form used on the trend chart's
       // x-axis (little room per tick); `rangeLabel` spells out the full
       // week for the header and panel subtitles, where clarity matters
       // more than space.
-      return { id: w.id, start_date: w.start_date, label: formatWeekShort(w.start_date), rangeLabel: formatWeekLabel(w.start_date), qty, activeCustomers, top10, topItem }
+      return { id: w.id, start_date: w.start_date, label: formatWeekShort(w.start_date), rangeLabel: formatWeekLabel(w.start_date), qty, activeCustomers, top10, topItem, top10Customers }
     })
 }
 
@@ -146,6 +175,7 @@ export default function Dashboard() {
   // short (or empty), meaning we've reached the actual beginning.
   const [hasMoreHistory, setHasMoreHistory] = useState(cached?.hasMoreHistory ?? true)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [chartMode, setChartMode] = useState('customer')
 
   useEffect(() => { loadDashboard(!!cached) }, [])
 
@@ -169,8 +199,10 @@ export default function Dashboard() {
         .limit(HISTORY_BATCH)
 
       const candidateIds = (candidateWeeksDesc || []).map(w => w.id)
-      const weekRows = candidateIds.length ? await fetchWeekData(candidateIds) : []
-      const historyAsc = buildHistorySegment(candidateWeeksDesc, weekRows)
+      const [itemRows, customerRows] = candidateIds.length
+        ? await Promise.all([fetchWeekData(candidateIds), fetchWeekCustomerData(candidateIds)])
+        : [[], []]
+      const historyAsc = buildHistorySegment(candidateWeeksDesc, itemRows, customerRows)
       const moreLikely = (candidateWeeksDesc || []).length >= HISTORY_BATCH
 
       setWeekHistory(historyAsc)
@@ -198,8 +230,10 @@ export default function Dashboard() {
         .limit(HISTORY_BATCH)
 
       const olderIds = (olderWeeksDesc || []).map(w => w.id)
-      const olderRows = olderIds.length ? await fetchWeekData(olderIds) : []
-      const olderHistoryAsc = buildHistorySegment(olderWeeksDesc, olderRows)
+      const [olderItemRows, olderCustomerRows] = olderIds.length
+        ? await Promise.all([fetchWeekData(olderIds), fetchWeekCustomerData(olderIds)])
+        : [[], []]
+      const olderHistoryAsc = buildHistorySegment(olderWeeksDesc, olderItemRows, olderCustomerRows)
       const moreLikely = (olderWeeksDesc || []).length >= HISTORY_BATCH && olderHistoryAsc.length > 0
 
       if (olderHistoryAsc.length === 0) {
@@ -232,7 +266,11 @@ export default function Dashboard() {
   const rawTopItem = viewedWeek?.topItem || null
   const topItem = rawTopItem ? { ...rawTopItem, name: lang === 'en' ? (rawTopItem.name_en || rawTopItem.name_he) : rawTopItem.name_he } : null
   const topItems = (viewedWeek?.top10 || []).map(i => ({ ...i, name: lang === 'en' ? (i.name_en || i.name_he) : i.name_he }))
-  const maxBar = topItems[0]?.qty || 1
+  const topCustomers = (viewedWeek?.top10Customers || []).map(c => ({ ...c, name: customerDisplayName(c, lang) }))
+  const chartData = chartMode === 'customer' ? topCustomers : topItems
+  const chartTitle = chartMode === 'customer' ? t('dashboard.qtyByCustomer') : t('dashboard.qtyByItem')
+  const top10Title = chartMode === 'customer' ? t('dashboard.top10TitleCustomers') : t('dashboard.top10Title')
+  const maxBar = chartData[0]?.qty || 1
   const trendData = weekHistory.slice(Math.max(0, viewedIndex - (TREND_WINDOW - 1)), viewedIndex + 1)
   const atLatest = viewedIndex >= weekHistory.length - 1
   const atOldest = viewedIndex <= 0 && !hasMoreHistory
@@ -304,20 +342,20 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Top 10 items */}
+        {/* Top 10 items/customers */}
         <div className="card">
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16 }}>{t('dashboard.top10Title')} — {viewedWeek?.rangeLabel || '—'}</div>
+          <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 16 }}>{top10Title} — {viewedWeek?.rangeLabel || '—'}</div>
           {loading ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[...Array(6)].map((_, i) => <div key={i} className="shimmer" style={{ height: 28 }} />)}
             </div>
-          ) : topItems.length === 0 ? (
-            <div style={{ color: 'var(--t3)', fontSize: 13 }}>{t('dashboard.noDataWeek')}</div>
+          ) : chartData.length === 0 ? (
+            <div style={{ color: 'var(--t3)', fontSize: 14 }}>{t('dashboard.noDataWeek')}</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {topItems.map((item, i) => (
+              {chartData.map((item, i) => (
                 <div key={i}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 3 }}>
                     <span style={{ color: 'var(--t1)', fontWeight: i === 0 ? 700 : 400 }}>{item.name}</span>
                     <span style={{ color: 'var(--t3)' }}>{item.qty.toLocaleString(locale)}</span>
                   </div>
@@ -339,14 +377,20 @@ export default function Dashboard() {
       </div>
 
       {/* Full bar chart */}
-      {!loading && topItems.length > 0 && (
+      {!loading && chartData.length > 0 && (
         <div className="card" style={{ marginTop: 20 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 20 }}>{t('dashboard.qtyByItem')} — {viewedWeek?.rangeLabel || '—'}</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{chartTitle} — {viewedWeek?.rangeLabel || '—'}</div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button className={'btn btn-sm ' + (chartMode === 'customer' ? 'btn-primary' : 'btn-ghost')} onClick={() => setChartMode('customer')}>{t('dashboard.viewByCustomer')}</button>
+              <button className={'btn btn-sm ' + (chartMode === 'item' ? 'btn-primary' : 'btn-ghost')} onClick={() => setChartMode('item')}>{t('dashboard.viewByItem')}</button>
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={topItems} margin={{ top: 4, right: 8, left: -20, bottom: 60 }}>
+            <BarChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 60 }}>
               <CartesianGrid stroke="var(--bdr)" strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--t3)' }} axisLine={false} tickLine={false} angle={-35} textAnchor="end" interval={0} />
-              <YAxis tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} angle={-35} textAnchor="end" interval={0} />
+              <YAxis tick={{ fontSize: 12, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip locale={locale} />} />
               <Bar dataKey="qty" name={t('common.quantity')} fill="var(--brass)" radius={[4, 4, 0, 0]} />
             </BarChart>

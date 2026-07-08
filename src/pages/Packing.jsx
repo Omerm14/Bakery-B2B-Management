@@ -149,10 +149,10 @@ export default function Packing() {
       {clients.length > 0 && (
         <div className="packing-sticky-header no-print">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ fontWeight: 700, fontSize: 15 }}>
+            <span style={{ fontWeight: 700, fontSize: 16 }}>
               {allDone ? t('packing.allDone') : `${doneCount} / ${clients.length} ${t('packing.customersCount')}`}
             </span>
-            <span style={{ fontSize: 12, color: 'var(--t2)' }}>{checkedItems}/{totalItems} {t('packing.itemsCount')}</span>
+            <span style={{ fontSize: 13, color: 'var(--t2)' }}>{checkedItems}/{totalItems} {t('packing.itemsCount')}</span>
           </div>
           <div style={{ height: 6, background: 'var(--bdr2)', borderRadius: 3, overflow: 'hidden' }}>
             <div style={{
@@ -189,8 +189,8 @@ export default function Packing() {
         <div className="completion-banner">
           <span style={{ fontSize: 28 }}>🎉</span>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>{t('packing.completionTitle')}</div>
-            <div style={{ fontSize: 13, color: 'var(--t2)', marginTop: 2 }}>{clients.length} {t('packing.customersCount')} · {totalItems} {t('packing.itemsCount')}</div>
+            <div style={{ fontWeight: 700, fontSize: 17 }}>{t('packing.completionTitle')}</div>
+            <div style={{ fontSize: 14, color: 'var(--t2)', marginTop: 2 }}>{clients.length} {t('packing.customersCount')} · {totalItems} {t('packing.itemsCount')}</div>
           </div>
         </div>
       )}
@@ -230,15 +230,15 @@ export default function Packing() {
                     {done && <Check size={13} color="var(--green)" />}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>{clientName}</div>
+                    <div style={{ fontWeight: 700, fontSize: 15.5 }}>{clientName}</div>
                     {!isOpen && (
-                      <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         {previewText}
                       </div>
                     )}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                    <span style={{ fontSize: 11, color: 'var(--t3)' }}>
+                    <span style={{ fontSize: 12, color: 'var(--t3)' }}>
                       {client.items.filter(i => !!checks[i.line_id]).length}/{client.items.length}
                     </span>
                     <button
@@ -266,10 +266,10 @@ export default function Packing() {
                         <div className={'pack-check' + (checked ? ' checked' : '')}>
                           {checked && <Check size={11} color="#fff" />}
                         </div>
-                        <span className="pack-label" style={{ flex: 1, fontSize: 13 }}>{displayName(item)}</span>
+                        <span className="pack-label" style={{ flex: 1, fontSize: 14.5 }}>{displayName(item)}</span>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
                           <span className="pack-qty">{item.quantity} {item.unit}</span>
-                          {time && <span style={{ fontSize: 9, color: 'var(--green)' }}>{t('packing.packedAt')} {time}</span>}
+                          {time && <span style={{ fontSize: 10, color: 'var(--green)' }}>{t('packing.packedAt')} {time}</span>}
                         </div>
                       </div>
                     )

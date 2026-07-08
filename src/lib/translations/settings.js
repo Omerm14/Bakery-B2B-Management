@@ -44,6 +44,14 @@ export default {
     'settings.toast.customerAlreadyExists': 'כבר קיים לקוח פעיל בשם זה',
     'settings.toast.nameEnUpdateFailed': 'עדכון השם באנגלית נכשל',
 
+    // Seed favorites
+    'settings.seedFavorites': 'סימון מועדפים לפי היסטוריה',
+    'settings.seedFavoritesTitle': 'מסמן אוטומטית פריטים שהוזמנו לעיתים קרובות כמועדפים עבור כל לקוח, לפי היסטוריית ההזמנות',
+    'settings.seedFavoritesConfirm': 'הפעולה תסמן פריטים שהוזמנו לעיתים קרובות (3+ מתוך 8 השבועות האחרונים) כמועדפים עבור כל לקוח. לא ישפיע על מועדפים שכבר הוגדרו ידנית. להמשיך?',
+    'settings.seeding': 'מסמן...',
+    'settings.toast.seedFavoritesSuccess': 'נוספו מועדפים חדשים:',
+    'settings.toast.seedFavoritesFailed': 'סימון המועדפים נכשל',
+
     // Import tab
     'settings.importInstructions': 'בחר קובץ Excel שבועי (פורמט המאפייה) — לקוח לכל גיליון, תאריכים בשורה 1, כמויות בעמודות B–H. ניתן לבחור מספר קבצים בו-זמנית. ניתן לנווט לדפים אחרים בזמן הייבוא — הוא ימשיך ברקע. השתמשו בכפתור "ייבוא Excel" בראש העמוד כדי להעלות קבצים.',
     'settings.importHistory': 'היסטוריית ייבוא',
@@ -166,6 +174,14 @@ export default {
     'settings.toast.customerReactivated': 'Customer was inactive and was reactivated:',
     'settings.toast.customerAlreadyExists': 'An active customer with this name already exists',
     'settings.toast.nameEnUpdateFailed': 'Failed to update English name',
+
+    // Seed favorites
+    'settings.seedFavorites': 'Mark Favorites from History',
+    'settings.seedFavoritesTitle': "Automatically marks frequently-ordered items as favorites for each customer, based on order history",
+    'settings.seedFavoritesConfirm': 'This will mark frequently-ordered items (3+ of the last 8 weeks) as favorites for every customer. Manually-set favorites are not affected. Continue?',
+    'settings.seeding': 'Marking...',
+    'settings.toast.seedFavoritesSuccess': 'New favorites added:',
+    'settings.toast.seedFavoritesFailed': 'Failed to mark favorites',
 
     // Import tab
     'settings.importInstructions': 'Select a weekly Excel file (bakery format) — one customer per sheet, dates in row 1, quantities in columns B–H. You can select multiple files at once. You can navigate to other pages during import — it will continue in the background. Use the "Import Excel" button at the top of the page to upload files.',
