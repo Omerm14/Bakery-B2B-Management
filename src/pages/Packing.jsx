@@ -70,11 +70,17 @@ export default function Packing() {
     }
   }
 
-  async function toggleCheck(lineId) {
+  async function toggleCheck(lineId, client) {
     const already = !!checks[lineId]
     const nowPacked = !already
     const packedAt = nowPacked ? new Date().toISOString() : null
     setChecks(prev => ({ ...prev, [lineId]: packedAt }))
+
+    // Checking off the last remaining item completes the card — collapse it
+    // instead of leaving it open showing an all-checked list.
+    if (nowPacked && client && client.items.every(i => i.line_id === lineId || !!checks[i.line_id])) {
+      setExpanded(p => ({ ...p, [client.customer_id]: false }))
+    }
 
     if (nowPacked) {
       await supabase.from('packing_checks').upsert(
@@ -103,6 +109,7 @@ export default function Packing() {
     })
 
     if (nowPacked) {
+      setExpanded(p => ({ ...p, [client.customer_id]: false }))
       await supabase.from('packing_checks').upsert(
         lineIds.map(id => ({ order_line_id: id, packed_at: packedAt })),
         { onConflict: 'order_line_id' }
@@ -293,7 +300,7 @@ export default function Packing() {
                       <div
                         key={item.line_id}
                         className={'pack-item' + (checked ? ' checked' : '')}
-                        onClick={() => toggleCheck(item.line_id)}
+                        onClick={() => toggleCheck(item.line_id, client)}
                       >
                         <div className={'pack-check' + (checked ? ' checked' : '')}>
                           {checked && <Check size={11} color="#fff" />}
