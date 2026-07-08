@@ -186,7 +186,7 @@ export default function Landing() {
         }}>
           <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 72 }}>
             <div style={{ display: 'flex', alignItems: 'center' }}>
-              <img src={flooryLogoOnDark} alt="Floory" style={{ height: 36, width: 'auto' }} />
+              <img src={flooryLogoOnDark} alt="Floory" style={{ height: 46, width: 'auto' }} />
             </div>
             <div className="land-nav-links-desktop" style={{ display: 'flex', gap: 32, alignItems: 'center' }}>
               <a href="#features" className="land-nav-link">יכולות</a>
