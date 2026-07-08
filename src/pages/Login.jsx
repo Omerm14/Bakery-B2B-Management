@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import flooryLogoOnDark from '../assets/floory/logo-horizontal-ondark.png'
 
 const FLOAT_CARDS = [
   { customer: 'קפה לואיז',         items: [{ name: 'קרואסון חמאה', qty: 24 }, { name: 'בגט', qty: 8 }],      init: 'ק', iColor: '#3DD6A3', left: '8%',  dur: '11s', del: '0s',   rot: '-2deg'  },
@@ -138,13 +139,8 @@ export default function Login() {
         {/* Content — on top of cards */}
         <div style={{ position: 'relative', zIndex: 3, display: 'flex', flexDirection: 'column', height: '100%', padding: '40px 48px' }}>
           {/* Logo */}
-          <div className="login-fade-in" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(61,214,163,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3DD6A3" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
-              </svg>
-            </div>
-            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16, letterSpacing: '-0.02em', color: '#F2F1EA' }}>Floory</span>
+          <div className="login-fade-in" style={{ display: 'flex', alignItems: 'center' }}>
+            <img src={flooryLogoOnDark} alt="Floory" style={{ height: 24, width: 'auto' }} />
           </div>
 
           {/* Hero copy */}
@@ -234,13 +230,8 @@ export default function Login() {
 
         <div style={{ width: '100%', maxWidth: 400, position: 'relative', zIndex: 1 }}>
           {/* Mobile logo */}
-          <div className="login-mobile-logo" style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 32 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 7, background: 'rgba(61,214,163,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3DD6A3" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
-              </svg>
-            </div>
-            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 17, color: '#F2F1EA' }}>Floory</span>
+          <div className="login-mobile-logo" style={{ display: 'flex', alignItems: 'center', marginBottom: 32 }}>
+            <img src={flooryLogoOnDark} alt="Floory" style={{ height: 22, width: 'auto' }} />
           </div>
 
           <div style={{ marginBottom: 28, direction: 'rtl' }}>

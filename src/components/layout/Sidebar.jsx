@@ -6,6 +6,9 @@ import { useBranding } from '../../hooks/useBranding'
 import {
   LayoutDashboard, ClipboardList, ShoppingCart, PackageCheck, CalendarDays, History, TrendingUp, Settings, X, LogOut, ChevronLeft,
 } from 'lucide-react'
+import flooryIcon from '../../assets/floory/icon.svg'
+import flooryLogoOnDark from '../../assets/floory/logo-horizontal-ondark.png'
+import flooryLogoOnLight from '../../assets/floory/logo-horizontal-onlight.png'
 
 const links = [
   { to: '/dashboard',   key: 'nav.dashboard',   Icon: LayoutDashboard },
@@ -18,19 +21,10 @@ const links = [
 ]
 
 export function BrandMark({ size = 28 }) {
-  return (
-    <span aria-hidden="true" style={{
-      width: size, height: size, borderRadius: size * 0.28, background: 'var(--accent-tint)',
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-    }}>
-      <svg width={size * 0.5} height={size * 0.5} viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
-      </svg>
-    </span>
-  )
+  return <img src={flooryIcon} alt="" width={size} height={size} style={{ objectFit: 'contain', flexShrink: 0 }} />
 }
 
-export default function Sidebar({ mobileOpen, setMobileOpen }) {
+export default function Sidebar({ mobileOpen, setMobileOpen, isDark }) {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const branding = useBranding()
@@ -86,8 +80,8 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
                 </div>
               )}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <BrandMark />
-                <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 15.5, letterSpacing: '-0.01em', color: 'var(--t1)', flex: 1 }}>Floory</span>
+                <img src={isDark ? flooryLogoOnDark : flooryLogoOnLight} alt="Floory" style={{ height: 24, width: 'auto' }} />
+                <div style={{ flex: 1 }} />
                 {mobileOpen && (
                   <button onClick={closeMenu} aria-label={t('nav.close')}
                     style={{ background: 'none', border: 'none', color: 'var(--t3)', cursor: 'pointer', display: 'flex', padding: 4 }}>

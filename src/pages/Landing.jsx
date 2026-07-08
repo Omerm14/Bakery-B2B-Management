@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import flooryLogoOnDark from '../assets/floory/logo-horizontal-ondark.png'
 
 const FEATURES = [
   { icon: '📋', title: 'הזמנות שבועיות', desc: 'טבלת הזמנות חכמה לכל לקוח — ימים, כמויות, עריכה ישירה. כמו Excel, רק חכם יותר.', accent: 'rgba(61,214,163,.45)' },
@@ -103,16 +104,6 @@ function RevealDiv({ children, delay = 0, style }) {
   )
 }
 
-function FlooryMark({ size = 32, iconSize = 15 }) {
-  return (
-    <div style={{ width: size, height: size, borderRadius: size * 0.28, background: 'rgba(61,214,163,.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-      <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="#3DD6A3" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
-      </svg>
-    </div>
-  )
-}
-
 export default function Landing() {
   const spotRef = useRef(null)
   const [scrolled, setScrolled] = useState(false)
@@ -194,9 +185,8 @@ export default function Landing() {
           borderBottom: `1px solid ${scrolled ? 'rgba(242,241,234,.07)' : 'transparent'}`,
         }}>
           <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 72 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <FlooryMark />
-              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, letterSpacing: '-0.01em', color: '#F2F1EA' }}>Floory</span>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <img src={flooryLogoOnDark} alt="Floory" style={{ height: 26, width: 'auto' }} />
             </div>
             <div className="land-nav-links-desktop" style={{ display: 'flex', gap: 32, alignItems: 'center' }}>
               <a href="#features" className="land-nav-link">יכולות</a>
@@ -480,9 +470,8 @@ export default function Landing() {
         {/* ── Footer ── */}
         <footer style={{ borderTop: '1px solid rgba(242,241,234,.06)', padding: '32px 0' }}>
           <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <FlooryMark size={26} iconSize={12} />
-              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14, color: '#A8B5AE' }}>Floory</span>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <img src={flooryLogoOnDark} alt="Floory" style={{ height: 18, width: 'auto', opacity: .85 }} />
             </div>
             <div style={{ fontSize: 13, color: '#6E7B74' }}>© 2025 Floory — Smart Floor Management</div>
             <Link to="/login" style={{ fontSize: 13, color: '#A8B5AE', textDecoration: 'none', transition: 'color .2s' }}
