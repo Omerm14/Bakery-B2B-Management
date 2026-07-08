@@ -127,7 +127,7 @@ body {
 .hd {
   height: 54px; flex-shrink: 0; display: flex; align-items: center; gap: 10px;
   padding-inline: 20px; background: var(--surf); border-bottom: 1px solid var(--bdr);
-  position: sticky; top: 0; z-index: 50;
+  position: sticky; top: 0; z-index: 100;
 }
 .hd-title { font: 600 15px var(--font-display); letter-spacing: -0.015em; color: var(--t1); }
 .hd-btn {
