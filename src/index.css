@@ -520,6 +520,8 @@ body {
 @media print {
   .no-print { display: none !important; }
   body       { background: #fff; color: #111; }
+  .app-shell { height: auto !important; min-height: 0 !important; display: block !important; }
+  .app-main  { height: auto !important; overflow: visible !important; }
   .page      { padding: 0; max-width: 100%; }
   .card      { background: #fff; border: 1px solid #ddd; }
   .produce-item { border-color: #ddd; }

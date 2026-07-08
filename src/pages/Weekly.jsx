@@ -297,7 +297,7 @@ export default function Weekly() {
                     {weekChange === null ? '—' : `${weekChange > 0 ? '+' : ''}${weekChange}%`}
                   </td>
                 </tr>
-                {Object.entries(grouped).map(([group, items]) => {
+                {Object.entries(grouped).map(([group, items], groupIdx) => {
                   const groupTotal = items.reduce((s, r) => s + r.total, 0)
                   const groupPrev = items.reduce((s, r) => s + (prevRows[r.menu_item_id] || 0), 0)
                   const gChange = groupPrev > 0 ? Math.round(((groupTotal - groupPrev) / groupPrev) * 100) : null
@@ -311,7 +311,7 @@ export default function Weekly() {
                         </td>
                         {WEEK_DAYS.map(d => (
                           <td key={d.key} style={{ textAlign: 'center', fontSize: 11, color: 'var(--t3)', background: 'var(--accent-tint)' }}>
-                            {formatShortDate(week.dayDate(d.key))}
+                            {groupIdx > 0 && `${lang === 'en' ? d.short_en : d.short} ${formatShortDate(week.dayDate(d.key))}`}
                           </td>
                         ))}
                         <td style={{ textAlign: 'center', fontSize: 12, fontWeight: 700, color: 'var(--t2)', background: 'var(--accent-tint)' }}>
