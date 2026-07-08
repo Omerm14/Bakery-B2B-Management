@@ -34,14 +34,14 @@ export function buildPackingListHtml({ htmlTitle, h2, subheading, sections, dir 
       </body></html>`
   }
 
-  const body = sections.map(s => `<div style="page-break-inside:avoid;margin-bottom:28px">
+  const body = sections.map(s => `<div style="margin-bottom:28px">
         <h3 style="margin:0 0 4px">${escapeHtml(s.heading)}</h3>
         <table style="width:100%;border-collapse:collapse">${rowsHtml(s.items, '6px 10px')}</table>
       </div>`).join('<hr style="margin:24px 0">')
 
   return `<!DOCTYPE html><html dir="${dir}"><head><meta charset="utf-8">
       <title>${escapeHtml(htmlTitle)}</title>
-      <style>body{font-family:Arial,sans-serif;margin:30px}h2{margin-bottom:16px}h3{font-size:16px}</style>
+      <style>body{font-family:Arial,sans-serif;margin:30px}h2{margin-bottom:16px}h3{font-size:16px;page-break-after:avoid}tr{page-break-inside:avoid}</style>
       </head><body>
       <h2>${escapeHtml(h2)}</h2>
       ${body}
@@ -112,7 +112,7 @@ export function buildWeeklyProductionHtml({ htmlTitle, h1, subheading, dayLabels
         <td style="text-align:center;padding:6px 8px;border-bottom:1px solid #eee;font-weight:700">${i.total % 1 === 0 ? i.total : i.total.toFixed(1)}</td>
       </tr>`
     }).join('')
-    return `<div style="page-break-inside:avoid;margin-bottom:24px">
+    return `<div style="margin-bottom:24px">
       <h3 style="margin:0 0 6px;font-size:16px">${escapeHtml(s.heading)}</h3>
       <table style="width:100%;border-collapse:collapse">
         <thead><tr>
@@ -129,7 +129,7 @@ export function buildWeeklyProductionHtml({ htmlTitle, h1, subheading, dayLabels
 
   return `<!DOCTYPE html><html dir="${dir}"><head><meta charset="utf-8">
     <title>${escapeHtml(htmlTitle)}</title>
-    <style>@page{size:A4 landscape;margin:14mm}body{font-family:Arial,sans-serif;margin:0}h1{margin:0 0 4px;font-size:20px}p{color:#666;font-size:13px;margin:0 0 18px}</style>
+    <style>@page{size:A4 landscape;margin:14mm}body{font-family:Arial,sans-serif;margin:0}h1{margin:0 0 4px;font-size:20px}p{color:#666;font-size:13px;margin:0 0 18px}h3{page-break-after:avoid}tr{page-break-inside:avoid}thead{display:table-header-group}</style>
     </head><body>
     <h1>${escapeHtml(h1)}</h1><p>${escapeHtml(subheading)}</p>
     ${body}

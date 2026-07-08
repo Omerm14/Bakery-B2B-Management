@@ -4,13 +4,13 @@ import { supabase } from '../../lib/supabase'
 import { useTranslation } from '../../context/LanguageContext'
 import { useBranding } from '../../hooks/useBranding'
 import {
-  LayoutDashboard, ClipboardList, Factory, PackageCheck, CalendarDays, History, TrendingUp, Settings, X, LogOut, ChevronLeft,
+  LayoutDashboard, ClipboardList, ShoppingCart, PackageCheck, CalendarDays, History, TrendingUp, Settings, X, LogOut, ChevronLeft,
 } from 'lucide-react'
 
 const links = [
   { to: '/dashboard',   key: 'nav.dashboard',   Icon: LayoutDashboard },
   { to: '/orders',      key: 'nav.orders',      Icon: ClipboardList },
-  { to: '/production',  key: 'nav.production',  Icon: Factory },
+  { to: '/production',  key: 'nav.production',  Icon: ShoppingCart },
   { to: '/packing',     key: 'nav.packing',     Icon: PackageCheck },
   { to: '/weekly',      key: 'nav.weekly',      Icon: CalendarDays },
   { to: '/history',     key: 'nav.history',     Icon: History },
@@ -81,7 +81,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen }) {
           ) : (
             <div style={{ padding: '4px 10px 18px' }}>
               {branding.logo_url && (
-                <div style={{ marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
                   <img src={branding.logo_url} alt="" style={{ height: 40, maxWidth: 180, objectFit: 'contain' }} />
                 </div>
               )}

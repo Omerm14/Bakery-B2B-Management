@@ -86,6 +86,32 @@ export default function Packing() {
     }
   }
 
+  // Bulk version of toggleCheck, driven by the customer card's round status
+  // circle — marks (or unmarks, if already all packed) every item in the
+  // card at once, using a single upsert/delete instead of looping the
+  // single-item write.
+  async function toggleAllForClient(client) {
+    const done = isClientDone(client)
+    const nowPacked = !done
+    const packedAt = nowPacked ? new Date().toISOString() : null
+    const lineIds = client.items.map(i => i.line_id)
+
+    setChecks(prev => {
+      const next = { ...prev }
+      for (const id of lineIds) next[id] = packedAt
+      return next
+    })
+
+    if (nowPacked) {
+      await supabase.from('packing_checks').upsert(
+        lineIds.map(id => ({ order_line_id: id, packed_at: packedAt })),
+        { onConflict: 'order_line_id' }
+      )
+    } else {
+      await supabase.from('packing_checks').delete().in('order_line_id', lineIds)
+    }
+  }
+
   useEffect(() => {
     if (!clients.length) { setAllDone(false); return }
     const done = clients.every(c => c.items.every(i => !!checks[i.line_id]))
@@ -220,15 +246,21 @@ export default function Packing() {
                   className="client-hdr"
                   onClick={() => setExpanded(p => ({ ...p, [client.customer_id]: !p[client.customer_id] }))}
                 >
-                  <div style={{
-                    width: 26, height: 26, borderRadius: '50%',
-                    background: done ? 'var(--green-tint)' : 'var(--surf2)',
-                    border: `2px solid ${done ? 'var(--green)' : 'var(--bdr2)'}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                    transition: 'all .3s',
-                  }}>
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); toggleAllForClient(client) }}
+                    aria-label={done ? t('packing.unmarkAll') : t('packing.markAll')}
+                    title={done ? t('packing.unmarkAll') : t('packing.markAll')}
+                    style={{
+                      width: 26, height: 26, borderRadius: '50%', padding: 0, cursor: 'pointer',
+                      background: done ? 'var(--green-tint)' : 'var(--surf2)',
+                      border: `2px solid ${done ? 'var(--green)' : 'var(--bdr2)'}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      transition: 'all .3s',
+                    }}
+                  >
                     {done && <Check size={13} color="var(--green)" />}
-                  </div>
+                  </button>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 15.5 }}>{clientName}</div>
                     {!isOpen && (
