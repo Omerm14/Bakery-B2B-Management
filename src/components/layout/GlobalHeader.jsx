@@ -5,7 +5,6 @@ import { supabase } from '../../lib/supabase'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { useTranslation } from '../../context/LanguageContext'
 import { customerDisplayName } from '../../lib/displayName'
-import { useBranding } from '../../hooks/useBranding'
 
 const TITLE_KEYS = {
   '/dashboard': 'nav.dashboard',
@@ -188,7 +187,6 @@ function NotificationBell() {
 export default function GlobalHeader({ isDark, onToggleTheme, onMenuOpen, onSearchOpen }) {
   const { pathname } = useLocation()
   const { t, toggleLang } = useTranslation()
-  const branding = useBranding()
   const title = t(TITLE_KEYS[pathname] || '')
 
   return (
@@ -196,9 +194,6 @@ export default function GlobalHeader({ isDark, onToggleTheme, onMenuOpen, onSear
       <button className="hd-btn hd-menu-btn" style={{ border: 'none' }} onClick={onMenuOpen} aria-label={t('header.menu')}>
         <Menu size={18} />
       </button>
-      {branding.logo_url && (
-        <img src={branding.logo_url} alt="" style={{ height: 36, maxWidth: 160, objectFit: 'contain', flexShrink: 0 }} />
-      )}
       <span className="hd-title">{TITLE_KEYS[pathname] ? title : ''}</span>
       <div style={{ flex: 1 }} />
       <button className="hd-search" onClick={onSearchOpen} aria-label={t('header.search')}>

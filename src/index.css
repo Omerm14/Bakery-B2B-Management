@@ -80,10 +80,18 @@ body {
   width: 232px; flex-shrink: 0; height: 100vh; overflow-y: auto;
   background: var(--surf); border-inline-end: 1px solid var(--bdr);
   display: flex; flex-direction: column; padding: 16px 12px;
-  position: sticky; top: 0;
+  position: sticky; top: 0; transition: width .2s ease;
 }
+.sb-collapsed { width: 64px; }
 .sb-drawer { position: fixed; top: 0; inset-inline-start: 0; z-index: 200; animation: slideInStart .25s ease; }
 .sb-scrim { position: fixed; inset: 0; background: rgba(4,8,6,.55); z-index: 199; animation: fadeIn .2s; border: none; }
+.sb-collapse-btn {
+  position: absolute; top: 72px; inset-inline-end: -12px; width: 24px; height: 24px;
+  border-radius: 50%; background: var(--surf); border: 1px solid var(--bdr2); color: var(--t2);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  z-index: 210; box-shadow: var(--shadow-pop); transition: color .12s, border-color .12s;
+}
+.sb-collapse-btn:hover { color: var(--t1); border-color: var(--accent-bdr); }
 .sb-nav-item {
   display: flex; align-items: center; gap: 10px; width: 100%;
   padding: 9px 12px; border-radius: var(--rs); border: none; cursor: pointer;
@@ -97,6 +105,7 @@ body {
   content: ""; position: absolute; inset-inline-start: 0; top: 9px; bottom: 9px;
   width: 2.5px; border-radius: 2px; background: var(--accent);
 }
+.sb-nav-item-collapsed { justify-content: center; padding-inline: 0; }
 @keyframes slideInStart { from { opacity: 0; transform: translateX(-100%) } to { opacity: 1; transform: none } }
 [dir="rtl"] .drawer-anim { animation-name: slideInEnd; }
 @keyframes slideInEnd { from { opacity: 0; transform: translateX(100%) } to { opacity: 1; transform: none } }
