@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, Upload, Image as ImageIcon } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { portalOrigin } from '../lib/host'
 import { useImport } from '../context/ImportContext'
 import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
@@ -213,7 +214,7 @@ export default function Settings() {
   }
 
   function portalUrlFor(customer) {
-    return `${window.location.origin}/portal/login?phone=${encodeURIComponent(customer.phone)}`
+    return `${portalOrigin()}/login?phone=${encodeURIComponent(customer.phone)}`
   }
 
   async function generateAndSetPin(customer) {

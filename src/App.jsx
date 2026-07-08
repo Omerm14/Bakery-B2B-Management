@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { supabase } from './lib/supabase'
 import Sidebar from './components/layout/Sidebar'
 import GlobalHeader from './components/layout/GlobalHeader'
@@ -21,6 +21,15 @@ import Landing from './pages/Landing'
 import CustomerLogin from './pages/customer/CustomerLogin'
 import CustomerOrders from './pages/customer/CustomerOrders'
 import CustomerPortalDemo from './pages/customer/CustomerPortalDemo'
+import { isPortalHost } from './lib/host'
+
+// Pre-subdomain deep links (/portal/orders etc.) still arrive on the portal
+// host from old bookmarks and shared links — send them to the clean path.
+function StripPortalPrefix() {
+  const location = useLocation()
+  const target = location.pathname.replace(/^\/portal/, '') || '/'
+  return <Navigate to={{ pathname: target, search: location.search }} replace />
+}
 
 function ImportToast() {
   const { running, progress, logs } = useImport()
@@ -147,7 +156,7 @@ export default function App() {
   const role = session?.user?.app_metadata?.role
   const isCustomer = role === 'customer'
   const isStaff = role === 'staff'
-  const homeFor = isCustomer ? '/portal/orders' : isStaff ? '/dashboard' : '/access-pending'
+  const staffHome = isStaff ? '/dashboard' : '/access-pending'
 
   if (session === undefined) {
     return (
@@ -161,17 +170,33 @@ export default function App() {
     <ToastProvider>
       <ImportProvider>
         <BrowserRouter>
+          {isPortalHost ? (
+          /* portal.urbanbakery.co — customer portal at clean paths. Only
+             customer sessions are honored here; staff or role-less sessions
+             see the customer login (full per-host session isolation is a
+             follow-up — see the auth note in the subdomain handoff doc). */
           <Routes>
-            <Route path="/" element={session ? <Navigate to={homeFor} replace /> : <Landing />} />
-            <Route path="/login" element={session ? <Navigate to={homeFor} replace /> : <Login />} />
-            <Route path="/portal/login" element={session ? <Navigate to={homeFor} replace /> : <CustomerLogin />} />
-            <Route path="/portal/preview" element={<CustomerPortalDemo />} />
+            <Route path="/login" element={session && isCustomer ? <Navigate to="/orders" replace /> : <CustomerLogin />} />
+            <Route path="/preview" element={<CustomerPortalDemo />} />
+            <Route path="/portal/*" element={<StripPortalPrefix />} />
             {session && isCustomer ? (
               <>
-                <Route path="/portal/orders" element={<CustomerOrders />} />
-                <Route path="*" element={<Navigate to="/portal/orders" replace />} />
+                <Route path="/orders" element={<CustomerOrders />} />
+                <Route path="*" element={<Navigate to="/orders" replace />} />
               </>
-            ) : session && isStaff ? (
+            ) : (
+              <Route path="*" element={<Navigate to="/login" replace />} />
+            )}
+          </Routes>
+          ) : (
+          /* floory.urbanbakery.co / *.vercel.app / localhost — management app.
+             The customer portal moved to the portal subdomain, so /portal/*
+             is blocked here and customer sessions get the staff login. */
+          <Routes>
+            <Route path="/" element={!session ? <Landing /> : isCustomer ? <Navigate to="/login" replace /> : <Navigate to={staffHome} replace />} />
+            <Route path="/login" element={session && !isCustomer ? <Navigate to={staffHome} replace /> : <Login />} />
+            <Route path="/portal/*" element={<Navigate to="/" replace />} />
+            {session && isStaff ? (
               <>
                 <Route path="/dashboard" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Dashboard /></ProtectedLayout>} />
                 <Route path="/orders" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Orders /></ProtectedLayout>} />
@@ -183,7 +208,7 @@ export default function App() {
                 <Route path="/settings" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Settings /></ProtectedLayout>} />
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </>
-            ) : session ? (
+            ) : session && !isCustomer ? (
               <>
                 <Route path="/access-pending" element={<AccessPending />} />
                 <Route path="*" element={<Navigate to="/access-pending" replace />} />
@@ -192,6 +217,7 @@ export default function App() {
               <Route path="*" element={<Navigate to="/login" replace />} />
             )}
           </Routes>
+          )}
         </BrowserRouter>
       </ImportProvider>
     </ToastProvider>

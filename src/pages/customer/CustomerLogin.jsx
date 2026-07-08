@@ -57,7 +57,7 @@ export default function CustomerLogin() {
     setLoading(false)
     if (signInErr) { setError('מספר טלפון או קוד שגויים'); return }
     // No navigate() needed — App.jsx's onAuthStateChange picks up the new
-    // session and routes to /portal/orders on its own.
+    // session and routes to /orders on its own.
   }
 
   return (
