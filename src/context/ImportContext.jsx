@@ -2,6 +2,7 @@ import { createContext, useContext, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { toLocalISODate } from '../constants/days'
+import { trackEvent } from '../lib/posthog'
 
 // ── helpers (copied from Settings so they run in context, not component) ──────
 
@@ -329,6 +330,12 @@ export function ImportProvider({ children }) {
     await saveHash(hash, fileName, newLines.length, dupCount)
     log(`✅ הסתיים — ${newLines.length} שורות חדשות, ${dupCount} קיימות`)
     log('──────────')
+    trackEvent('excel_import_completed', {
+      customers: customers.length,
+      items: items.length,
+      rows_new: newLines.length,
+      rows_existing: dupCount,
+    })
   }
 
   async function startImport(files) {
@@ -346,6 +353,7 @@ export function ImportProvider({ children }) {
       } catch (err) {
         log(`❌ שגיאה ב-${file.name}: ${err.message}`)
         log('──────────')
+        trackEvent('excel_import_failed')
       }
     }
 

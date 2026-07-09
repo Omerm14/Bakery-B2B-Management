@@ -11,6 +11,7 @@ import { useTranslation } from '../context/LanguageContext'
 import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
 import SearchInput from '../components/SearchInput'
 import { customerDisplayName } from '../lib/displayName'
+import { trackEvent } from '../lib/posthog'
 
 export default function Orders() {
   const toast = useToast()
@@ -132,6 +133,7 @@ export default function Orders() {
       if (data) {
         setOrderLines(prev => ({ ...prev, [key]: { ...prev[key], id: data.id } }))
       }
+      trackEvent('order_line_edited', { via, reason: changeReason })
     } catch (err) {
       console.error('[handleQtyChange]', err)
       setOrderLines(prev => {
