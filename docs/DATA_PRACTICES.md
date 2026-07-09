@@ -50,9 +50,14 @@ What's collected and why differs between the two groups, so it's broken out sepa
 
 ## 5. Analytics
 
-*(To be filled in once a tool is selected — see the separate analytics tool recommendation.)*
+We use **PostHog** to understand how the system is actually used — which screens get opened, how often, and whether core actions (like submitting an order) succeed.
 
-When we add product analytics, this section will name the specific tool, state plainly what it tracks (e.g. "which screens and features are used, and how often" — not keystrokes, not message content, no session recordings unless explicitly stated), and confirm it does not add any new personal data beyond what's already listed above. This section will be updated *before* the tool goes live, not after.
+- We track page views and a small set of named actions (e.g. "order submitted"). We do **not** use session recording, autocapture (which would log every click/keystroke), or heatmaps — those are explicitly turned off in our configuration.
+- For customers, only an internal account ID is sent — never your name, phone number, or email.
+- For staff, activity is tied to their work email, consistent with the existing internal audit trail already described in this document.
+- No new category of personal data is collected beyond what's listed in Section 2 — analytics reuses identifiers we already have, it doesn't introduce new ones.
+
+`[TBD]` — confirm PostHog's data hosting region (EU vs US) here once the account is set up.
 
 ## 6. Data retention
 
