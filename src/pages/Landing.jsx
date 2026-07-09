@@ -474,10 +474,20 @@ export default function Landing() {
               <img src={flooryLogoOnDark} alt="Floory" style={{ height: 18, width: 'auto', opacity: .85 }} />
             </div>
             <div style={{ fontSize: 13, color: '#6E7B74' }}>© 2025 Floory — Smart Floor Management</div>
-            <Link to="/login" style={{ fontSize: 13, color: '#A8B5AE', textDecoration: 'none', transition: 'color .2s' }}
-              onMouseEnter={e => e.currentTarget.style.color = '#F2F1EA'}
-              onMouseLeave={e => e.currentTarget.style.color = '#A8B5AE'}
-            >כניסה</Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+              <Link to="/privacy" style={{ fontSize: 13, color: '#A8B5AE', textDecoration: 'none', transition: 'color .2s' }}
+                onMouseEnter={e => e.currentTarget.style.color = '#F2F1EA'}
+                onMouseLeave={e => e.currentTarget.style.color = '#A8B5AE'}
+              >מדיניות פרטיות</Link>
+              <Link to="/terms" style={{ fontSize: 13, color: '#A8B5AE', textDecoration: 'none', transition: 'color .2s' }}
+                onMouseEnter={e => e.currentTarget.style.color = '#F2F1EA'}
+                onMouseLeave={e => e.currentTarget.style.color = '#A8B5AE'}
+              >תנאי שימוש</Link>
+              <Link to="/login" style={{ fontSize: 13, color: '#A8B5AE', textDecoration: 'none', transition: 'color .2s' }}
+                onMouseEnter={e => e.currentTarget.style.color = '#F2F1EA'}
+                onMouseLeave={e => e.currentTarget.style.color = '#A8B5AE'}
+              >כניסה</Link>
+            </div>
           </div>
         </footer>
       </div>

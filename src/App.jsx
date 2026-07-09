@@ -18,6 +18,8 @@ import { LanguageProvider } from './context/LanguageContext'
 import ToastHost from './components/ToastHost'
 import SearchOverlay from './components/search/SearchOverlay'
 import Landing from './pages/Landing'
+import PrivacyPolicy from './pages/legal/PrivacyPolicy'
+import TermsOfService from './pages/legal/TermsOfService'
 import CustomerLogin from './pages/customer/CustomerLogin'
 import CustomerOrders from './pages/customer/CustomerOrders'
 import CustomerPortalDemo from './pages/customer/CustomerPortalDemo'
@@ -211,6 +213,8 @@ export default function App() {
           <Routes>
             <Route path="/" element={!session ? <Landing /> : isCustomer ? <Navigate to="/login" replace /> : <Navigate to={staffHome} replace />} />
             <Route path="/login" element={session && !isCustomer ? <Navigate to={staffHome} replace /> : <Login />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<TermsOfService />} />
             <Route path="/portal/*" element={<Navigate to="/" replace />} />
             {session && isStaff ? (
               <>
