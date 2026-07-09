@@ -8,6 +8,7 @@ import { useMenuItems } from '../hooks/useMenuItems'
 import { useToast } from '../context/ToastContext'
 import SearchInput from '../components/SearchInput'
 import { useTranslation } from '../context/LanguageContext'
+import { trackEvent } from '../lib/posthog'
 
 export default function Settings() {
   const toast = useToast()
@@ -337,6 +338,7 @@ export default function Settings() {
       }
       setCustomers(prev => prev.map(c => c.id === customer.id ? { ...c, auth_user_id: c.auth_user_id || 'pending', portal_pin: pin } : c))
       setPinModalCustomerId(customer.id)
+      trackEvent('customer_pin_reset')
     } finally {
       setSettingPin(null)
     }

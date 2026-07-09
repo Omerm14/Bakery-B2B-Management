@@ -6,6 +6,7 @@ import { buildProductionListHtml, printViaIframe } from '../lib/printHtml'
 import { useTranslation } from '../context/LanguageContext'
 import { customerDisplayName } from '../lib/displayName'
 import { CATEGORY_ORDER, displayCategoryLabel } from '../constants/categories'
+import { trackEvent } from '../lib/posthog'
 
 // Ordered-bucket grouping (same pattern as Weekly.jsx's groupRows()): fixed
 // CATEGORY_ORDER first, then any leftover categories sorted alphabetically.
@@ -169,6 +170,7 @@ export default function Production() {
       labels: { item: t('common.item'), byCustomer: t('common.customer'), totalQty: t('production.totalQtyStat') },
     })
     printViaIframe(html)
+    trackEvent('production_export', { sections: sections.length })
   }
 
   const suppliers = ['all', ...new Set(items.map(i => i.supplier))]
