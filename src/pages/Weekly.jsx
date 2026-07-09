@@ -10,7 +10,8 @@ import { useTranslation } from '../context/LanguageContext'
 
 const CATEGORY_EN = {
   'מאפים': 'Pastries',
-  'לחם ולחמניות': 'Bread & Rolls',
+  'לחם': 'Bread',
+  'לחמניות': 'Rolls',
   'עוגות ועוגיות': 'Cakes & Cookies',
   'קפואים ושונות - קונדי': 'Frozen & Misc',
 }

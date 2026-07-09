@@ -11,7 +11,7 @@ const NON_ITEM = new Set(['', 'סה"כ', 'Total', 'total', 'תאריך', 'Date',
 // Section-header rows inside each customer sheet — mark the category of the
 // item rows below them until the next header (or end of sheet). Some sheets
 // prefix the header with a colon (e.g. ":עוגות ועוגיות") — stripped before matching.
-const CATEGORY_HEADERS = new Set(['מאפים', 'מתוקים', 'קפואים', 'שונות', 'עוגות ועוגיות', 'קפואים ושונות - קונדי', 'לחם ולחמניות'])
+const CATEGORY_HEADERS = new Set(['מאפים', 'מתוקים', 'קפואים', 'שונות', 'עוגות ועוגיות', 'קפואים ושונות - קונדי', 'לחם ולחמניות', 'לחם', 'לחמניות'])
 
 function normalizeCategoryLabel(s) {
   return s.trim().replace(/^[:：]\s*/, '').replace(/\s*[:：]$/, '')
