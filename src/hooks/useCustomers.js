@@ -9,7 +9,7 @@ export function useCustomers({ activeOnly = true } = {}) {
 
   const refetch = useCallback(async () => {
     setLoading(true)
-    let q = supabase.from('customers').select('id, name, name_en, phone, active, auth_user_id, portal_pin').order('name')
+    let q = supabase.from('customers').select('id, name, name_en, phone, active, auth_user_id, portal_pin, contact_person, email').order('name')
     if (activeOnly) q = q.eq('active', true)
     const { data, error } = await q
     if (error) { console.error('[useCustomers]', error); toast.error('טעינת הלקוחות נכשלה') }
@@ -31,7 +31,7 @@ export function useCustomers({ activeOnly = true } = {}) {
     const { data, error } = await supabase
       .from('customers')
       .insert({ name: trimmed, active: true })
-      .select('id, name, name_en, phone, active, auth_user_id, portal_pin')
+      .select('id, name, name_en, phone, active, auth_user_id, portal_pin, contact_person, email')
       .single()
 
     if (!error) {
@@ -42,7 +42,7 @@ export function useCustomers({ activeOnly = true } = {}) {
     if (error.code === '23505') {
       const { data: existing } = await supabase
         .from('customers')
-        .select('id, name, name_en, phone, active, auth_user_id, portal_pin')
+        .select('id, name, name_en, phone, active, auth_user_id, portal_pin, contact_person, email')
         .eq('name', trimmed)
         .maybeSingle()
 
@@ -51,7 +51,7 @@ export function useCustomers({ activeOnly = true } = {}) {
           .from('customers')
           .update({ active: true })
           .eq('id', existing.id)
-          .select('id, name, name_en, phone, active, auth_user_id, portal_pin')
+          .select('id, name, name_en, phone, active, auth_user_id, portal_pin, contact_person, email')
           .single()
         if (reactivateErr) return { error: reactivateErr }
         setCustomers(prev => [...prev.filter(c => c.id !== reactivated.id), reactivated].sort((a, b) => a.name.localeCompare(b.name, 'he')))

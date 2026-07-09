@@ -2,13 +2,11 @@ import { useState, useEffect } from 'react'
 import { ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Check, Printer } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { isoToday, toLocalISODate } from '../constants/days'
-import { buildPackingListHtml, openAndPrint } from '../lib/printHtml'
-import { useToast } from '../context/ToastContext'
+import { buildPackingListHtml, printViaIframe } from '../lib/printHtml'
 import { useTranslation } from '../context/LanguageContext'
 import { customerDisplayName } from '../lib/displayName'
 
 export default function Packing() {
-  const toast = useToast()
   const { t, lang } = useTranslation()
   const locale = lang === 'en' ? 'en-US' : 'he-IL'
   const [selectedDate, setSelectedDate] = useState(isoToday())
@@ -152,7 +150,7 @@ export default function Packing() {
       sections: [{ items: client.items.map(i => ({ ...i, name_he: displayName(i) })) }],
       dir: lang === 'en' ? 'ltr' : 'rtl',
     })
-    if (!openAndPrint(html)) toast.error(t('packing.popupBlocked'))
+    printViaIframe(html)
   }
 
   function printAll() {
@@ -165,7 +163,7 @@ export default function Packing() {
       sections: clients.map(client => ({ heading: customerDisplayName(client, lang), items: client.items.map(i => ({ ...i, name_he: displayName(i) })) })),
       dir: lang === 'en' ? 'ltr' : 'rtl',
     })
-    if (!openAndPrint(html)) toast.error(t('packing.popupBlocked'))
+    printViaIframe(html)
   }
 
   const doneCount = clients.filter(isClientDone).length

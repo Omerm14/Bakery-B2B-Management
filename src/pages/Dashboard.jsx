@@ -191,10 +191,19 @@ export default function Dashboard() {
     if (!isBackgroundRefresh) setLoading(true)
     try {
       const todayIso = toLocalISODate(weekStart())
+      // Candidates go one week past today so a next week that already has
+      // real data (e.g. an advance order) is reachable via forward
+      // navigation — but no further than that, so the handful of blank
+      // far-future week stubs the app pre-creates when anyone merely
+      // browses ahead don't crowd real history out of this batch (same
+      // class of bug fixed for favorites seeding — see migration 046).
+      const nextWeekStart = new Date(weekStart())
+      nextWeekStart.setDate(nextWeekStart.getDate() + 7)
+      const nextWeekIso = toLocalISODate(nextWeekStart)
       const { data: candidateWeeksDesc } = await supabase
         .from('weeks')
         .select('id, start_date')
-        .lte('start_date', todayIso)
+        .lte('start_date', nextWeekIso)
         .order('start_date', { ascending: false })
         .limit(HISTORY_BATCH)
 
@@ -205,10 +214,18 @@ export default function Dashboard() {
       const historyAsc = buildHistorySegment(candidateWeeksDesc, itemRows, customerRows)
       const moreLikely = (candidateWeeksDesc || []).length >= HISTORY_BATCH
 
+      // Default landing view stays on the most recent week that isn't in
+      // the future, even though next week (if it has data) may now sit
+      // past this index in the array — reachable by clicking forward.
+      let defaultIndex = historyAsc.length - 1
+      for (let i = historyAsc.length - 1; i >= 0; i--) {
+        if (historyAsc[i].start_date <= todayIso) { defaultIndex = i; break }
+      }
+
       setWeekHistory(historyAsc)
-      setViewedIndex(historyAsc.length - 1)
+      setViewedIndex(defaultIndex)
       setHasMoreHistory(moreLikely)
-      writeCache(historyAsc, historyAsc.length - 1, moreLikely)
+      writeCache(historyAsc, defaultIndex, moreLikely)
     } finally {
       setLoading(false)
     }

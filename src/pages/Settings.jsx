@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Upload, Image as ImageIcon } from 'lucide-react'
+import { Plus, Upload, Image as ImageIcon, Pencil } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { portalOrigin } from '../lib/host'
 import { useImport } from '../context/ImportContext'
@@ -238,6 +238,49 @@ export default function Settings() {
   const [showAddCustomer, setShowAddCustomer] = useState(false)
   const [newCustomerName, setNewCustomerName] = useState('')
 
+  // Dedicated "Edit Customer" modal — consolidates every editable customer
+  // field (including name, which has no inline editor at all) in one place
+  // instead of growing the table with more inline columns.
+  const [editingCustomer, setEditingCustomer] = useState(null)
+  const [editForm, setEditForm] = useState({ name: '', name_en: '', phone: '', contact_person: '', email: '' })
+  const [savingCustomer, setSavingCustomer] = useState(false)
+
+  function openEditCustomer(c) {
+    setEditingCustomer(c)
+    setEditForm({
+      name: c.name || '',
+      name_en: c.name_en || '',
+      phone: c.phone || '',
+      contact_person: c.contact_person || '',
+      email: c.email || '',
+    })
+  }
+
+  async function saveEditCustomer() {
+    if (!editingCustomer || savingCustomer) return
+    const name = editForm.name.trim()
+    if (!name) { toast.error(t('settings.customerNameRequired')); return }
+    const payload = {
+      name,
+      name_en: editForm.name_en.trim() || null,
+      phone: editForm.phone.trim() || null,
+      contact_person: editForm.contact_person.trim() || null,
+      email: editForm.email.trim() || null,
+    }
+    const prev = editingCustomer
+    setSavingCustomer(true)
+    setCustomers(list => list.map(c => c.id === prev.id ? { ...c, ...payload } : c))
+    const { error } = await supabase.from('customers').update(payload).eq('id', prev.id)
+    setSavingCustomer(false)
+    if (error) {
+      setCustomers(list => list.map(c => c.id === prev.id ? prev : c))
+      toast.error(t('settings.toast.customerUpdateFailed'))
+      return
+    }
+    toast.success(t('settings.toast.customerUpdated'))
+    setEditingCustomer(null)
+  }
+
   async function addCustomer() {
     if (!newCustomerName.trim()) return
     const { error, reactivated, alreadyActive, data } = await createCustomer(newCustomerName)
@@ -311,7 +354,10 @@ export default function Settings() {
   const UNITS = ['יח׳', 'ק״ג', 'גרם', 'ליטר', 'מ״ל', 'מגש', 'קרטון']
   const knownCategories = [...new Set(menuItems.map(i => i.category).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'he'))
 
-  const sortedMenuItems = [...menuItems].sort((a, b) => a.name_he.localeCompare(b.name_he, 'he'))
+  const sortedMenuItems = [...menuItems].sort((a, b) => {
+    if (a.active !== b.active) return a.active ? -1 : 1
+    return a.name_he.localeCompare(b.name_he, 'he')
+  })
   const sortedCustomers = [...customers].sort((a, b) => {
     if (a.active !== b.active) return a.active ? -1 : 1
     return a.name.localeCompare(b.name, 'he')
@@ -595,7 +641,7 @@ function AuditLogTab({ filterText }) {
           <div className="card" style={{ padding: 0 }}>
             <table className="itbl">
               <thead>
-                <tr><th>{t('settings.col.name')}</th><th>{t('settings.col.nameEn')}</th><th>{t('settings.col.phone')}</th><th>{t('settings.col.portalAccess')}</th><th>{t('settings.col.status')}</th></tr>
+                <tr><th>{t('settings.col.name')}</th><th>{t('settings.col.nameEn')}</th><th>{t('settings.col.phone')}</th><th>{t('settings.col.portalAccess')}</th><th>{t('settings.col.status')}</th><th></th></tr>
               </thead>
               <tbody>
                 {sortedCustomers.filter(c => c.name.includes(filterText.trim())).map(c => (
@@ -636,6 +682,11 @@ function AuditLogTab({ filterText }) {
                     <td>
                       <button className={'btn btn-sm ' + (c.active ? 'btn-success' : 'btn-ghost')} onClick={() => toggleCustomerActive(c.id, c.active)}>
                         {c.active ? t('settings.active') : t('settings.inactive')}
+                      </button>
+                    </td>
+                    <td>
+                      <button className="btn btn-ghost btn-sm" onClick={() => openEditCustomer(c)} title={t('settings.editCustomerTitle')} aria-label={t('settings.editCustomerTitle')}>
+                        <Pencil size={13} />
                       </button>
                     </td>
                   </tr>
@@ -803,6 +854,71 @@ function AuditLogTab({ filterText }) {
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={() => setShowAddCustomer(false)}>{t('common.cancel')}</button>
               <button className="btn btn-primary" onClick={addCustomer}>{t('common.add')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Customer Modal */}
+      {editingCustomer && (
+        <div className="overlay" onClick={() => setEditingCustomer(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-title">{t('settings.editCustomerModalTitle')}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label className="lbl">{t('settings.customerNameLabel')}</label>
+                <input
+                  className="input"
+                  value={editForm.name}
+                  onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="lbl">{t('settings.col.nameEn')}</label>
+                <input
+                  className="input"
+                  dir="ltr"
+                  value={editForm.name_en}
+                  onChange={e => setEditForm(f => ({ ...f, name_en: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="lbl">{t('settings.col.phone')}</label>
+                <input
+                  className="input"
+                  dir="ltr"
+                  placeholder="050-1234567"
+                  value={editForm.phone}
+                  onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="lbl">{t('settings.contactPersonLabel')}</label>
+                <input
+                  className="input"
+                  value={editForm.contact_person}
+                  onChange={e => setEditForm(f => ({ ...f, contact_person: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="lbl">{t('settings.emailLabel')}</label>
+                <input
+                  className="input"
+                  dir="ltr"
+                  type="email"
+                  placeholder="name@example.com"
+                  value={editForm.email}
+                  onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))}
+                  onKeyDown={e => e.key === 'Enter' && saveEditCustomer()}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setEditingCustomer(null)}>{t('common.cancel')}</button>
+              <button className="btn btn-primary" onClick={saveEditCustomer} disabled={savingCustomer}>
+                {savingCustomer ? t('settings.saving') : t('common.save')}
+              </button>
             </div>
           </div>
         </div>

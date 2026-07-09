@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Menu, Sun, Moon, Search, Bell, Languages, ArrowUp, ArrowDown } from 'lucide-react'
+import { Menu, Sun, Moon, Search, Bell, Globe, ArrowUp, ArrowDown } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { useTranslation } from '../../context/LanguageContext'
@@ -209,7 +209,7 @@ export default function GlobalHeader({ isDark, onToggleTheme, onMenuOpen, onSear
       </button>
       <NotificationBell />
       <button className="hd-btn" onClick={toggleLang} aria-label={t('header.lang')} title={t('header.lang')}>
-        <Languages size={14} />
+        <Globe size={14} />
       </button>
       <button className="hd-btn" onClick={onToggleTheme} aria-label={isDark ? t('header.toggleDay') : t('header.toggleNight')}>
         {isDark ? <Sun size={14} /> : <Moon size={14} />}

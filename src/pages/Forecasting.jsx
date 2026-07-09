@@ -3,25 +3,20 @@ import { supabase } from '../lib/supabase'
 import { useWeek } from '../hooks/useWeek'
 import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
-import { useCurrentUser } from '../hooks/useCurrentUser'
-import { useToast } from '../context/ToastContext'
 import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
-import { ChevronRight, ChevronLeft, Lock } from 'lucide-react'
+import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { useTranslation } from '../context/LanguageContext'
 import { customerDisplayName } from '../lib/displayName'
 
 export default function Forecasting() {
-  const toast = useToast()
   const { t, lang } = useTranslation()
   const week = useWeek()
   const { customers } = useCustomers()
   const { menuItems } = useMenuItems()
-  const userEmail = useCurrentUser()
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [forecast, setForecast] = useState({}) // key: `${itemId}_${date}` => qty
   const [overrides, setOverrides] = useState({}) // same key => qty (user edits)
   const [loading, setLoading] = useState(false)
-  const [locking, setLocking] = useState(false)
   const [locked, setLocked] = useState({}) // keys already locked this week
 
   function displayName(item) {
@@ -130,60 +125,6 @@ export default function Forecasting() {
     })
   }
 
-  async function lockForecast() {
-    if (!selectedCustomer) return
-    setLocking(true)
-    try {
-      const wid = await week.getOrCreateWeek()
-
-      // Collect all cells with a forecast qty > 0
-      const upserts = []
-      for (const d of WEEK_DAYS) {
-        const date = week.dayDate(d.key)
-        for (const item of menuItems) {
-          const k = `${item.id}_${date}`
-          const qty = overrides[k] !== undefined ? overrides[k] : (forecast[k] || 0)
-          if (qty > 0) {
-            upserts.push({
-              week_id: wid,
-              customer_id: selectedCustomer.id,
-              menu_item_id: item.id,
-              delivery_date: date,
-              quantity: qty,
-              source: 'forecast',
-              status: 'ok',
-              change_reason: 'forecast',
-              change_note: 'נעל כתוכנית ייצור מתחזית',
-              changed_by: userEmail,
-              changed_via: 'forecast_lock',
-              updated_at: new Date().toISOString(),
-            })
-          }
-        }
-      }
-
-      if (upserts.length) {
-        const { error } = await supabase.from('order_lines').upsert(upserts, {
-          onConflict: 'week_id,customer_id,menu_item_id,delivery_date',
-        })
-        if (error) throw error
-      }
-
-      // Refresh locked state
-      const newLocked = {}
-      for (const u of upserts) newLocked[`${u.menu_item_id}_${u.delivery_date}`] = true
-      setLocked(newLocked)
-      toast.success(upserts.length
-        ? `${t('forecasting.lockedToastPrefix')} — ${upserts.length} ${t('forecasting.cells')}`
-        : t('forecasting.nothingToLockToast'))
-    } catch (err) {
-      console.error('[lockForecast]', err)
-      toast.error(t('forecasting.lockFailedToast'))
-    } finally {
-      setLocking(false)
-    }
-  }
-
   // Group items by category
   const grouped = menuItems.reduce((acc, item) => {
     const cat = item.category || 'כללי'
@@ -211,14 +152,6 @@ export default function Forecasting() {
           {lockedCount > 0 && (
             <span style={{ fontSize: 12, color: 'var(--green)' }}>✓ {lockedCount} {t('forecasting.lockedCells')}</span>
           )}
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={lockForecast}
-            disabled={locking || !hasForecast || !selectedCustomer}
-            title={t('forecasting.lockTooltip')}
-          >
-            <Lock size={13} /> {locking ? '...' : t('forecasting.lockButton')}
-          </button>
         </div>
       </div>
 

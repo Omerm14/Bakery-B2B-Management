@@ -241,6 +241,12 @@ body {
 .itbl td { padding: 11px 14px; border-bottom: 1px solid var(--bdr); font-size: 14.5px; vertical-align: middle; }
 .itbl tr:hover td { background: var(--surf2); }
 
+/* Weekly Production Table only — larger text for iPad readability. Scoped
+   here (not a global .itbl change) since History and Settings share .itbl
+   at its default density. */
+.weekly-page .itbl th { font-size: 14px; }
+.weekly-page .itbl td { font-size: 17px; }
+
 /* ─── ORDER GRID ─── */
 .order-grid-wrap { overflow-x: auto; }
 .order-grid { width: 100%; border-collapse: collapse; min-width: 700px; }
@@ -300,12 +306,12 @@ body {
 @keyframes checkPop { 0% { transform: scale(.6); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
 
 /* ─── PRODUCE TODAY ─── */
-.produce-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; background: var(--surf); border: 1px solid var(--bdr); border-radius: var(--rs); margin-bottom: 8px; transition: border-color .2s; }
+.produce-item { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: var(--surf); border: 1px solid var(--bdr); border-radius: var(--rs); margin-bottom: 8px; transition: border-color .2s; }
 .produce-item:hover { border-color: var(--bdr2); }
-.produce-item-name { font-size: 16px; font-weight: 600; }
+.produce-item-name { font-size: 20px; font-weight: 600; }
 .produce-qty-wrap { display: flex; align-items: baseline; gap: 4px; }
-.produce-qty { font-size: 23px; font-weight: 800; color: var(--accent); font-family: var(--font-mono); }
-.produce-unit { font-size: 13px; color: var(--t3); }
+.produce-qty { font-size: 29px; font-weight: 800; color: var(--accent); font-family: var(--font-mono); }
+.produce-unit { font-size: 16px; color: var(--t3); }
 .supplier-group { margin-bottom: 24px; }
 .supplier-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; background: var(--accent-tint); border: 1px solid var(--accent-bdr); border-radius: 20px; font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 12px; }
 
@@ -531,7 +537,7 @@ body {
 @media print {
   .no-print { display: none !important; }
   body       { background: #fff; color: #111; }
-  .app-shell { height: auto !important; min-height: 0 !important; display: block !important; }
+  .app-shell { height: auto !important; min-height: 0 !important; display: block !important; background: #fff !important; }
   .app-main  { height: auto !important; overflow: visible !important; }
   .page      { padding: 0; max-width: 100%; }
   .card      { background: #fff; border: 1px solid #ddd; }
