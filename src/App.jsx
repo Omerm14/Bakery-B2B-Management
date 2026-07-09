@@ -22,6 +22,7 @@ import CustomerLogin from './pages/customer/CustomerLogin'
 import CustomerOrders from './pages/customer/CustomerOrders'
 import CustomerPortalDemo from './pages/customer/CustomerPortalDemo'
 import { isPortalHost } from './lib/host'
+import { identifyUser, resetAnalytics, trackPageview } from './lib/posthog'
 
 // Pre-subdomain deep links (/portal/orders etc.) still arrive on the portal
 // host from old bookmarks and shared links — send them to the clean path.
@@ -29,6 +30,14 @@ function StripPortalPrefix() {
   const location = useLocation()
   const target = location.pathname.replace(/^\/portal/, '') || '/'
   return <Navigate to={{ pathname: target, search: location.search }} replace />
+}
+
+function RouteChangeTracker() {
+  const location = useLocation()
+  useEffect(() => {
+    trackPageview(location.pathname)
+  }, [location.pathname])
+  return null
 }
 
 function ImportToast() {
@@ -148,6 +157,12 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    if (session === undefined) return // still resolving initial auth state
+    if (session?.user) identifyUser(session.user)
+    else resetAnalytics()
+  }, [session?.user?.id])
+
+  useEffect(() => {
     document.documentElement.dataset.theme = isDark ? 'night' : 'day'
     localStorage.setItem('floory_theme', isDark ? 'night' : 'day')
   }, [isDark])
@@ -170,6 +185,7 @@ export default function App() {
     <ToastProvider>
       <ImportProvider>
         <BrowserRouter>
+          <RouteChangeTracker />
           {isPortalHost ? (
           /* portal.urbanbakery.co — customer portal at clean paths. Only
              customer sessions are honored here; staff or role-less sessions

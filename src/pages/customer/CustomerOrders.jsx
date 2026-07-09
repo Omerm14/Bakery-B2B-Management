@@ -11,6 +11,7 @@ import DayOrderView from './DayOrderView'
 import WeekSummaryView from './WeekSummaryView'
 import SendOrderModal from '../../components/customer/SendOrderModal'
 import flooryLogoOnDark from '../../assets/floory/logo-horizontal-ondark.png'
+import { trackEvent } from '../../lib/posthog'
 
 const FAVORITES_KEY = '__favorites__'
 
@@ -267,9 +268,11 @@ export default function CustomerOrders() {
       await loadWeek()
       setSendSummary(changes)
       toast.success(skippedLocked > 0 ? `ההזמנה נשלחה — ${skippedLocked} ימים נעולים לא עודכנו` : 'ההזמנה נשלחה בהצלחה')
+      trackEvent('order_submitted', { items_changed: changes.length, lines_submitted: upserts.length, skipped_locked: skippedLocked })
     } catch (err) {
       console.error('[CustomerOrders.sendOrder]', err)
       toast.error('שליחת ההזמנה נכשלה — נסו שוב')
+      trackEvent('order_submit_failed')
     } finally {
       setSending(false)
     }
