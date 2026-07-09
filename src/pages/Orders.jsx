@@ -42,7 +42,7 @@ export default function Orders() {
   const [bulkFillItem, setBulkFillItem] = useState(null)
   const [bulkFillQty, setBulkFillQty] = useState('')
   const [bulkFilling, setBulkFilling] = useState(false)
-  const [changeReason, setChangeReason] = useState(() => localStorage.getItem('floory_change_reason') || 'customer_request')
+  const [changeReason, setChangeReason] = useState(() => localStorage.getItem('floory_change_reason') || 'internal_decision')
   const [changeNote, setChangeNote] = useState('')
   const [showNoteInput, setShowNoteInput] = useState(false)
   const gridRef = useRef(null)
@@ -308,7 +308,7 @@ export default function Orders() {
             </button>
           </div>
           <SearchInput value={customerFilter} onChange={setCustomerFilter} placeholder={t('orders.searchPlaceholder')} />
-          <div className="customer-list">
+          <div className="customer-list" style={{ maxHeight: 'calc(100vh - 230px)', overflowY: 'auto' }}>
             {filteredCustomers.map(c => (
               <div
                 key={c.id}
@@ -372,7 +372,7 @@ export default function Orders() {
                   />
                 )}
               </div>
-              <div className="order-grid-wrap" ref={gridRef}>
+              <div className="order-grid-wrap" ref={gridRef} style={{ maxHeight: 'calc(100vh - 290px)', overflowY: 'auto' }}>
                 <table className="order-grid">
                   <thead>
                     <tr>

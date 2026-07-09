@@ -30,7 +30,6 @@ export function buildPackingListHtml({ htmlTitle, h2, subheading, sections, dir 
       </head><body>
       <h2>${escapeHtml(h2)}</h2><p>${escapeHtml(subheading)}</p>
       <table>${rows}</table>
-      <script>window.onload=()=>{window.print()}<\/script>
       </body></html>`
   }
 
@@ -45,7 +44,6 @@ export function buildPackingListHtml({ htmlTitle, h2, subheading, sections, dir 
       </head><body>
       <h2>${escapeHtml(h2)}</h2>
       ${body}
-      <script>window.onload=()=>{window.print()}<\/script>
       </body></html>`
 }
 
@@ -66,6 +64,7 @@ export function buildProductionListHtml({ htmlTitle, h2, subheading, sections, d
   const end = dir === 'rtl' ? 'left' : 'right'
   const body = sections.map((s, i) => `
     <div style="${i < sections.length - 1 ? 'page-break-after:always;break-after:page;' : ''}">
+      <h2 style="margin:0 0 4px">${escapeHtml(h2)}</h2><p style="color:#666;font-size:14px;margin:0 0 16px">${escapeHtml(subheading)}</p>
       <h3 style="margin:0 0 4px;font-size:18px">${escapeHtml(s.heading)}</h3>
       <table style="width:100%;border-collapse:collapse">
         <thead><tr>
@@ -81,9 +80,7 @@ export function buildProductionListHtml({ htmlTitle, h2, subheading, sections, d
     <title>${escapeHtml(htmlTitle)}</title>
     <style>@page{size:A4;margin:16mm}body{font-family:Arial,sans-serif;margin:0}h2{margin:0 0 16px}p{color:#666;font-size:14px;margin:0 0 20px}</style>
     </head><body>
-    <h2>${escapeHtml(h2)}</h2><p>${escapeHtml(subheading)}</p>
     ${body}
-    <script>window.onload=()=>{window.print()}<\/script>
     </body></html>`
 }
 
@@ -133,14 +130,39 @@ export function buildWeeklyProductionHtml({ htmlTitle, h1, subheading, dayLabels
     </head><body>
     <h1>${escapeHtml(h1)}</h1><p>${escapeHtml(subheading)}</p>
     ${body}
-    <script>window.onload=()=>{window.print()}<\/script>
     </body></html>`
 }
 
-export function openAndPrint(html) {
-  const w = window.open('', '_blank')
-  if (!w) return false
-  w.document.write(html)
-  w.document.close()
-  return true
+// Prints via a hidden iframe injected into the current page instead of
+// window.open('', '_blank') + document.write. The app runs as an installed
+// PWA (display:"standalone" in the manifest) — in that mode window.open
+// frequently hijacks the CURRENT window instead of opening a real new one,
+// since a standalone shell has no tab/window chrome to return from. An
+// iframe never creates a new browsing context at all, so it's structurally
+// incapable of navigating the app away, and isn't subject to popup blockers
+// either.
+export function printViaIframe(html) {
+  const iframe = document.createElement('iframe')
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:0'
+  iframe.setAttribute('aria-hidden', 'true')
+  document.body.appendChild(iframe)
+
+  let cleaned = false
+  function cleanup() {
+    if (cleaned) return
+    cleaned = true
+    iframe.remove()
+  }
+
+  iframe.onload = () => {
+    const win = iframe.contentWindow
+    win.focus()
+    win.print()
+    // `afterprint` support is inconsistent (notably older iPad Safari) —
+    // the timeout guarantees the hidden iframe never lingers regardless.
+    win.addEventListener('afterprint', cleanup)
+    setTimeout(cleanup, 60000)
+  }
+
+  iframe.srcdoc = html
 }

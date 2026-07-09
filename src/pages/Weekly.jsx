@@ -5,13 +5,13 @@ import { supabase } from '../lib/supabase'
 import { useWeek } from '../hooks/useWeek'
 import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
 import { CATEGORY_ORDER } from '../constants/categories'
-import { buildWeeklyProductionHtml, openAndPrint } from '../lib/printHtml'
-import { useToast } from '../context/ToastContext'
+import { buildWeeklyProductionHtml, printViaIframe } from '../lib/printHtml'
 import { useTranslation } from '../context/LanguageContext'
 
 const CATEGORY_EN = {
   'מאפים': 'Pastries',
-  'לחם ולחמניות': 'Bread & Rolls',
+  'לחם': 'Bread',
+  'לחמניות': 'Rolls',
   'עוגות ועוגיות': 'Cakes & Cookies',
   'קפואים ושונות - קונדי': 'Frozen & Misc',
 }
@@ -24,7 +24,6 @@ const TREND_KEY = {
 }
 
 export default function Weekly() {
-  const toast = useToast()
   const { t, lang } = useTranslation()
   const locale = lang === 'en' ? 'en-US' : 'he-IL'
   const week = useWeek()
@@ -157,7 +156,7 @@ export default function Weekly() {
       dir,
       labels: { item: t('common.item'), category: t('common.category'), unit: t('common.unit'), total: t('common.total') },
     })
-    if (!openAndPrint(html)) toast.error(t('weekly.popupBlocked'))
+    printViaIframe(html)
   }
 
   function changePercent(curr, prev) {
@@ -211,7 +210,7 @@ export default function Weekly() {
   })
 
   return (
-    <div className="page">
+    <div className="page weekly-page">
       <div className="page-header">
         <h1 className="page-title">{t('weekly.title')}</h1>
         <div style={{ display: 'flex', gap: 6 }}>

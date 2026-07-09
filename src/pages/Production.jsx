@@ -2,8 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { ChevronRight, ChevronLeft, Printer, FileDown } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { isoToday, toLocalISODate } from '../constants/days'
-import { useToast } from '../context/ToastContext'
-import { buildProductionListHtml, openAndPrint } from '../lib/printHtml'
+import { buildProductionListHtml, printViaIframe } from '../lib/printHtml'
 import { useTranslation } from '../context/LanguageContext'
 import { customerDisplayName } from '../lib/displayName'
 import { CATEGORY_ORDER, displayCategoryLabel } from '../constants/categories'
@@ -52,7 +51,6 @@ function tomorrowIso() {
 }
 
 export default function Production() {
-  const toast = useToast()
   const { t, lang } = useTranslation()
   const locale = lang === 'en' ? 'en-US' : 'he-IL'
   const STATUS_CYCLE = { pending: 'done', done: 'pending' }
@@ -170,7 +168,7 @@ export default function Production() {
       dir: lang === 'en' ? 'ltr' : 'rtl',
       labels: { item: t('common.item'), byCustomer: t('common.customer'), totalQty: t('production.totalQtyStat') },
     })
-    if (!openAndPrint(html)) toast.error(t('production.popupBlocked'))
+    printViaIframe(html)
   }
 
   const suppliers = ['all', ...new Set(items.map(i => i.supplier))]
@@ -276,7 +274,7 @@ export default function Production() {
                     <div className="produce-item-name" style={{ textDecoration: isDone ? 'line-through' : 'none' }}>
                       {displayName(item)}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 4 }}>
+                    <div style={{ fontSize: 15, color: 'var(--t3)', marginTop: 5 }}>
                       {item.customers.map(c => `${customerDisplayName(c, lang)} (${c.qty})`).join(' · ')}
                     </div>
                   </div>
@@ -292,13 +290,13 @@ export default function Production() {
                         border: `1px solid ${STATUS_COLOR[st]}`,
                         color: STATUS_COLOR[st],
                         background: STATUS_BG[st],
-                        borderRadius: 20,
-                        padding: '4px 12px',
-                        fontSize: 12,
+                        borderRadius: 24,
+                        padding: '10px 20px',
+                        fontSize: 15,
                         cursor: 'pointer',
                         fontWeight: 600,
                         transition: 'all .2s',
-                        minWidth: 72,
+                        minWidth: 100,
                       }}
                     >
                       {STATUS_LABEL[st]}

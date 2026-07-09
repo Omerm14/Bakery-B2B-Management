@@ -44,6 +44,16 @@ export default {
     'settings.toast.customerAlreadyExists': 'כבר קיים לקוח פעיל בשם זה',
     'settings.toast.nameEnUpdateFailed': 'עדכון השם באנגלית נכשל',
 
+    // Edit customer modal
+    'settings.editCustomerTitle': 'עריכת לקוח',
+    'settings.editCustomerModalTitle': 'עריכת פרטי לקוח',
+    'settings.contactPersonLabel': 'איש קשר',
+    'settings.emailLabel': 'דוא"ל',
+    'settings.customerNameRequired': 'יש להזין שם לקוח',
+    'settings.saving': 'שומר...',
+    'settings.toast.customerUpdated': 'פרטי הלקוח עודכנו',
+    'settings.toast.customerUpdateFailed': 'עדכון פרטי הלקוח נכשל',
+
     // Seed favorites
     'settings.seedFavorites': 'סימון מועדפים לפי היסטוריה',
     'settings.seedFavoritesTitle': 'מסמן אוטומטית פריטים שהוזמנו לעיתים קרובות כמועדפים עבור כל לקוח, לפי היסטוריית ההזמנות',
@@ -177,6 +187,16 @@ export default {
     'settings.toast.customerReactivated': 'Customer was inactive and was reactivated:',
     'settings.toast.customerAlreadyExists': 'An active customer with this name already exists',
     'settings.toast.nameEnUpdateFailed': 'Failed to update English name',
+
+    // Edit customer modal
+    'settings.editCustomerTitle': 'Edit customer',
+    'settings.editCustomerModalTitle': 'Edit customer details',
+    'settings.contactPersonLabel': 'Contact person',
+    'settings.emailLabel': 'Email',
+    'settings.customerNameRequired': 'Customer name is required',
+    'settings.saving': 'Saving...',
+    'settings.toast.customerUpdated': 'Customer details updated',
+    'settings.toast.customerUpdateFailed': 'Failed to update customer details',
 
     // Seed favorites
     'settings.seedFavorites': 'Mark Favorites from History',
