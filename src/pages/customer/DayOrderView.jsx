@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { ChevronRight, ChevronLeft, ChevronDown, Star } from 'lucide-react'
 import QtyStepper from './QtyStepper'
 import CutoffCountdown from './CutoffCountdown'
@@ -6,30 +6,17 @@ import CutoffBlockedNotice from './CutoffBlockedNotice'
 import SearchInput from '../../components/SearchInput'
 import { displayCategoryLabel } from '../../constants/categories'
 
-const SWIPE_THRESHOLD = 50
 const FAVORITES_KEY = '__favorites__'
 
 // Single-day, list-style order entry — the mobile-first default view.
-// Swiping the list left/right (or tapping the arrows) moves a day at a
-// time, mirroring how the week-nav chevrons already work elsewhere in the
-// app (ChevronRight = previous, ChevronLeft = next, matching RTL reading
-// order).
+// Day navigation is via the chevrons only (ChevronRight = previous,
+// ChevronLeft = next, matching RTL reading order).
 export default function DayOrderView({
   dayLabel, dateLabel, date, grouped, orderLines, canEdit, lockAt,
   onQtyChange, onToggleFavorite, onPrevDay, onNextDay, dayTotal,
 }) {
-  const touchStartX = useRef(null)
   const [search, setSearch] = useState('')
   const [collapsed, setCollapsed] = useState(() => new Set())
-
-  function handleTouchStart(e) { touchStartX.current = e.touches[0].clientX }
-  function handleTouchEnd(e) {
-    if (touchStartX.current == null) return
-    const dx = e.changedTouches[0].clientX - touchStartX.current
-    touchStartX.current = null
-    if (Math.abs(dx) < SWIPE_THRESHOLD) return
-    if (dx < 0) onNextDay(); else onPrevDay()
-  }
 
   function toggleCategory(cat) {
     setCollapsed(prev => {
@@ -71,7 +58,7 @@ export default function DayOrderView({
         <SearchInput value={search} onChange={setSearch} placeholder="חיפוש פריט..." />
       </div>
 
-      <div className="day-list" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+      <div className="day-list">
         {visibleGroups.length === 0 && (
           <div className="empty">
             <div className="empty-icon">📋</div>
