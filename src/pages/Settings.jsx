@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Upload, Image as ImageIcon, Pencil } from 'lucide-react'
+import { Plus, Upload, Image as ImageIcon, Pencil, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { portalOrigin } from '../lib/host'
 import { useImport } from '../context/ImportContext'
@@ -26,6 +26,7 @@ export default function Settings() {
   // New item form
   const [newItem, setNewItem] = useState({ name_he: '', name_en: '', unit: 'יח׳', category: '', supplier_id: '', price: '' })
   const [showAddItem, setShowAddItem] = useState(false)
+  const [showCategories, setShowCategories] = useState(false)
 
   useEffect(() => {
     supabase.from('suppliers').select('*').order('name').then(({ data, error }) => {
@@ -150,6 +151,32 @@ export default function Settings() {
     const { error } = await supabase.from('menu_items').update({ category }).eq('id', id)
     if (error) {
       setMenuItems(prev => prev.map(i => i.id === id ? { ...i, category: prevCategory } : i))
+      toast.error(t('settings.toast.categoryUpdateFailed'))
+    }
+  }
+
+  // Renaming to an existing category name is allowed on purpose — it's the
+  // natural way to merge two categories into one (e.g. "עוגות" into
+  // "עוגות ועוגיות") without a separate merge action.
+  async function renameCategory(oldName, newName) {
+    const value = newName.trim()
+    if (!value || value === oldName) return
+    const prevByItemId = new Map(menuItems.filter(i => i.category === oldName).map(i => [i.id, i.category]))
+    setMenuItems(prev => prev.map(i => i.category === oldName ? { ...i, category: value } : i))
+    const { error } = await supabase.from('menu_items').update({ category: value }).eq('category', oldName)
+    if (error) {
+      setMenuItems(prev => prev.map(i => prevByItemId.has(i.id) ? { ...i, category: prevByItemId.get(i.id) } : i))
+      toast.error(t('settings.toast.categoryUpdateFailed'))
+    }
+  }
+
+  async function deleteCategory(name) {
+    if (!window.confirm(`${t('settings.confirmDeleteCategory')} "${name}"?`)) return
+    const prevByItemId = new Map(menuItems.filter(i => i.category === name).map(i => [i.id, i.category]))
+    setMenuItems(prev => prev.map(i => i.category === name ? { ...i, category: null } : i))
+    const { error } = await supabase.from('menu_items').update({ category: null }).eq('category', name)
+    if (error) {
+      setMenuItems(prev => prev.map(i => prevByItemId.has(i.id) ? { ...i, category: prevByItemId.get(i.id) } : i))
       toast.error(t('settings.toast.categoryUpdateFailed'))
     }
   }
@@ -466,7 +493,10 @@ function ImportTab() {
       {/* MENU ITEMS */}
       {tab === 'menu' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 16 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowCategories(true)}>
+              <Pencil size={14} /> {t('settings.manageCategories')}
+            </button>
             <button className="btn btn-primary btn-sm" onClick={() => setShowAddItem(true)}>
               <Plus size={14} /> {t('settings.addItem')}
             </button>
@@ -849,6 +879,47 @@ function ImportTab() {
               <button className="btn btn-primary" onClick={saveEditCustomer} disabled={savingCustomer}>
                 {savingCustomer ? t('settings.saving') : t('common.save')}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Categories Modal */}
+      {showCategories && (
+        <div className="overlay" onClick={() => setShowCategories(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-title">{t('settings.categoriesModalTitle')}</div>
+            {knownCategories.length === 0 ? (
+              <div style={{ color: 'var(--t3)', fontSize: 13.5 }}>{t('settings.categoriesEmpty')}</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {knownCategories.map(cat => (
+                  <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      className="input"
+                      style={{ flex: 1 }}
+                      defaultValue={cat}
+                      onBlur={e => renameCategory(cat, e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && e.target.blur()}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--t3)', minWidth: 60, textAlign: 'center' }}>
+                      {menuItems.filter(i => i.category === cat).length} {t('common.items')}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      style={{ color: 'var(--red)' }}
+                      onClick={() => deleteCategory(cat)}
+                      aria-label={t('common.delete')}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="modal-footer">
+              <button className="btn btn-primary" onClick={() => setShowCategories(false)}>{t('common.close')}</button>
             </div>
           </div>
         </div>

@@ -18,6 +18,10 @@ export default {
     'settings.col.status': 'סטטוס',
     'settings.newCategoryOption': '+ קטגוריה חדשה...',
     'settings.newCategoryPrompt': 'שם קטגוריה חדשה:',
+    'settings.manageCategories': 'ניהול קטגוריות',
+    'settings.categoriesModalTitle': 'קטגוריות',
+    'settings.categoriesEmpty': 'אין עדיין קטגוריות',
+    'settings.confirmDeleteCategory': 'למחוק את הקטגוריה',
     'settings.active': 'פעיל',
     'settings.inactive': 'לא פעיל',
 
@@ -161,6 +165,10 @@ export default {
     'settings.col.status': 'Status',
     'settings.newCategoryOption': '+ New category...',
     'settings.newCategoryPrompt': 'New category name:',
+    'settings.manageCategories': 'Manage categories',
+    'settings.categoriesModalTitle': 'Categories',
+    'settings.categoriesEmpty': 'No categories yet',
+    'settings.confirmDeleteCategory': 'Delete category',
     'settings.active': 'Active',
     'settings.inactive': 'Inactive',
 
