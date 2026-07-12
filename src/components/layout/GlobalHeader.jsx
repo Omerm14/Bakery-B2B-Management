@@ -14,6 +14,7 @@ const TITLE_KEYS = {
   '/production': 'nav.production',
   '/packing': 'nav.packing',
   '/weekly': 'nav.weekly',
+  '/audit': 'nav.audit',
   '/history': 'nav.history',
   '/forecasting': 'nav.forecasting',
   '/settings': 'nav.settings',
@@ -60,16 +61,20 @@ function NotificationBell() {
 
   // A ±10s window around each notification's created_at reliably isolates
   // just that send's changes in order_line_audit, since sendOrder() in
-  // CustomerOrders.jsx does one batched upsert immediately followed by
-  // the notification insert, all in the same request.
+  // CustomerOrders.jsx (and the Wednesday auto-copy rollover) each do one
+  // batched write immediately followed by the notification insert, all in
+  // the same transaction/request. Only these two sources ever create a
+  // notification in the first place — routine internal edits (orders_grid,
+  // copy_prev_week, import) never do — so this filter just mirrors that,
+  // it isn't hiding anything staff would otherwise see here.
   async function fetchAuditRows(n) {
     const center = new Date(n.created_at).getTime()
     const { data, error } = await supabase
       .from('order_line_audit')
-      .select('delivery_date, item_name_he, old_quantity, new_quantity, menu_items(name_he, name_en)')
+      .select('delivery_date, item_name_he, old_quantity, new_quantity, changed_via, menu_items(name_he, name_en)')
       .eq('customer_id', n.customer_id)
       .eq('week_id', n.week_id)
-      .eq('changed_via', 'customer_portal')
+      .in('changed_via', ['customer_portal', 'auto_copy_weekly'])
       .gte('created_at', new Date(center - 10000).toISOString())
       .lte('created_at', new Date(center + 10000).toISOString())
       .order('delivery_date', { ascending: true })
@@ -146,10 +151,14 @@ function NotificationBell() {
           ) : (
             items.map(n => {
               const rows = auditRows[n.id]
+              const isAutoSync = rows?.length > 0 && rows.every(r => r.changed_via === 'auto_copy_weekly')
               return (
                 <div key={n.id} className={`notif-item${!n.seen_at ? ' unseen' : ''}`}>
                   <div className="notif-item-header">
-                    <div className="notif-item-name">{n.customers ? customerDisplayName(n.customers, lang) : t('common.customer')}</div>
+                    <div className="notif-item-name">
+                      {n.customers ? customerDisplayName(n.customers, lang) : t('common.customer')}
+                      {isAutoSync && <span className="notif-autosync-badge">{t('header.notificationsAutoSync')}</span>}
+                    </div>
                     <div className="notif-item-meta">{n.weeks?.label || ''} · {timeAgo(n.created_at, lang)}</div>
                   </div>
                   <div className="notif-item-detail">
