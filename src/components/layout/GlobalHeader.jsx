@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { useTranslation } from '../../context/LanguageContext'
 import { customerDisplayName } from '../../lib/displayName'
+import { weekdayLabel, formatShortDate } from '../../constants/days'
 
 const TITLE_KEYS = {
   '/dashboard': 'nav.dashboard',
@@ -80,14 +81,33 @@ function NotificationBell() {
     const center = new Date(n.created_at).getTime()
     const { data, error } = await supabase
       .from('order_line_audit')
-      .select('item_name_he, old_quantity, new_quantity, menu_items(name_he, name_en)')
+      .select('delivery_date, item_name_he, old_quantity, new_quantity, menu_items(name_he, name_en)')
       .eq('customer_id', n.customer_id)
       .eq('week_id', n.week_id)
       .eq('changed_via', 'customer_portal')
       .gte('created_at', new Date(center - 10000).toISOString())
       .lte('created_at', new Date(center + 10000).toISOString())
+      .order('delivery_date', { ascending: true })
     if (error) { console.error('[NotificationBell audit]', error); return [] }
     return data || []
+  }
+
+  // A customer can edit several different days in one send, so the day
+  // needs its own sub-header per group rather than one date for the whole
+  // notification — the week label up top isn't specific enough to act on.
+  function groupRowsByDate(rows) {
+    const groups = []
+    const byDate = new Map()
+    for (const r of rows) {
+      let group = byDate.get(r.delivery_date)
+      if (!group) {
+        group = { date: r.delivery_date, rows: [] }
+        byDate.set(r.delivery_date, group)
+        groups.push(group)
+      }
+      group.rows.push(r)
+    }
+    return groups
   }
 
   async function toggleOpen() {
@@ -153,28 +173,33 @@ function NotificationBell() {
                     ) : rows.length === 0 ? (
                       <div className="notif-empty">{t('header.notificationsNoDetail')}</div>
                     ) : (
-                      rows.map((r, i) => {
-                        const isNew = r.old_quantity === null
-                        const increasing = !isNew && r.new_quantity > r.old_quantity
-                        const color = isNew || increasing ? 'var(--green)' : 'var(--red)'
-                        const Arrow = isNew || increasing ? ArrowUp : ArrowDown
-                        const itemName = r.menu_items
-                          ? (lang === 'en' ? (r.menu_items.name_en || r.menu_items.name_he) : r.menu_items.name_he)
-                          : r.item_name_he
-                        return (
-                          <div key={i} className="notif-detail-row">
-                            <span>{itemName || '—'}</span>
-                            {/* dir="ltr" is load-bearing: inside this RTL flex row,
-                                "30 → 15" otherwise gets bidi-reordered to "15 → 30"
-                                — the numbers swap position even though the DOM
-                                content is correct. */}
-                            <span dir="ltr" style={{ color, display: 'flex', alignItems: 'center', gap: 3 }}>
-                              <Arrow size={12} />
-                              {isNew ? `${t('header.notificationsNewItem')}: ${r.new_quantity}` : `${r.old_quantity} → ${r.new_quantity}`}
-                            </span>
-                          </div>
-                        )
-                      })
+                      groupRowsByDate(rows).map(group => (
+                        <div key={group.date} className="notif-detail-group">
+                          <div className="notif-detail-day">{weekdayLabel(group.date, lang)} {formatShortDate(group.date)}</div>
+                          {group.rows.map((r, i) => {
+                            const isNew = r.old_quantity === null
+                            const increasing = !isNew && r.new_quantity > r.old_quantity
+                            const color = isNew || increasing ? 'var(--green)' : 'var(--red)'
+                            const Arrow = isNew || increasing ? ArrowUp : ArrowDown
+                            const itemName = r.menu_items
+                              ? (lang === 'en' ? (r.menu_items.name_en || r.menu_items.name_he) : r.menu_items.name_he)
+                              : r.item_name_he
+                            return (
+                              <div key={i} className="notif-detail-row">
+                                <span>{itemName || '—'}</span>
+                                {/* dir="ltr" is load-bearing: inside this RTL flex row,
+                                    "30 → 15" otherwise gets bidi-reordered to "15 → 30"
+                                    — the numbers swap position even though the DOM
+                                    content is correct. */}
+                                <span dir="ltr" style={{ color, display: 'flex', alignItems: 'center', gap: 3 }}>
+                                  <Arrow size={12} />
+                                  {isNew ? `${t('header.notificationsNewItem')}: ${r.new_quantity}` : `${r.old_quantity} → ${r.new_quantity}`}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ))
                     )}
                     <button type="button" className="notif-detail-goto" onClick={() => goToOrder(n)}>
                       {t('header.notificationsGoToOrder')}

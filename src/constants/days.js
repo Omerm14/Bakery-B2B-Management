@@ -55,3 +55,13 @@ export function formatShortDate(isoDate) {
   const [, m, d] = isoDate.split('-')
   return `${d}/${m}`
 }
+
+// Weekday name for a YYYY-MM-DD string. Built from explicit y/m/d fields
+// (not `new Date(isoString)`, which parses as UTC and can shift the day
+// backward in timezones ahead of UTC) so the result always matches the
+// calendar date, not whatever local midnight happens to be in UTC.
+export function weekdayLabel(isoDate, lang = 'he') {
+  const [y, m, d] = isoDate.split('-').map(Number)
+  const day = new Date(y, m - 1, d).getDay()
+  return lang === 'en' ? WEEK_DAYS[day].short_en : WEEK_DAYS[day].label
+}
