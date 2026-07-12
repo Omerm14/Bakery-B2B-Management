@@ -19,15 +19,26 @@ export default function DayOrderView({
   onQtyChange, onToggleFavorite, onPrevDay, onNextDay, dayTotal,
 }) {
   const touchStartX = useRef(null)
+  const touchStartY = useRef(null)
   const [search, setSearch] = useState('')
   const [collapsed, setCollapsed] = useState(() => new Set())
 
-  function handleTouchStart(e) { touchStartX.current = e.touches[0].clientX }
+  function handleTouchStart(e) {
+    touchStartX.current = e.touches[0].clientX
+    touchStartY.current = e.touches[0].clientY
+  }
   function handleTouchEnd(e) {
     if (touchStartX.current == null) return
     const dx = e.changedTouches[0].clientX - touchStartX.current
+    const dy = e.changedTouches[0].clientY - touchStartY.current
     touchStartX.current = null
+    touchStartY.current = null
     if (Math.abs(dx) < SWIPE_THRESHOLD) return
+    // Vertical list-scrolling almost always carries some horizontal thumb
+    // drift too — only treat the gesture as a day-swipe once it's clearly
+    // more horizontal than vertical, so scrolling never gets misread as
+    // "change day".
+    if (Math.abs(dx) < Math.abs(dy) * 2) return
     if (dx < 0) onNextDay(); else onPrevDay()
   }
 
