@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Upload, Image as ImageIcon, Pencil } from 'lucide-react'
+import { Plus, Upload, Image as ImageIcon, Pencil, ArrowUp, ArrowDown } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { portalOrigin } from '../lib/host'
 import { useImport } from '../context/ImportContext'
@@ -9,10 +9,12 @@ import { useToast } from '../context/ToastContext'
 import SearchInput from '../components/SearchInput'
 import { useTranslation } from '../context/LanguageContext'
 import { trackEvent } from '../lib/posthog'
+import { weekdayLabel, formatShortDate } from '../constants/days'
+import { timeAgo } from '../lib/time'
 
 export default function Settings() {
   const toast = useToast()
-  const { t } = useTranslation()
+  const { t, lang } = useTranslation()
   const [tab, setTab] = useState('menu')
   const { menuItems, setMenuItems } = useMenuItems({ activeOnly: false })
   const { customers, setCustomers, createCustomer } = useCustomers({ activeOnly: false })
@@ -453,14 +455,16 @@ function AuditLogTab({ filterText }) {
 
   useEffect(() => {
     supabase.from('order_line_audit')
-      .select('created_at, customer_name, item_name_he, delivery_date, old_quantity, new_quantity, source, change_reason, change_note, changed_by, changed_via')
+      .select('created_at, customer_name, item_name_he, delivery_date, old_quantity, new_quantity, source, change_reason, change_note, changed_by, changed_via, menu_items(name_he, name_en)')
       .order('created_at', { ascending: false })
       .limit(200)
       .then(({ data }) => setRows(data || []))
   }, [])
 
   const filtered = rows.filter(r =>
-    (r.customer_name || '').includes(filterText.trim()) || (r.item_name_he || '').includes(filterText.trim())
+    (r.customer_name || '').includes(filterText.trim())
+    || (r.item_name_he || '').includes(filterText.trim())
+    || (r.menu_items?.name_he || '').includes(filterText.trim())
   )
 
   return (
@@ -480,23 +484,36 @@ function AuditLogTab({ filterText }) {
           </tr>
         </thead>
         <tbody>
-          {filtered.map((row, i) => (
-            <tr key={i}>
-              <td dir="ltr" style={{ fontSize: 12, color: 'var(--t3)' }}>
-                {new Date(row.created_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
-              </td>
-              <td style={{ fontWeight: 500 }}>{row.customer_name || '—'}</td>
-              <td>{row.item_name_he || '—'}</td>
-              <td dir="ltr" style={{ fontSize: 12, color: 'var(--t3)' }}>{row.delivery_date}</td>
-              <td dir="ltr" style={{ textAlign: 'center', fontSize: 12 }}>
-                {row.old_quantity ?? '—'} → {row.new_quantity}
-              </td>
-              <td style={{ fontSize: 12, color: 'var(--t3)' }}>{row.source}</td>
-              <td style={{ fontSize: 12 }}>{AUDIT_REASON_LABELS[row.change_reason] || row.change_reason || '—'}</td>
-              <td style={{ fontSize: 12, color: 'var(--t3)' }}>{row.change_note || '—'}</td>
-              <td style={{ fontSize: 12, color: 'var(--t3)' }}>{row.changed_by || '—'}</td>
-            </tr>
-          ))}
+          {filtered.map((row, i) => {
+            const isNew = row.old_quantity == null
+            const increasing = !isNew && row.new_quantity > row.old_quantity
+            const qtyColor = isNew || increasing ? 'var(--green)' : 'var(--red)'
+            const QtyArrow = isNew || increasing ? ArrowUp : ArrowDown
+            const itemName = row.menu_items
+              ? (lang === 'en' ? (row.menu_items.name_en || row.menu_items.name_he) : row.menu_items.name_he)
+              : row.item_name_he
+            return (
+              <tr key={i}>
+                <td dir="ltr" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--t1)' }}>
+                  {new Date(row.created_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                  <div style={{ fontWeight: 400, color: 'var(--t3)' }}>{timeAgo(row.created_at, lang)}</div>
+                </td>
+                <td style={{ fontWeight: 500 }}>{row.customer_name || '—'}</td>
+                <td>{itemName || '—'}</td>
+                <td dir="ltr" style={{ fontSize: 12, color: 'var(--t3)' }}>{weekdayLabel(row.delivery_date, lang)} {formatShortDate(row.delivery_date)}</td>
+                <td dir="ltr" style={{ textAlign: 'center', fontSize: 12 }}>
+                  <span style={{ color: qtyColor, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                    <QtyArrow size={12} />
+                    {isNew ? `${t('header.notificationsNewItem')}: ${row.new_quantity}` : `${row.old_quantity} → ${row.new_quantity}`}
+                  </span>
+                </td>
+                <td style={{ fontSize: 12, color: 'var(--t3)' }}>{row.source}</td>
+                <td style={{ fontSize: 12 }}>{AUDIT_REASON_LABELS[row.change_reason] || row.change_reason || '—'}</td>
+                <td style={{ fontSize: 12, color: 'var(--t3)' }}>{row.change_note || '—'}</td>
+                <td style={{ fontSize: 12, color: 'var(--t3)' }}>{row.changed_by || '—'}</td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
