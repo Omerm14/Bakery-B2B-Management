@@ -60,18 +60,18 @@ function NotificationBell() {
   }, [])
 
   // A ±10s window around each notification's created_at reliably isolates
-  // just that send's changes in order_line_audit, since sendOrder() in
-  // CustomerOrders.jsx (and the Wednesday auto-copy rollover) each do one
-  // batched write immediately followed by the notification insert, all in
-  // the same transaction/request. Only these two sources ever create a
-  // notification in the first place — routine internal edits (orders_grid,
-  // copy_prev_week, import) never do — so this filter just mirrors that,
-  // it isn't hiding anything staff would otherwise see here.
+  // just that batch's changes in order_line_audit, since every writer that
+  // creates a notification (sendOrder(), the view-triggered auto-default
+  // write-through, and the Wednesday auto-copy rollover) does one batched
+  // write immediately followed by the notification insert, all in the same
+  // request/transaction. Routine internal edits (orders_grid, copy_prev_week,
+  // import) never create a notification in the first place, so this filter
+  // just mirrors that — it isn't hiding anything staff would otherwise see.
   async function fetchAuditRows(n) {
     const center = new Date(n.created_at).getTime()
     const { data, error } = await supabase
       .from('order_line_audit')
-      .select('delivery_date, item_name_he, old_quantity, new_quantity, changed_via, menu_items(name_he, name_en)')
+      .select('delivery_date, item_name_he, old_quantity, new_quantity, change_reason, changed_via, menu_items(name_he, name_en)')
       .eq('customer_id', n.customer_id)
       .eq('week_id', n.week_id)
       .in('changed_via', ['customer_portal', 'auto_copy_weekly'])
@@ -151,7 +151,12 @@ function NotificationBell() {
           ) : (
             items.map(n => {
               const rows = auditRows[n.id]
-              const isAutoSync = rows?.length > 0 && rows.every(r => r.changed_via === 'auto_copy_weekly')
+              // change_reason, not changed_via — the view-triggered auto-default
+              // write-through also goes through changed_via='customer_portal'
+              // (same as a real send), so change_reason is the only field that
+              // actually distinguishes "system filled this in" from "customer
+              // sent this".
+              const isAutoSync = rows?.length > 0 && rows.every(r => r.change_reason === 'auto_copy')
               return (
                 <div key={n.id} className={`notif-item${!n.seen_at ? ' unseen' : ''}`}>
                   <div className="notif-item-header">
