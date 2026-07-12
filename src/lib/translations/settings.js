@@ -5,7 +5,6 @@ export default {
     'settings.importRunning': 'מייבא ברקע...',
 
     'settings.tabs.menu': 'תפריט',
-    'settings.tabs.audit': 'יומן שינויים',
     'settings.tabs.branding': 'מיתוג',
     'settings.tabs.staff': 'גישת צוות',
 
@@ -149,7 +148,6 @@ export default {
     'settings.importRunning': 'Importing in background...',
 
     'settings.tabs.menu': 'Menu',
-    'settings.tabs.audit': 'Change Log',
     'settings.tabs.branding': 'Branding',
     'settings.tabs.staff': 'Staff Access',
 

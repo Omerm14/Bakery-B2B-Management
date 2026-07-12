@@ -8,6 +8,7 @@ import Orders from './pages/Orders'
 import Production from './pages/Production'
 import Packing from './pages/Packing'
 import Weekly from './pages/Weekly'
+import AuditLog from './pages/AuditLog'
 import Settings from './pages/Settings'
 import Dashboard from './pages/Dashboard'
 import History from './pages/History'
@@ -223,6 +224,7 @@ export default function App() {
                 <Route path="/production" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Production /></ProtectedLayout>} />
                 <Route path="/packing" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Packing /></ProtectedLayout>} />
                 <Route path="/weekly" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Weekly /></ProtectedLayout>} />
+                <Route path="/audit" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><AuditLog /></ProtectedLayout>} />
                 <Route path="/history" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><History /></ProtectedLayout>} />
                 <Route path="/forecasting" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Forecasting /></ProtectedLayout>} />
                 <Route path="/settings" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Settings /></ProtectedLayout>} />
