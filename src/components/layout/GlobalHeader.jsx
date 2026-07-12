@@ -6,6 +6,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { useTranslation } from '../../context/LanguageContext'
 import { customerDisplayName } from '../../lib/displayName'
 import { weekdayLabel, formatShortDate } from '../../constants/days'
+import { timeAgo } from '../../lib/time'
 
 const TITLE_KEYS = {
   '/dashboard': 'nav.dashboard',
@@ -19,22 +20,6 @@ const TITLE_KEYS = {
 }
 
 const POLL_MS = 30000
-
-function timeAgo(iso, lang) {
-  const diffMin = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
-  if (lang === 'en') {
-    if (diffMin < 1) return 'just now'
-    if (diffMin < 60) return `${diffMin} min ago`
-    const diffHr = Math.round(diffMin / 60)
-    if (diffHr < 24) return `${diffHr}h ago`
-    return `${Math.round(diffHr / 24)}d ago`
-  }
-  if (diffMin < 1) return 'עכשיו'
-  if (diffMin < 60) return `לפני ${diffMin} דק׳`
-  const diffHr = Math.round(diffMin / 60)
-  if (diffHr < 24) return `לפני ${diffHr} שעות`
-  return `לפני ${Math.round(diffHr / 24)} ימים`
-}
 
 // Lets the floor know a customer sent a self-service order update — the
 // customer portal no longer auto-saves silently, so every send is a
