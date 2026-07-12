@@ -21,6 +21,8 @@ export default {
     'settings.manageCategories': 'ניהול קטגוריות',
     'settings.categoriesModalTitle': 'קטגוריות',
     'settings.categoriesEmpty': 'אין עדיין קטגוריות',
+    'settings.addCategoryPlaceholder': 'שם קטגוריה חדשה...',
+    'settings.addCategoryButton': 'הוספה',
     'settings.confirmDeleteCategory': 'למחוק את הקטגוריה',
     'settings.active': 'פעיל',
     'settings.inactive': 'לא פעיל',
@@ -130,6 +132,8 @@ export default {
 
     // Toasts
     'settings.toast.suppliersLoadFailed': 'טעינת הספקים נכשלה',
+    'settings.toast.categoriesLoadFailed': 'טעינת הקטגוריות נכשלה',
+    'settings.toast.categoryAlreadyExists': 'הקטגוריה כבר קיימת',
     'settings.toast.brandingSaveFailed': 'שמירת המיתוג נכשלה',
     'settings.toast.logoUploadSuccess': 'הלוגו הועלה בהצלחה',
     'settings.toast.logoUploadFailed': 'העלאת הלוגו נכשלה',
@@ -168,6 +172,8 @@ export default {
     'settings.manageCategories': 'Manage categories',
     'settings.categoriesModalTitle': 'Categories',
     'settings.categoriesEmpty': 'No categories yet',
+    'settings.addCategoryPlaceholder': 'New category name...',
+    'settings.addCategoryButton': 'Add',
     'settings.confirmDeleteCategory': 'Delete category',
     'settings.active': 'Active',
     'settings.inactive': 'Inactive',
@@ -277,6 +283,8 @@ export default {
 
     // Toasts
     'settings.toast.suppliersLoadFailed': 'Failed to load suppliers',
+    'settings.toast.categoriesLoadFailed': 'Failed to load categories',
+    'settings.toast.categoryAlreadyExists': 'Category already exists',
     'settings.toast.brandingSaveFailed': 'Failed to save branding',
     'settings.toast.logoUploadSuccess': 'Logo uploaded successfully',
     'settings.toast.logoUploadFailed': 'Failed to upload logo',
