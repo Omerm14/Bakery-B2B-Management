@@ -171,7 +171,19 @@ export default function CustomerOrders() {
           const { error: defaultsErr } = await supabase
             .from('order_lines')
             .upsert(autoDefaults, { onConflict: 'week_id,customer_id,menu_item_id,delivery_date' })
-          if (defaultsErr) console.error('[CustomerOrders.loadWeek] auto-default write-through failed', defaultsErr)
+          if (defaultsErr) {
+            console.error('[CustomerOrders.loadWeek] auto-default write-through failed', defaultsErr)
+          } else {
+            // Same signal as a real send — the floor should know this
+            // customer's week just got auto-filled, same as the Wednesday
+            // rollover. `autoDefaults` only ever contains cells that had no
+            // row yet (filtered above), so this never re-fires for cells
+            // already written by a previous view.
+            const { error: notifyErr } = await supabase
+              .from('order_change_notifications')
+              .insert({ customer_id: customer.id, week_id: wid })
+            if (notifyErr) console.error('[CustomerOrders.loadWeek] auto-default notification insert failed', notifyErr)
+          }
         }
       }
 

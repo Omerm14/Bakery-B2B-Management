@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Upload, Image as ImageIcon, Pencil, ArrowUp, ArrowDown } from 'lucide-react'
+import { Plus, Upload, Image as ImageIcon, Pencil, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { portalOrigin } from '../lib/host'
 import { useImport } from '../context/ImportContext'
@@ -9,16 +9,16 @@ import { useToast } from '../context/ToastContext'
 import SearchInput from '../components/SearchInput'
 import { useTranslation } from '../context/LanguageContext'
 import { trackEvent } from '../lib/posthog'
-import { weekdayLabel, formatShortDate } from '../constants/days'
-import { timeAgo } from '../lib/time'
 
 export default function Settings() {
   const toast = useToast()
-  const { t, lang } = useTranslation()
+  const { t } = useTranslation()
   const [tab, setTab] = useState('menu')
   const { menuItems, setMenuItems } = useMenuItems({ activeOnly: false })
   const { customers, setCustomers, createCustomer } = useCustomers({ activeOnly: false })
   const [suppliers, setSuppliers] = useState([])
+  const [categories, setCategories] = useState([])
+  const [newCategoryName, setNewCategoryName] = useState('')
   const [filterText, setFilterText] = useState('')
   const { running: importRunning, startImport } = useImport()
   const importFileRef = useRef()
@@ -28,11 +28,19 @@ export default function Settings() {
   // New item form
   const [newItem, setNewItem] = useState({ name_he: '', name_en: '', unit: 'יח׳', category: '', supplier_id: '', price: '' })
   const [showAddItem, setShowAddItem] = useState(false)
+  const [showCategories, setShowCategories] = useState(false)
 
   useEffect(() => {
     supabase.from('suppliers').select('*').order('name').then(({ data, error }) => {
       if (error) { console.error('[Settings suppliers]', error); toast.error(t('settings.toast.suppliersLoadFailed')) }
       setSuppliers(data || [])
+    })
+  }, [])
+
+  useEffect(() => {
+    supabase.from('categories').select('*').order('name').then(({ data, error }) => {
+      if (error) { console.error('[Settings categories]', error); toast.error(t('settings.toast.categoriesLoadFailed')) }
+      setCategories(data || [])
     })
   }, [])
 
@@ -152,6 +160,62 @@ export default function Settings() {
     const { error } = await supabase.from('menu_items').update({ category }).eq('id', id)
     if (error) {
       setMenuItems(prev => prev.map(i => i.id === id ? { ...i, category: prevCategory } : i))
+      toast.error(t('settings.toast.categoryUpdateFailed'))
+    }
+  }
+
+  async function addCategory(name) {
+    const value = name.trim()
+    if (!value) return
+    if (knownCategories.includes(value)) { toast.error(t('settings.toast.categoryAlreadyExists')); return }
+    const { data, error } = await supabase.from('categories').insert({ name: value }).select().single()
+    if (error) { toast.error(t('settings.toast.categoryUpdateFailed')); return }
+    setCategories(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name, 'he')))
+    setNewCategoryName('')
+  }
+
+  // Renaming to an existing category name is allowed on purpose — it's the
+  // natural way to merge two categories into one (e.g. "עוגות" into
+  // "עוגות ועוגיות") without a separate merge action. In that case the old
+  // category row is dropped (its name would collide) instead of renamed.
+  async function renameCategory(oldName, newName) {
+    const value = newName.trim()
+    if (!value || value === oldName) return
+    const prevCategories = categories
+    const prevByItemId = new Map(menuItems.filter(i => i.category === oldName).map(i => [i.id, i.category]))
+    const mergingIntoExisting = categories.some(c => c.name === value)
+
+    setMenuItems(prev => prev.map(i => i.category === oldName ? { ...i, category: value } : i))
+    setCategories(prev => mergingIntoExisting
+      ? prev.filter(c => c.name !== oldName)
+      : prev.map(c => c.name === oldName ? { ...c, name: value } : c))
+
+    const [{ error: catError }, { error: itemsError }] = await Promise.all([
+      mergingIntoExisting
+        ? supabase.from('categories').delete().eq('name', oldName)
+        : supabase.from('categories').update({ name: value }).eq('name', oldName),
+      supabase.from('menu_items').update({ category: value }).eq('category', oldName),
+    ])
+    if (catError || itemsError) {
+      setCategories(prevCategories)
+      setMenuItems(prev => prev.map(i => prevByItemId.has(i.id) ? { ...i, category: prevByItemId.get(i.id) } : i))
+      toast.error(t('settings.toast.categoryUpdateFailed'))
+    }
+  }
+
+  async function deleteCategory(name) {
+    if (!window.confirm(`${t('settings.confirmDeleteCategory')} "${name}"?`)) return
+    const prevCategories = categories
+    const prevByItemId = new Map(menuItems.filter(i => i.category === name).map(i => [i.id, i.category]))
+    setCategories(prev => prev.filter(c => c.name !== name))
+    setMenuItems(prev => prev.map(i => i.category === name ? { ...i, category: null } : i))
+    const [{ error: catError }, { error: itemsError }] = await Promise.all([
+      supabase.from('categories').delete().eq('name', name),
+      supabase.from('menu_items').update({ category: null }).eq('category', name),
+    ])
+    if (catError || itemsError) {
+      setCategories(prevCategories)
+      setMenuItems(prev => prev.map(i => prevByItemId.has(i.id) ? { ...i, category: prevByItemId.get(i.id) } : i))
       toast.error(t('settings.toast.categoryUpdateFailed'))
     }
   }
@@ -356,7 +420,11 @@ export default function Settings() {
   }
 
   const UNITS = ['יח׳', 'ק״ג', 'גרם', 'ליטר', 'מ״ל', 'מגש', 'קרטון']
-  const knownCategories = [...new Set(menuItems.map(i => i.category).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'he'))
+  // Union of the categories table (source of truth, including categories
+  // with zero items) and whatever's still on menu_items — covers rows
+  // written before the categories table existed, or any other drift.
+  const knownCategories = [...new Set([...categories.map(c => c.name), ...menuItems.map(i => i.category).filter(Boolean)])]
+    .sort((a, b) => a.localeCompare(b, 'he'))
 
   const sortedMenuItems = [...menuItems].sort((a, b) => {
     if (a.active !== b.active) return a.active ? -1 : 1
@@ -371,7 +439,10 @@ export default function Settings() {
     const value = e.target.value
     if (value === '__new__') {
       const name = window.prompt(t('settings.newCategoryPrompt'))
-      if (name && name.trim()) updateItemCategory(itemId, name.trim())
+      const trimmed = name?.trim()
+      if (!trimmed) return
+      if (!knownCategories.includes(trimmed)) addCategory(trimmed)
+      updateItemCategory(itemId, trimmed)
       return
     }
     updateItemCategory(itemId, value || null)
@@ -441,85 +512,6 @@ function ImportTab() {
   )
 }
 
-const AUDIT_REASON_LABELS = {
-  customer_request: t('settings.auditReason.customerRequest'),
-  internal_decision: t('settings.auditReason.internalDecision'),
-  correction: t('settings.auditReason.correction'),
-  other: t('settings.auditReason.other'),
-  import: t('settings.auditReason.import'),
-  forecast: t('settings.auditReason.forecast'),
-}
-
-function AuditLogTab({ filterText }) {
-  const [rows, setRows] = useState([])
-
-  useEffect(() => {
-    supabase.from('order_line_audit')
-      .select('created_at, customer_name, item_name_he, delivery_date, old_quantity, new_quantity, source, change_reason, change_note, changed_by, changed_via, menu_items(name_he, name_en)')
-      .order('created_at', { ascending: false })
-      .limit(200)
-      .then(({ data }) => setRows(data || []))
-  }, [])
-
-  const filtered = rows.filter(r =>
-    (r.customer_name || '').includes(filterText.trim())
-    || (r.item_name_he || '').includes(filterText.trim())
-    || (r.menu_items?.name_he || '').includes(filterText.trim())
-  )
-
-  return (
-    <div className="card" style={{ padding: 0 }}>
-      <table className="itbl">
-        <thead>
-          <tr>
-            <th>{t('settings.col.changeDate')}</th>
-            <th>{t('common.customer')}</th>
-            <th>{t('common.item')}</th>
-            <th>{t('settings.col.deliveryDate')}</th>
-            <th style={{ textAlign: 'center' }}>{t('common.quantity')}</th>
-            <th>{t('settings.col.source')}</th>
-            <th>{t('settings.col.reason')}</th>
-            <th>{t('settings.col.note')}</th>
-            <th>{t('settings.col.changedBy')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map((row, i) => {
-            const isNew = row.old_quantity == null
-            const increasing = !isNew && row.new_quantity > row.old_quantity
-            const qtyColor = isNew || increasing ? 'var(--green)' : 'var(--red)'
-            const QtyArrow = isNew || increasing ? ArrowUp : ArrowDown
-            const itemName = row.menu_items
-              ? (lang === 'en' ? (row.menu_items.name_en || row.menu_items.name_he) : row.menu_items.name_he)
-              : row.item_name_he
-            return (
-              <tr key={i}>
-                <td dir="ltr" style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--t1)' }}>
-                  {new Date(row.created_at).toLocaleString('he-IL', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                  <div style={{ fontWeight: 400, color: 'var(--t3)' }}>{timeAgo(row.created_at, lang)}</div>
-                </td>
-                <td style={{ fontWeight: 500 }}>{row.customer_name || '—'}</td>
-                <td>{itemName || '—'}</td>
-                <td dir="ltr" style={{ fontSize: 12, color: 'var(--t3)' }}>{weekdayLabel(row.delivery_date, lang)} {formatShortDate(row.delivery_date)}</td>
-                <td dir="ltr" style={{ textAlign: 'center', fontSize: 12 }}>
-                  <span style={{ color: qtyColor, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                    <QtyArrow size={12} />
-                    {isNew ? `${t('header.notificationsNewItem')}: ${row.new_quantity}` : `${row.old_quantity} → ${row.new_quantity}`}
-                  </span>
-                </td>
-                <td style={{ fontSize: 12, color: 'var(--t3)' }}>{row.source}</td>
-                <td style={{ fontSize: 12 }}>{AUDIT_REASON_LABELS[row.change_reason] || row.change_reason || '—'}</td>
-                <td style={{ fontSize: 12, color: 'var(--t3)' }}>{row.change_note || '—'}</td>
-                <td style={{ fontSize: 12, color: 'var(--t3)' }}>{row.changed_by || '—'}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
   return (
     <div className="page">
       <div className="page-header">
@@ -539,7 +531,7 @@ function AuditLogTab({ filterText }) {
       </div>
 
       <div className="settings-tabs" style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
-        {[['menu', t('settings.tabs.menu')], ['customers', t('common.customers')], ['import', t('settings.importExcel')], ['audit', t('settings.tabs.audit')], ['branding', t('settings.tabs.branding')], ['staff', t('settings.tabs.staff')]].map(([k, l]) => (
+        {[['menu', t('settings.tabs.menu')], ['customers', t('common.customers')], ['import', t('settings.importExcel')], ['branding', t('settings.tabs.branding')], ['staff', t('settings.tabs.staff')]].map(([k, l]) => (
           <button key={k} className={'btn btn-sm ' + (tab === k ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -547,7 +539,10 @@ function AuditLogTab({ filterText }) {
       {/* MENU ITEMS */}
       {tab === 'menu' && (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 16 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowCategories(true)}>
+              <Pencil size={14} /> {t('settings.manageCategories')}
+            </button>
             <button className="btn btn-primary btn-sm" onClick={() => setShowAddItem(true)}>
               <Plus size={14} /> {t('settings.addItem')}
             </button>
@@ -718,14 +713,6 @@ function AuditLogTab({ filterText }) {
 
       {/* IMPORT */}
       {tab === 'import' && <ImportTab />}
-
-      {/* AUDIT LOG */}
-      {tab === 'audit' && (
-        <div>
-          <SearchInput value={filterText} onChange={setFilterText} placeholder={t('settings.searchAuditPlaceholder')} />
-          <AuditLogTab filterText={filterText} />
-        </div>
-      )}
 
       {/* BRANDING (customer portal white-label) */}
       {tab === 'branding' && (
@@ -938,6 +925,60 @@ function AuditLogTab({ filterText }) {
               <button className="btn btn-primary" onClick={saveEditCustomer} disabled={savingCustomer}>
                 {savingCustomer ? t('settings.saving') : t('common.save')}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Categories Modal */}
+      {showCategories && (
+        <div className="overlay" onClick={() => setShowCategories(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-title">{t('settings.categoriesModalTitle')}</div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <input
+                className="input"
+                style={{ flex: 1 }}
+                placeholder={t('settings.addCategoryPlaceholder')}
+                value={newCategoryName}
+                onChange={e => setNewCategoryName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addCategory(newCategoryName)}
+              />
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => addCategory(newCategoryName)}>
+                <Plus size={14} /> {t('settings.addCategoryButton')}
+              </button>
+            </div>
+            {knownCategories.length === 0 ? (
+              <div style={{ color: 'var(--t3)', fontSize: 13.5 }}>{t('settings.categoriesEmpty')}</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {knownCategories.map(cat => (
+                  <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      className="input"
+                      style={{ flex: 1 }}
+                      defaultValue={cat}
+                      onBlur={e => renameCategory(cat, e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && e.target.blur()}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--t3)', minWidth: 60, textAlign: 'center' }}>
+                      {menuItems.filter(i => i.category === cat).length} {t('common.items')}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      style={{ color: 'var(--red)' }}
+                      onClick={() => deleteCategory(cat)}
+                      aria-label={t('common.delete')}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="modal-footer">
+              <button className="btn btn-primary" onClick={() => setShowCategories(false)}>{t('common.close')}</button>
             </div>
           </div>
         </div>
