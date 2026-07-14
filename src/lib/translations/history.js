@@ -11,6 +11,10 @@ export default {
     'history.last': 'אחרונים',
     'history.standingOrder': 'הזמנה קבועה',
     'history.standingLegend': '🔄 = הזמנה קבועה (3+ שבועות זהים)',
+    'history.range.month': 'חודש',
+    'history.range.3months': '3 חודשים',
+    'history.range.ytd': 'מתחילת השנה',
+    'history.range.all': 'הכל',
   },
   en: {
     'history.title': 'History',
@@ -24,5 +28,9 @@ export default {
     'history.last': 'last',
     'history.standingOrder': 'Standing order',
     'history.standingLegend': '🔄 = Standing order (3+ identical weeks)',
+    'history.range.month': 'Month',
+    'history.range.3months': '3 Months',
+    'history.range.ytd': 'Year to Date',
+    'history.range.all': 'All',
   },
 }

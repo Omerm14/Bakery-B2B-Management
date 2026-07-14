@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { supabase } from '../lib/supabase'
@@ -22,6 +22,16 @@ const CustomTooltip = ({ active, payload, label, locale }) => {
 
 const MAX_WEEKS = 12
 const PAGE_SIZE = 1000
+
+const TREND_RANGES = ['month', '3months', 'ytd', 'all']
+
+function trendRangeCutoff(range) {
+  const now = new Date()
+  if (range === 'month') return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
+  if (range === '3months') return new Date(now.getFullYear(), now.getMonth() - 3, now.getDate())
+  if (range === 'ytd') return new Date(now.getFullYear(), 0, 1)
+  return null
+}
 
 // Supabase/PostgREST caps a single response at PAGE_SIZE rows by default —
 // a customer's or item's full order history can exceed that as more weeks
@@ -51,8 +61,9 @@ export default function History() {
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [selectedItem, setSelectedItem] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [tableData, setTableData] = useState(null) // { weeks: [...iso], rows: [...], trendData: [...] }
+  const [tableData, setTableData] = useState(null) // { weeks: [...iso], rows: [...], allWeeks: [...iso], weekTotals: {iso: qty} }
   const [pillFilter, setPillFilter] = useState('')
+  const [trendRange, setTrendRange] = useState('all')
 
   function displayName(item) {
     return lang === 'en' ? (item.name_en || item.name_he) : item.name_he
@@ -129,9 +140,8 @@ export default function History() {
         if (!iso) continue
         weekTotals[iso] = (weekTotals[iso] || 0) + parseFloat(l.quantity)
       }
-      const trendData = allWeeks.map(iso => ({ label: fmtWeek(iso), כמות: Math.round((weekTotals[iso] || 0) * 10) / 10 }))
 
-      setTableData({ weeks: recentWeeks, rows, trendData, title: customerDisplayName(selectedCustomer, lang) })
+      setTableData({ weeks: recentWeeks, rows, allWeeks, weekTotals, title: customerDisplayName(selectedCustomer, lang) })
     } finally {
       setLoading(false)
     }
@@ -184,9 +194,8 @@ export default function History() {
         if (!iso) continue
         weekTotals[iso] = (weekTotals[iso] || 0) + parseFloat(l.quantity)
       }
-      const trendData = allWeeks.map(iso => ({ label: fmtWeek(iso), כמות: Math.round((weekTotals[iso] || 0) * 10) / 10 }))
 
-      setTableData({ weeks: recentWeeks, rows, trendData, title: displayName(selectedItem) })
+      setTableData({ weeks: recentWeeks, rows, allWeeks, weekTotals, title: displayName(selectedItem) })
     } finally {
       setLoading(false)
     }
@@ -208,6 +217,13 @@ export default function History() {
     const d = new Date(iso + 'T00:00:00')
     return `${d.getDate()}/${d.getMonth() + 1}/${String(d.getFullYear()).slice(2)}`
   }
+
+  const trendData = useMemo(() => {
+    if (!tableData?.allWeeks) return []
+    const cutoff = trendRangeCutoff(trendRange)
+    const weeks = cutoff ? tableData.allWeeks.filter(iso => new Date(iso + 'T00:00:00') >= cutoff) : tableData.allWeeks
+    return weeks.map(iso => ({ label: fmtWeek(iso), כמות: Math.round((tableData.weekTotals[iso] || 0) * 10) / 10 }))
+  }, [tableData, trendRange])
 
   return (
     <div className="page">
@@ -257,11 +273,24 @@ export default function History() {
             <>
               {/* Trend chart */}
               <div className="card" style={{ marginBottom: 20 }}>
-                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 16 }}>
-                  {t('history.trendPrefix')} — {tableData.title}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>
+                    {t('history.trendPrefix')} — {tableData.title}
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {TREND_RANGES.map(r => (
+                      <button
+                        key={r}
+                        className={'btn btn-sm ' + (trendRange === r ? 'btn-primary' : 'btn-ghost')}
+                        onClick={() => setTrendRange(r)}
+                      >
+                        {t(`history.range.${r}`)}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <ResponsiveContainer width="100%" height={160}>
-                  <LineChart data={tableData.trendData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <LineChart data={trendData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                     <CartesianGrid stroke="var(--bdr)" strokeDasharray="3 3" />
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
