@@ -321,7 +321,7 @@ export default function History() {
                   <div style={{ fontWeight: 700, fontSize: 14 }}>
                     {t('history.trendPrefix')} — {tableData.title}
                   </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {TREND_RANGES.map(r => (
                       <button
                         key={r}
@@ -333,7 +333,7 @@ export default function History() {
                     ))}
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 12, color: 'var(--t2)', marginBottom: 12 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 16, fontSize: 12, color: 'var(--t2)', marginBottom: 12 }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ width: 16, height: 3, borderRadius: 2, background: 'var(--accent)', display: 'inline-block' }} />
                     {t('common.quantity')}
