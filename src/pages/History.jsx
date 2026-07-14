@@ -25,12 +25,17 @@ const PAGE_SIZE = 1000
 
 const TREND_RANGES = ['month', '3months', 'ytd', 'all']
 
-function trendRangeCutoff(range) {
+// { start, end } bounds for a trend range, end = today so weeks already
+// pre-created ahead of time (the Wednesday auto-copy rollover creates next
+// week's row in advance) don't leak into a filter meant to show the past.
+// 'all' stays fully unbounded, matching the pre-filter behavior.
+function trendRangeBounds(range) {
   const now = new Date()
-  if (range === 'month') return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
-  if (range === '3months') return new Date(now.getFullYear(), now.getMonth() - 3, now.getDate())
-  if (range === 'ytd') return new Date(now.getFullYear(), 0, 1)
-  return null
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  if (range === 'month') return { start: new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()), end: today }
+  if (range === '3months') return { start: new Date(now.getFullYear(), now.getMonth() - 3, now.getDate()), end: today }
+  if (range === 'ytd') return { start: new Date(now.getFullYear(), 0, 1), end: today }
+  return { start: null, end: null }
 }
 
 // Supabase/PostgREST caps a single response at PAGE_SIZE rows by default —
@@ -220,8 +225,11 @@ export default function History() {
 
   const trendData = useMemo(() => {
     if (!tableData?.allWeeks) return []
-    const cutoff = trendRangeCutoff(trendRange)
-    const weeks = cutoff ? tableData.allWeeks.filter(iso => new Date(iso + 'T00:00:00') >= cutoff) : tableData.allWeeks
+    const { start, end } = trendRangeBounds(trendRange)
+    const weeks = (!start && !end) ? tableData.allWeeks : tableData.allWeeks.filter(iso => {
+      const d = new Date(iso + 'T00:00:00')
+      return d >= start && d <= end
+    })
     return weeks.map(iso => ({ label: fmtWeek(iso), כמות: Math.round((tableData.weekTotals[iso] || 0) * 10) / 10 }))
   }, [tableData, trendRange])
 
