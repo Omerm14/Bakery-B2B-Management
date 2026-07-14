@@ -335,7 +335,7 @@ export default function Orders() {
             <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
               <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--bdr)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
                 <span style={{ fontWeight: 700, fontSize: 16 }}>{customerDisplayName(selectedCustomer, lang)}</span>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
                   <select
                     value={changeReason}
                     onChange={e => { setChangeReason(e.target.value); localStorage.setItem('floory_change_reason', e.target.value) }}

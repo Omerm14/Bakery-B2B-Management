@@ -282,7 +282,10 @@ export default function Weekly() {
               </thead>
               <tbody>
                 <tr>
-                  <td className="sticky-col" style={{ fontWeight: 700, background: 'var(--accent-tint)' }}>{t('weekly.grandTotal')}</td>
+                  {/* Opaque background, not --accent-tint — this cell is position:sticky, so a
+                      translucent background lets the horizontally-scrolled columns underneath
+                      show through and visually mix with its text. */}
+                  <td className="sticky-col" style={{ fontWeight: 700, background: 'var(--surf3)' }}>{t('weekly.grandTotal')}</td>
                   <td style={{ background: 'var(--accent-tint)' }} />
                   {dayTotals.map((total, i) => (
                     <td key={WEEK_DAYS[i].key} style={{ textAlign: 'center', fontWeight: 700, background: 'var(--accent-tint)' }}>
@@ -303,7 +306,8 @@ export default function Weekly() {
                   return (
                     <>
                       <tr key={`g-${group}`}>
-                        <td className="sticky-col" colSpan={2} style={{ background: 'var(--accent-tint)', padding: '8px 14px' }}>
+                        {/* Opaque, same reason as the grand-total row's sticky cell above. */}
+                        <td className="sticky-col" colSpan={2} style={{ background: 'var(--surf3)', padding: '8px 14px' }}>
                           <span className="supplier-tag" style={{ marginBottom: 0 }}>
                             {viewMode === 'trend' ? TREND_ICONS[group] : '📦'} {groupLabel(group)}
                           </span>
