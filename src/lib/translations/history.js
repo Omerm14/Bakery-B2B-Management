@@ -15,6 +15,10 @@ export default {
     'history.range.3months': '3 חודשים',
     'history.range.ytd': 'מתחילת השנה',
     'history.range.all': 'הכל',
+    'history.pctChange': 'שינוי שבועי (%)',
+    'history.increase': 'עלייה',
+    'history.decrease': 'ירידה',
+    'history.pctCaption': 'אחוז השינוי: (כמות השבוע − כמות השבוע הקודם) ÷ כמות השבוע הקודם × 100. לשבוע הראשון בטווח הנבחר אין נקודת אחוז, כי אין לו שבוע קודם להשוואה בתוך אותו טווח.',
   },
   en: {
     'history.title': 'History',
@@ -32,5 +36,9 @@ export default {
     'history.range.3months': '3 Months',
     'history.range.ytd': 'Year to Date',
     'history.range.all': 'All',
+    'history.pctChange': 'Weekly change (%)',
+    'history.increase': 'Increase',
+    'history.decrease': 'Decrease',
+    'history.pctCaption': '% change: (this week’s quantity − previous week’s) ÷ previous week’s × 100. The first week in the selected range has no % point, since it has no earlier week to compare against within that range.',
   },
 }
