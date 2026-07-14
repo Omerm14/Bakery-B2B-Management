@@ -43,6 +43,7 @@ export default function AuditLog() {
       <SearchInput value={filterText} onChange={setFilterText} placeholder={t('settings.searchAuditPlaceholder')} />
 
       <div className="card" style={{ padding: 0, marginTop: 12 }}>
+        <div className="itbl-wrap">
         <table className="itbl">
           <thead>
             <tr>
@@ -90,6 +91,7 @@ export default function AuditLog() {
             })}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   )
