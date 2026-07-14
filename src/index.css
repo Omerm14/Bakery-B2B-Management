@@ -243,6 +243,7 @@ body {
 .stat-green .stat-val { color: var(--green); }
 
 /* ─── TABLE ─── */
+.itbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .itbl { width: 100%; border-collapse: collapse; }
 .itbl th { text-align: start; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--t3); padding: 10px 14px; border-bottom: 1px solid var(--bdr); }
 .itbl td { padding: 11px 14px; border-bottom: 1px solid var(--bdr); font-size: 14.5px; vertical-align: middle; }
@@ -477,9 +478,6 @@ body {
   .day-tab { min-height: 36px; font-size: 15px; padding: 6px 14px; }
   .customer-pill { min-height: 44px; }
   .week-label { font-size: 15px; }
-
-  /* Tables — always scrollable */
-  .itbl-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
   /* Settings tabs */
   .settings-tabs { flex-wrap: wrap; }

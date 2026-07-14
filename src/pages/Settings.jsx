@@ -484,6 +484,7 @@ function ImportTab() {
       {importHistory.length > 0 && (
         <div className="card" style={{ padding: 0 }}>
           <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--bdr)', fontWeight: 600, fontSize: 14 }}>{t('settings.importHistory')}</div>
+          <div className="itbl-wrap">
           <table className="itbl">
             <thead>
               <tr>
@@ -506,6 +507,7 @@ function ImportTab() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>
@@ -549,7 +551,8 @@ function ImportTab() {
           </div>
           <SearchInput value={filterText} onChange={setFilterText} placeholder={t('settings.searchItemPlaceholder')} />
           <div className="card" style={{ padding: 0 }}>
-            <table className="itbl">
+            <div className="itbl-wrap">
+            <table className="itbl" style={{ minWidth: 800 }}>
               <thead>
                 <tr>
                   <th>{t('settings.col.nameHe')}</th>
@@ -636,6 +639,7 @@ function ImportTab() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}
@@ -653,7 +657,8 @@ function ImportTab() {
           </div>
           <SearchInput value={filterText} onChange={setFilterText} placeholder={t('settings.searchCustomerPlaceholder')} />
           <div className="card" style={{ padding: 0 }}>
-            <table className="itbl">
+            <div className="itbl-wrap">
+            <table className="itbl" style={{ minWidth: 700 }}>
               <thead>
                 <tr><th>{t('settings.col.name')}</th><th>{t('settings.col.nameEn')}</th><th>{t('settings.col.phone')}</th><th>{t('settings.col.portalAccess')}</th><th>{t('settings.col.status')}</th><th></th></tr>
               </thead>
@@ -707,6 +712,7 @@ function ImportTab() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}
