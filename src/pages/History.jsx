@@ -13,12 +13,41 @@ const CustomTooltip = ({ active, payload, label, locale }) => {
   return (
     <div style={{ background: 'var(--surf2)', border: '1px solid var(--bdr2)', borderRadius: 8, padding: '8px 12px', fontSize: 13 }}>
       <div style={{ color: 'var(--t2)', marginBottom: 4 }}>{label}</div>
-      {payload.map((p, i) => (
-        <div key={i} style={{ color: p.color || 'var(--accent)', fontWeight: 600 }}>{p.name}: {p.value?.toLocaleString(locale)}</div>
-      ))}
+      {payload.filter(p => p.value != null).map((p, i) => {
+        const isPct = p.dataKey === 'שינוי'
+        const color = isPct ? (p.value >= 0 ? 'var(--green)' : 'var(--red)') : (p.color || 'var(--accent)')
+        const display = isPct ? `${p.value > 0 ? '+' : ''}${p.value}%` : p.value?.toLocaleString(locale)
+        return (
+          <div key={i} style={{ color, fontWeight: 600 }}>
+            {p.name}:{' '}
+            {/* dir="ltr" — a leading minus sign in an RTL document otherwise
+                gets bidi-reordered to the end ("-9.6%" renders as "9.6%-"). */}
+            <span dir="ltr">{display}</span>
+          </div>
+        )
+      })}
     </div>
   )
 }
+
+// Week-over-week % change is only meaningful from the second visible week on
+// (the first has no prior point to compare against within the selected
+// range), so weeks with a null שינוי get no dot instead of one sitting at y=0.
+const PctDot = ({ cx, cy, payload }) => {
+  if (payload?.שינוי == null) return null
+  return <circle cx={cx} cy={cy} r={4} fill={payload.שינוי >= 0 ? 'var(--green)' : 'var(--red)'} stroke="var(--surf)" strokeWidth={1.5} />
+}
+
+const PctActiveDot = ({ cx, cy, payload }) => {
+  if (payload?.שינוי == null) return null
+  return <circle cx={cx} cy={cy} r={6} fill={payload.שינוי >= 0 ? 'var(--green)' : 'var(--red)'} stroke="var(--surf)" strokeWidth={2} />
+}
+
+// Custom tick (not tickFormatter) so the minus sign on a negative tick can
+// get an explicit LTR run — same bidi reorder issue as the tooltip above.
+const PctAxisTick = ({ x, y, payload }) => (
+  <text x={x} y={y} dy={4} textAnchor="start" fontSize={11} fill="var(--t3)" direction="ltr">{payload.value}%</text>
+)
 
 const MAX_WEEKS = 12
 const PAGE_SIZE = 1000
@@ -232,7 +261,12 @@ export default function History() {
     if (!tableData?.allWeeks) return []
     const start = trendRangeStart(trendRange)
     const weeks = start ? tableData.allWeeks.filter(iso => new Date(iso + 'T00:00:00') >= start) : tableData.allWeeks
-    return weeks.map(iso => ({ label: fmtWeek(iso), כמות: Math.round((tableData.weekTotals[iso] || 0) * 10) / 10 }))
+    const totals = weeks.map(iso => tableData.weekTotals[iso] || 0)
+    return weeks.map((iso, i) => {
+      const prev = totals[i - 1]
+      const pct = (i > 0 && prev) ? Math.round(((totals[i] - prev) / prev) * 1000) / 10 : null
+      return { label: fmtWeek(iso), כמות: Math.round(totals[i] * 10) / 10, שינוי: pct }
+    })
   }, [tableData, trendRange])
 
   return (
@@ -299,15 +333,38 @@ export default function History() {
                     ))}
                   </div>
                 </div>
-                <ResponsiveContainer width="100%" height={160}>
-                  <LineChart data={trendData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 12, color: 'var(--t2)', marginBottom: 12 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 16, height: 3, borderRadius: 2, background: 'var(--accent)', display: 'inline-block' }} />
+                    {t('common.quantity')}
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 16, height: 3, borderRadius: 2, background: 'var(--t2)', opacity: 0.7, display: 'inline-block' }} />
+                    {t('history.pctChange')}
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)', display: 'inline-block' }} />
+                    {t('history.increase')}
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--red)', display: 'inline-block' }} />
+                    {t('history.decrease')}
+                  </span>
+                </div>
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={trendData} margin={{ top: 14, right: 26, left: -20, bottom: 0 }}>
                     <CartesianGrid stroke="var(--bdr)" strokeDasharray="3 3" />
                     <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
+                    <YAxis yAxisId="qty" tick={{ fontSize: 11, fill: 'var(--t3)' }} axisLine={false} tickLine={false} />
+                    <YAxis yAxisId="pct" orientation="right" tick={<PctAxisTick />} axisLine={false} tickLine={false} />
                     <Tooltip content={<CustomTooltip locale={locale} />} />
-                    <Line type="monotone" dataKey="כמות" name={t('common.quantity')} stroke="var(--accent)" strokeWidth={2} dot={{ fill: 'var(--accent)', r: 3 }} activeDot={{ r: 5 }} />
+                    <Line yAxisId="qty" type="monotone" dataKey="כמות" name={t('common.quantity')} stroke="var(--accent)" strokeWidth={2} dot={{ fill: 'var(--accent)', r: 3 }} activeDot={{ r: 5 }} />
+                    <Line yAxisId="pct" type="monotone" dataKey="שינוי" name={t('history.pctChange')} stroke="var(--t2)" strokeWidth={1.5} strokeDasharray="5 4" connectNulls={false} dot={<PctDot />} activeDot={<PctActiveDot />} />
                   </LineChart>
                 </ResponsiveContainer>
+                <div style={{ fontSize: 12, color: 'var(--t3)', lineHeight: 1.6, marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--bdr)' }}>
+                  {t('history.pctCaption')}
+                </div>
               </div>
 
               {/* Cross-tab table: rows = items/customers, columns = weeks */}
