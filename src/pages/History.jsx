@@ -25,17 +25,22 @@ const PAGE_SIZE = 1000
 
 const TREND_RANGES = ['month', '3months', 'ytd', 'all']
 
-// { start, end } bounds for a trend range, end = today so weeks already
-// pre-created ahead of time (the Wednesday auto-copy rollover creates next
-// week's row in advance) don't leak into a filter meant to show the past.
-// 'all' stays fully unbounded, matching the pre-filter behavior.
-function trendRangeBounds(range) {
+function todayIso() {
   const now = new Date()
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  if (range === 'month') return { start: new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()), end: today }
-  if (range === '3months') return { start: new Date(now.getFullYear(), now.getMonth() - 3, now.getDate()), end: today }
-  if (range === 'ytd') return { start: new Date(now.getFullYear(), 0, 1), end: today }
-  return { start: null, end: null }
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
+// Lower bound for a trend range; null ('all') means no lower bound. Weeks
+// after today are excluded further down, at the source (see loadCustomerHistory
+// /loadItemHistory) — this is a History page, so weeks already pre-created
+// ahead of schedule (the Wednesday auto-copy rollover, or a customer's portal
+// view pre-filling next week) never appear as if they were past activity.
+function trendRangeStart(range) {
+  const now = new Date()
+  if (range === 'month') return new Date(now.getFullYear(), now.getMonth() - 1, now.getDate())
+  if (range === '3months') return new Date(now.getFullYear(), now.getMonth() - 3, now.getDate())
+  if (range === 'ytd') return new Date(now.getFullYear(), 0, 1)
+  return null
 }
 
 // Supabase/PostgREST caps a single response at PAGE_SIZE rows by default —
@@ -124,8 +129,8 @@ export default function History() {
         itemWeekMap[id].total += parseFloat(l.quantity)
       }
 
-      // Sort weeks, take last MAX_WEEKS
-      const allWeeks = [...weekSet].sort()
+      // Sort weeks, drop any not-yet-happened ones, take last MAX_WEEKS
+      const allWeeks = [...weekSet].sort().filter(iso => iso <= todayIso())
       const recentWeeks = allWeeks.slice(-MAX_WEEKS)
 
       // Build rows, sorted by total desc, filter items with any qty in recent weeks
@@ -181,7 +186,7 @@ export default function History() {
         custWeekMap[id].total += parseFloat(l.quantity)
       }
 
-      const allWeeks = [...weekSet].sort()
+      const allWeeks = [...weekSet].sort().filter(iso => iso <= todayIso())
       const recentWeeks = allWeeks.slice(-MAX_WEEKS)
 
       const rows = Object.values(custWeekMap)
@@ -225,11 +230,8 @@ export default function History() {
 
   const trendData = useMemo(() => {
     if (!tableData?.allWeeks) return []
-    const { start, end } = trendRangeBounds(trendRange)
-    const weeks = (!start && !end) ? tableData.allWeeks : tableData.allWeeks.filter(iso => {
-      const d = new Date(iso + 'T00:00:00')
-      return d >= start && d <= end
-    })
+    const start = trendRangeStart(trendRange)
+    const weeks = start ? tableData.allWeeks.filter(iso => new Date(iso + 'T00:00:00') >= start) : tableData.allWeeks
     return weeks.map(iso => ({ label: fmtWeek(iso), כמות: Math.round((tableData.weekTotals[iso] || 0) * 10) / 10 }))
   }, [tableData, trendRange])
 
