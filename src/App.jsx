@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { Analytics } from '@vercel/analytics/react'
 import { supabase } from './lib/supabase'
 import Sidebar from './components/layout/Sidebar'
 import GlobalHeader from './components/layout/GlobalHeader'
@@ -242,6 +243,7 @@ export default function App() {
           )}
         </BrowserRouter>
       </ImportProvider>
+      <Analytics />
     </ToastProvider>
   )
 }
