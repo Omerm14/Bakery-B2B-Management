@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { Menu, Sun, Moon, Search, Bell, Globe, ArrowUp, ArrowDown } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
+import { useAutoSyncPref } from '../../hooks/useAutoSyncPref'
 import { useTranslation } from '../../context/LanguageContext'
 import { customerDisplayName } from '../../lib/displayName'
 import { weekdayLabel, formatShortDate } from '../../constants/days'
@@ -30,20 +31,42 @@ function NotificationBell() {
   const { t, lang } = useTranslation()
   const userEmail = useCurrentUser()
   const navigate = useNavigate()
+  const [showAutoSync] = useAutoSyncPref()
   const [unseenCount, setUnseenCount] = useState(0)
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState([])
   const [loadingItems, setLoadingItems] = useState(false)
   const [auditRows, setAuditRows] = useState({})
+  const [hiddenAutoSyncCount, setHiddenAutoSyncCount] = useState(0)
   const wrapRef = useRef(null)
 
   const refreshCount = useCallback(async () => {
-    const { count } = await supabase
+    if (showAutoSync) {
+      const { count } = await supabase
+        .from('order_change_notifications')
+        .select('id', { count: 'exact', head: true })
+        .is('seen_at', null)
+      setUnseenCount(count || 0)
+      return
+    }
+    // Auto-sync is hidden by default, so a plain head-count would badge the
+    // bell with a number the panel itself never shows. Classifying each
+    // unseen row costs one extra audit lookup per row, but this only runs
+    // while auto-sync stays hidden, and 200 is far more than real unseen
+    // volume ever reaches between polls.
+    const { data } = await supabase
       .from('order_change_notifications')
-      .select('id', { count: 'exact', head: true })
+      .select('id, customer_id, week_id, created_at')
       .is('seen_at', null)
-    setUnseenCount(count || 0)
-  }, [])
+      .order('created_at', { ascending: false })
+      .limit(200)
+    const list = data || []
+    const flags = await Promise.all(list.map(async n => {
+      const rows = await fetchAuditRows(n)
+      return rows.length > 0 && rows.every(r => r.change_reason === 'auto_copy')
+    }))
+    setUnseenCount(flags.filter(isAutoSync => !isAutoSync).length)
+  }, [showAutoSync])
 
   useEffect(() => {
     refreshCount()
@@ -105,22 +128,44 @@ function NotificationBell() {
     setOpen(next)
     if (!next) return
     setLoadingItems(true)
+    // Fetch a bigger batch when auto-sync is hidden — a recent bulk rollover
+    // batch could otherwise fill the whole top-20 with entries this panel
+    // then filters out, leaving it looking empty despite real ones just
+    // behind them.
     const { data } = await supabase
       .from('order_change_notifications')
       .select('id, customer_id, week_id, created_at, seen_at, customers(name, name_en), weeks(label, start_date)')
       .order('created_at', { ascending: false })
-      .limit(20)
+      .limit(showAutoSync ? 20 : 60)
     const list = data || []
-    setItems(list)
-    setLoadingItems(false)
 
-    // The itemized breakdown is shown immediately, not behind a click — so
-    // fetch every notification's rows up front instead of lazily on expand.
+    if (showAutoSync) {
+      setItems(list)
+      setLoadingItems(false)
+    }
+
+    // The itemized breakdown is shown immediately (when showing everything),
+    // not behind a click — so fetch every notification's rows up front
+    // instead of lazily on expand. When hiding auto-sync, this same data is
+    // also what decides which notifications are visible at all.
     const entries = await Promise.all(list.map(async n => [n.id, await fetchAuditRows(n)]))
-    setAuditRows(Object.fromEntries(entries))
+    const rowsById = Object.fromEntries(entries)
+    setAuditRows(rowsById)
+
+    if (!showAutoSync) {
+      const visible = list.filter(n => {
+        const rows = rowsById[n.id]
+        return !(rows.length > 0 && rows.every(r => r.change_reason === 'auto_copy'))
+      })
+      setHiddenAutoSyncCount(list.length - visible.length)
+      setItems(visible.slice(0, 20))
+      setLoadingItems(false)
+    }
 
     // Viewing the list now IS viewing the detail, so mark everything unseen
-    // as seen as soon as the panel opens instead of per-item on click.
+    // as seen as soon as the panel opens instead of per-item on click — this
+    // covers auto-sync entries too even when hidden, so they don't inflate
+    // the count again if the preference is later switched back to "show".
     const unseenIds = list.filter(n => !n.seen_at).map(n => n.id)
     if (unseenIds.length) {
       const seenAt = new Date().toISOString()
@@ -207,6 +252,11 @@ function NotificationBell() {
                 </div>
               )
             })
+          )}
+          {!loadingItems && !showAutoSync && hiddenAutoSyncCount > 0 && (
+            <div className="notif-empty" style={{ fontSize: 11 }}>
+              {t('header.notificationsAutoSyncHidden')} ({hiddenAutoSyncCount})
+            </div>
           )}
         </div>
       )}
