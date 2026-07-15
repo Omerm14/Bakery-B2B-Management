@@ -97,7 +97,12 @@ export default function Orders() {
   }
 
   async function handleQtyChange(menuItemId, date, value, via = 'orders_grid') {
-    const qty = parseFloat(value) || 0
+    // Piece-count items ("יח׳") don't have fractional units in real life —
+    // 10.5 loaves isn't a thing — so round those to whole numbers. Weight/
+    // volume units (kg, gram, liter, ml) legitimately need decimals.
+    const item = menuItems.find(m => m.id === menuItemId)
+    let qty = parseFloat(value) || 0
+    if (item?.unit === 'יח׳') qty = Math.round(qty)
     const key = `${menuItemId}_${date}`
 
     // Optimistic update
@@ -275,7 +280,7 @@ export default function Orders() {
   }, {})
 
   return (
-    <div className="page">
+    <div className="page orders-page">
       <div className="page-header">
         <h1 className="page-title">{t('orders.title')}</h1>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -374,7 +379,7 @@ export default function Orders() {
                   />
                 )}
               </div>
-              <div className="order-grid-wrap" ref={gridRef} style={{ maxHeight: 'calc(100vh - 290px)', overflowY: 'auto' }}>
+              <div className="order-grid-wrap" ref={gridRef}>
                 <table className="order-grid">
                   <thead>
                     <tr>
@@ -421,7 +426,7 @@ export default function Orders() {
                                     type="number"
                                     className={cls}
                                     min="0"
-                                    step="0.5"
+                                    step={item.unit === 'יח׳' ? '1' : '0.5'}
                                     value={line?.quantity || ''}
                                     placeholder="—"
                                     onChange={e => handleQtyChange(item.id, date, e.target.value)}
@@ -498,7 +503,7 @@ export default function Orders() {
                 className="input"
                 type="number"
                 min="0"
-                step="0.5"
+                step={bulkFillItem.unit === 'יח׳' ? '1' : '0.5'}
                 placeholder="0"
                 value={bulkFillQty}
                 onChange={e => setBulkFillQty(e.target.value)}
