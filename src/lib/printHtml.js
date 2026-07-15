@@ -92,32 +92,36 @@ export function buildWeeklyProductionHtml({ htmlTitle, h1, subheading, dayLabels
   const L = { item: 'Item', category: 'Category', unit: 'Unit', total: 'Total', ...labels }
   const start = dir === 'rtl' ? 'right' : 'left'
   const dayHeaders = dayLabels.map(d =>
-    `<th style="text-align:center;padding:6px 8px;border-bottom:2px solid #333">${escapeHtml(d.short_en)}</th>`
+    `<th style="text-align:center;padding:4px 6px;border-bottom:2px solid #333">${escapeHtml(d.short_en)}</th>`
   ).join('')
 
   const body = sections.map(s => {
     const rows = s.items.map(i => {
       const dayCells = dayLabels.map(d => {
         const qty = i.days[d.key]
-        return `<td style="text-align:center;padding:6px 8px;border-bottom:1px solid #eee">${qty ? (qty % 1 === 0 ? qty : qty.toFixed(1)) : '—'}</td>`
+        return `<td style="text-align:center;padding:3px 6px;border-bottom:1px solid #eee">${qty ? (qty % 1 === 0 ? qty : qty.toFixed(1)) : '—'}</td>`
       }).join('')
       return `<tr>
-        <td style="padding:6px 10px;border-bottom:1px solid #eee">${escapeHtml(i.name)}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:12px;color:#555">${escapeHtml(i.category)}</td>
-        <td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:12px;color:#555">${escapeHtml(i.unit)}</td>
+        <td style="padding:3px 8px;border-bottom:1px solid #eee">${escapeHtml(i.name)}</td>
+        <td style="padding:3px 8px;border-bottom:1px solid #eee;font-size:9px;color:#555">${escapeHtml(i.category)}</td>
+        <td style="padding:3px 8px;border-bottom:1px solid #eee;font-size:9px;color:#555">${escapeHtml(i.unit)}</td>
         ${dayCells}
-        <td style="text-align:center;padding:6px 8px;border-bottom:1px solid #eee;font-weight:700">${i.total % 1 === 0 ? i.total : i.total.toFixed(1)}</td>
+        <td style="text-align:center;padding:3px 6px;border-bottom:1px solid #eee;font-weight:700">${i.total % 1 === 0 ? i.total : i.total.toFixed(1)}</td>
       </tr>`
     }).join('')
-    return `<div style="margin-bottom:24px">
-      <h3 style="margin:0 0 6px;font-size:16px">${escapeHtml(s.heading)}</h3>
+    // page-break-inside/break-inside:avoid on the wrapping div (not just the
+    // <table>, which some print engines ignore this on) keeps a category's
+    // full row-set together -- the browser pushes the WHOLE section to a
+    // fresh page instead of splitting it partway through like before.
+    return `<div style="margin-bottom:14px;page-break-inside:avoid;break-inside:avoid">
+      <h3 style="margin:0 0 4px;font-size:13px">${escapeHtml(s.heading)}</h3>
       <table style="width:100%;border-collapse:collapse">
         <thead><tr>
-          <th style="text-align:${start};padding:6px 10px;border-bottom:2px solid #333">${escapeHtml(L.item)}</th>
-          <th style="text-align:${start};padding:6px 10px;border-bottom:2px solid #333">${escapeHtml(L.category)}</th>
-          <th style="text-align:${start};padding:6px 10px;border-bottom:2px solid #333">${escapeHtml(L.unit)}</th>
+          <th style="text-align:${start};padding:4px 8px;border-bottom:2px solid #333">${escapeHtml(L.item)}</th>
+          <th style="text-align:${start};padding:4px 8px;border-bottom:2px solid #333">${escapeHtml(L.category)}</th>
+          <th style="text-align:${start};padding:4px 8px;border-bottom:2px solid #333">${escapeHtml(L.unit)}</th>
           ${dayHeaders}
-          <th style="text-align:center;padding:6px 8px;border-bottom:2px solid #333">${escapeHtml(L.total)}</th>
+          <th style="text-align:center;padding:4px 6px;border-bottom:2px solid #333">${escapeHtml(L.total)}</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -126,7 +130,7 @@ export function buildWeeklyProductionHtml({ htmlTitle, h1, subheading, dayLabels
 
   return `<!DOCTYPE html><html dir="${dir}"><head><meta charset="utf-8">
     <title>${escapeHtml(htmlTitle)}</title>
-    <style>@page{size:A4 landscape;margin:14mm}body{font-family:Arial,sans-serif;margin:0}h1{margin:0 0 4px;font-size:20px}p{color:#666;font-size:13px;margin:0 0 18px}h3{page-break-after:avoid}tr{page-break-inside:avoid}thead{display:table-header-group}</style>
+    <style>@page{size:A4 landscape;margin:12mm}body{font-family:Arial,sans-serif;margin:0;font-size:10px}h1{margin:0 0 4px;font-size:16px}p{color:#666;font-size:11px;margin:0 0 12px}h3{page-break-after:avoid}tr{page-break-inside:avoid}thead{display:table-header-group}</style>
     </head><body>
     <h1>${escapeHtml(h1)}</h1><p>${escapeHtml(subheading)}</p>
     ${body}
