@@ -26,6 +26,7 @@ export default {
     'header.notificationsNewItem': 'חדש',
     'header.notificationsGoToOrder': 'מעבר להזמנה',
     'header.notificationsAutoSync': 'סנכרון אוטומטי',
+    'header.notificationsAutoSyncHidden': 'עדכוני סנכרון אוטומטי מוסתרים',
     'header.lang': 'English',
   },
   en: {
@@ -55,6 +56,7 @@ export default {
     'header.notificationsNewItem': 'New',
     'header.notificationsGoToOrder': 'Go to order',
     'header.notificationsAutoSync': 'Auto-sync',
+    'header.notificationsAutoSyncHidden': 'Auto-sync updates hidden',
     'header.lang': 'עברית',
   },
 }

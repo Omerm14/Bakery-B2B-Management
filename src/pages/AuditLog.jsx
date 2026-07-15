@@ -1,15 +1,22 @@
 import { useState, useEffect } from 'react'
-import { ArrowUp, ArrowDown } from 'lucide-react'
+import { ArrowUp, ArrowDown, Eye, EyeOff } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import SearchInput from '../components/SearchInput'
 import { useTranslation } from '../context/LanguageContext'
 import { weekdayLabel, formatShortDate } from '../constants/days'
 import { timeAgo } from '../lib/time'
+import { useAutoSyncPref } from '../hooks/useAutoSyncPref'
 
 export default function AuditLog() {
   const { t, lang } = useTranslation()
   const [rows, setRows] = useState([])
   const [filterText, setFilterText] = useState('')
+  // Auto-sync entries (Wednesday rollover + portal view auto-fill, both
+  // change_reason: 'auto_copy') dwarf real staff/customer edits in volume —
+  // hidden by default so the log reads as an actual change history. Shared
+  // with the notification bell (see useAutoSyncPref) so this one toggle
+  // controls both surfaces.
+  const [showAutoSync, setShowAutoSync] = useAutoSyncPref()
 
   const AUDIT_REASON_LABELS = {
     customer_request: t('settings.auditReason.customerRequest'),
@@ -28,11 +35,15 @@ export default function AuditLog() {
       .then(({ data }) => setRows(data || []))
   }, [])
 
-  const filtered = rows.filter(r =>
-    (r.customer_name || '').includes(filterText.trim())
-    || (r.item_name_he || '').includes(filterText.trim())
-    || (r.menu_items?.name_he || '').includes(filterText.trim())
-  )
+  const autoSyncCount = rows.filter(r => r.change_reason === 'auto_copy').length
+
+  const filtered = rows
+    .filter(r => showAutoSync || r.change_reason !== 'auto_copy')
+    .filter(r =>
+      (r.customer_name || '').includes(filterText.trim())
+      || (r.item_name_he || '').includes(filterText.trim())
+      || (r.menu_items?.name_he || '').includes(filterText.trim())
+    )
 
   return (
     <div className="page">
@@ -40,7 +51,20 @@ export default function AuditLog() {
         <h1 className="page-title">{t('nav.audit')}</h1>
       </div>
 
-      <SearchInput value={filterText} onChange={setFilterText} placeholder={t('settings.searchAuditPlaceholder')} />
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-start' }}>
+        <div style={{ flex: '1 1 240px' }}>
+          <SearchInput value={filterText} onChange={setFilterText} placeholder={t('settings.searchAuditPlaceholder')} />
+        </div>
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => setShowAutoSync(v => !v)}
+          title={showAutoSync ? t('settings.auditHideAutoSync') : t('settings.auditShowAutoSync')}
+        >
+          {showAutoSync ? <EyeOff size={14} /> : <Eye size={14} />}
+          {showAutoSync ? t('settings.auditHideAutoSync') : t('settings.auditShowAutoSync')}
+          {!showAutoSync && autoSyncCount > 0 && ` (${autoSyncCount})`}
+        </button>
+      </div>
 
       <div className="card" style={{ padding: 0, marginTop: 12 }}>
         <div className="itbl-wrap">
