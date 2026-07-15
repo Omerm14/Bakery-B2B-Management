@@ -7,9 +7,11 @@ import { useBranding } from '../../hooks/useBranding'
 import { useToast } from '../../context/ToastContext'
 import { WEEK_DAYS, formatShortDate, dayDate, toLocalISODate } from '../../constants/days'
 import { CATEGORY_ORDER } from '../../constants/categories'
+import { isPortalHost } from '../../lib/host'
 import DayOrderView from './DayOrderView'
 import WeekSummaryView from './WeekSummaryView'
 import SendOrderModal from '../../components/customer/SendOrderModal'
+import InstallPrompt from '../../components/customer/InstallPrompt'
 import flooryLogoOnDark from '../../assets/floory/logo-horizontal-ondark.png'
 import { trackEvent } from '../../lib/posthog'
 
@@ -65,6 +67,16 @@ export default function CustomerOrders() {
   useEffect(() => {
     document.title = customer ? `הזמנות — ${customer.name}` : 'הזמנות'
   }, [customer])
+
+  // Registered only on the portal host — makes the app installable
+  // (Android/Chrome's beforeinstallprompt requires a registered SW with a
+  // fetch handler). The staff app never registers one.
+  useEffect(() => {
+    if (!isPortalHost || !('serviceWorker' in navigator)) return
+    navigator.serviceWorker.register('/sw.js').catch(err => {
+      console.error('[CustomerOrders] service worker registration failed', err)
+    })
+  }, [])
 
   // Previous week's quantities (qty > 0 only), keyed by `${menuItemId}_${dayOffset}`
   // (0-6) rather than a date string, so the caller can shift it onto
@@ -438,6 +450,7 @@ export default function CustomerOrders() {
       )}
 
       {sendSummary && <SendOrderModal changes={sendSummary} onClose={() => setSendSummary(null)} />}
+      <InstallPrompt />
     </div>
   )
 }
