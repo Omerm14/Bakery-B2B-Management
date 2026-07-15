@@ -460,7 +460,18 @@ body {
 .shimmer { background: linear-gradient(90deg, var(--surf2) 25%, var(--surf3) 50%, var(--surf2) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 8px; }
 
 /* ─── RESPONSIVE LAYOUTS ─── */
+/* min-width: 0 on the grid children -- a grid item's default min-width is
+   auto (its content's intrinsic width), not 0, so a wide child (Orders'/
+   History's day-column table) refuses to shrink below its own content size
+   and instead grows the grid track itself past the viewport. That drags
+   .app-main (the real scroll container) into horizontal scroll, escaping
+   the table's own overflow-x:auto wrapper entirely -- invisible on desktop,
+   where the 1fr column always has more room than the table needs, but real
+   on any narrow viewport. min-width: 0 lets the item actually shrink to its
+   track's size, so overflow-x:auto on the table wrapper inside it can do
+   its job. */
 .sidebar-layout { display: grid; grid-template-columns: 220px 1fr; gap: 20px; }
+.sidebar-layout > * { min-width: 0; }
 .dash-layout    { display: grid; grid-template-columns: 1fr 380px;  gap: 20px; }
 
 @media (max-width: 768px) {
