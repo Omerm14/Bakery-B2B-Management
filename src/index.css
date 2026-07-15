@@ -257,6 +257,16 @@ body {
 
 /* ─── ORDER GRID ─── */
 .order-grid-wrap { overflow-x: auto; }
+
+/* Orders page only (not Forecasting, which shares .order-grid-wrap but never
+   had this bounded-height behavior): an independently-scrolling panel on
+   desktop so the customer list/header stay in view while scrolling a long
+   item list. Overridden below on mobile, where a second scroll container
+   nested inside the page scroll is exactly the kind of thing touch browsers
+   handle badly (scroll-chaining, 100vh viewport quirks) -- same simple "let
+   the page scroll, only trap the horizontal overflow" approach already used
+   by Weekly's table. */
+.orders-page .order-grid-wrap { max-height: calc(100vh - 290px); overflow-y: auto; }
 .order-grid { width: 100%; border-collapse: collapse; min-width: 700px; }
 .order-grid th { padding: 10px 8px; font-size: 12px; font-weight: 700; color: var(--t3); text-align: center; border-bottom: 1px solid var(--bdr); background: var(--surf); }
 .order-grid th.item-col { text-align: start; min-width: 180px; padding-inline-end: 16px; }
@@ -465,6 +475,15 @@ body {
   }
   .sidebar-layout .customer-list::-webkit-scrollbar { display: none; }
   .sidebar-layout .customer-pill { flex: 0 0 auto; white-space: nowrap; }
+
+  /* Order grid — let the page scroll vertically instead of a bounded inner
+     scrollbox; only the horizontal overflow (from order-grid-wrap's own
+     overflow-x: auto, unchanged here) stays contained. Setting overflow-y
+     here would be pointless -- overflow-x: auto forces the computed
+     overflow-y to auto regardless, per the CSS overflow spec's axis
+     coupling rule -- max-height: none is what actually removes the bounded
+     scrollbox, since with no height cap there's nothing left to scroll. */
+  .orders-page .order-grid-wrap { max-height: none; }
 
   /* Page */
   .hd { padding-inline: 14px; }
