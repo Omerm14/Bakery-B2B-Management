@@ -49,14 +49,21 @@ export function buildPackingListHtml({ htmlTitle, h2, subheading, sections, dir 
 
 function productionRowsHtml(items) {
   return items.map(i =>
-    `<tr><td style="padding:6px 10px;border-bottom:1px solid #eee">${escapeHtml(i.name_he)}</td>` +
-    `<td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:12px;color:#555">${escapeHtml(i.customerBreakdown)}</td>` +
-    `<td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:left;font-weight:700">${escapeHtml(i.total_qty)} ${escapeHtml(i.unit)}</td></tr>`
+    `<tr><td style="padding:4px 8px;border-bottom:1px solid #eee">${escapeHtml(i.name_he)}</td>` +
+    `<td style="padding:4px 8px;border-bottom:1px solid #eee;font-size:10.5px;color:#555">${escapeHtml(i.customerBreakdown)}</td>` +
+    `<td style="padding:4px 8px;border-bottom:1px solid #eee;text-align:left;font-weight:700">${escapeHtml(i.total_qty)} ${escapeHtml(i.unit)}</td></tr>`
   ).join('')
 }
 
 // sections: [{ heading, items: [{name_he, customerBreakdown, total_qty, unit}] }]
 // One <div> per section, each forced onto its own printed page except the last.
+// A category with enough items (or long enough customer-breakdown text) to
+// overflow one page still has to spill onto a next page -- no amount of font
+// shrinking guarantees every category fits on one sheet -- but thead's
+// display:table-header-group repeats the column headers on that continuation
+// page instead of leaving a bare, unlabeled row floating alone, and
+// tr's page-break-inside:avoid stops a row's wrapped customer list from being
+// torn mid-line across the page boundary.
 // dir/labels: follow the staff app's current language toggle.
 export function buildProductionListHtml({ htmlTitle, h2, subheading, sections, dir = 'rtl', labels = {} }) {
   const L = { item: 'פריט', byCustomer: 'לפי לקוח', totalQty: 'כמות כוללת', ...labels }
@@ -64,13 +71,13 @@ export function buildProductionListHtml({ htmlTitle, h2, subheading, sections, d
   const end = dir === 'rtl' ? 'left' : 'right'
   const body = sections.map((s, i) => `
     <div style="${i < sections.length - 1 ? 'page-break-after:always;break-after:page;' : ''}">
-      <h2 style="margin:0 0 4px">${escapeHtml(h2)}</h2><p style="color:#666;font-size:14px;margin:0 0 16px">${escapeHtml(subheading)}</p>
-      <h3 style="margin:0 0 4px;font-size:18px">${escapeHtml(s.heading)}</h3>
+      <h2 style="margin:0 0 4px">${escapeHtml(h2)}</h2><p style="color:#666;font-size:13px;margin:0 0 12px">${escapeHtml(subheading)}</p>
+      <h3 style="margin:0 0 4px;font-size:15px">${escapeHtml(s.heading)}</h3>
       <table style="width:100%;border-collapse:collapse">
         <thead><tr>
-          <th style="text-align:${start};padding:6px 10px;border-bottom:2px solid #333">${escapeHtml(L.item)}</th>
-          <th style="text-align:${start};padding:6px 10px;border-bottom:2px solid #333">${escapeHtml(L.byCustomer)}</th>
-          <th style="text-align:${end};padding:6px 10px;border-bottom:2px solid #333">${escapeHtml(L.totalQty)}</th>
+          <th style="text-align:${start};padding:4px 8px;border-bottom:2px solid #333">${escapeHtml(L.item)}</th>
+          <th style="text-align:${start};padding:4px 8px;border-bottom:2px solid #333">${escapeHtml(L.byCustomer)}</th>
+          <th style="text-align:${end};padding:4px 8px;border-bottom:2px solid #333">${escapeHtml(L.totalQty)}</th>
         </tr></thead>
         <tbody>${productionRowsHtml(s.items)}</tbody>
       </table>
@@ -78,7 +85,7 @@ export function buildProductionListHtml({ htmlTitle, h2, subheading, sections, d
 
   return `<!DOCTYPE html><html dir="${dir}"><head><meta charset="utf-8">
     <title>${escapeHtml(htmlTitle)}</title>
-    <style>@page{size:A4;margin:16mm}body{font-family:Arial,sans-serif;margin:0}h2{margin:0 0 16px}p{color:#666;font-size:14px;margin:0 0 20px}</style>
+    <style>@page{size:A4;margin:14mm}body{font-family:Arial,sans-serif;margin:0;font-size:11px}h2{margin:0 0 12px}p{color:#666;font-size:13px;margin:0 0 12px}tr{page-break-inside:avoid;break-inside:avoid}thead{display:table-header-group}</style>
     </head><body>
     ${body}
     </body></html>`
