@@ -10,6 +10,7 @@ import { useAutoSyncPref } from '../hooks/useAutoSyncPref'
 export default function AuditLog() {
   const { t, lang } = useTranslation()
   const [rows, setRows] = useState([])
+  const [autoSyncCount, setAutoSyncCount] = useState(0)
   const [filterText, setFilterText] = useState('')
   // Auto-sync entries (Wednesday rollover + portal view auto-fill, both
   // change_reason: 'auto_copy') dwarf real staff/customer edits in volume —
@@ -28,22 +29,31 @@ export default function AuditLog() {
   }
 
   useEffect(() => {
-    supabase.from('order_line_audit')
+    // Filtered server-side, not just client-side after a flat top-200 fetch —
+    // a single bulk auto-copy run (the Wednesday rollover, or backfilling it
+    // by hand) can insert far more than 200 rows at once, which would other-
+    // wise fill the entire window with auto-sync entries and leave nothing
+    // to show once they're hidden, even though older real entries exist.
+    let query = supabase.from('order_line_audit')
       .select('created_at, customer_name, item_name_he, delivery_date, old_quantity, new_quantity, source, change_reason, change_note, changed_by, changed_via, menu_items(name_he, name_en)')
       .order('created_at', { ascending: false })
       .limit(200)
-      .then(({ data }) => setRows(data || []))
+    if (!showAutoSync) query = query.neq('change_reason', 'auto_copy')
+    query.then(({ data }) => setRows(data || []))
+  }, [showAutoSync])
+
+  useEffect(() => {
+    supabase.from('order_line_audit')
+      .select('id', { count: 'exact', head: true })
+      .eq('change_reason', 'auto_copy')
+      .then(({ count }) => setAutoSyncCount(count || 0))
   }, [])
 
-  const autoSyncCount = rows.filter(r => r.change_reason === 'auto_copy').length
-
-  const filtered = rows
-    .filter(r => showAutoSync || r.change_reason !== 'auto_copy')
-    .filter(r =>
-      (r.customer_name || '').includes(filterText.trim())
-      || (r.item_name_he || '').includes(filterText.trim())
-      || (r.menu_items?.name_he || '').includes(filterText.trim())
-    )
+  const filtered = rows.filter(r =>
+    (r.customer_name || '').includes(filterText.trim())
+    || (r.item_name_he || '').includes(filterText.trim())
+    || (r.menu_items?.name_he || '').includes(filterText.trim())
+  )
 
   return (
     <div className="page">
