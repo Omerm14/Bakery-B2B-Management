@@ -89,6 +89,8 @@ export default {
     'settings.auditReason.other': 'אחר',
     'settings.auditReason.import': 'ייבוא',
     'settings.auditReason.forecast': 'תחזית',
+    'settings.auditShowAutoSync': 'הצג סנכרון אוטומטי',
+    'settings.auditHideAutoSync': 'הסתר סנכרון אוטומטי',
 
     // Branding tab
     'settings.brandingSectionTitle': 'מיתוג — עמוד כניסה ללקוחות',
@@ -240,6 +242,8 @@ export default {
     'settings.auditReason.other': 'Other',
     'settings.auditReason.import': 'Import',
     'settings.auditReason.forecast': 'Forecast',
+    'settings.auditShowAutoSync': 'Show auto-sync',
+    'settings.auditHideAutoSync': 'Hide auto-sync',
 
     // Branding tab
     'settings.brandingSectionTitle': 'Branding — Customer Login Page',
