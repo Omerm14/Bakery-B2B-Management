@@ -244,6 +244,12 @@ export default function Packing() {
             const previewItems = client.items.slice(0, 3)
             const previewText = previewItems.map(i => `${displayName(i)} ×${i.quantity}`).join(', ')
               + (client.items.length > 3 ? ` ${t('packing.andMore')} ${client.items.length - 3}` : '')
+            // Total physical units to pack, not the count of distinct products —
+            // "37" (product lines) reads nothing like the actual packing workload
+            // when one line alone is 35 units.
+            const packedUnits = client.items.filter(i => !!checks[i.line_id]).reduce((s, i) => s + parseFloat(i.quantity), 0)
+            const totalUnits = client.items.reduce((s, i) => s + parseFloat(i.quantity), 0)
+            const fmtQty = q => (q % 1 === 0 ? q : q.toFixed(1))
 
             return (
               <div key={client.customer_id} className={'client-block' + (done ? ' done' : '')}>
@@ -276,7 +282,7 @@ export default function Packing() {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                     <span style={{ fontSize: 12, color: 'var(--t3)' }}>
-                      {client.items.filter(i => !!checks[i.line_id]).length}/{client.items.length}
+                      {fmtQty(packedUnits)}/{fmtQty(totalUnits)}
                     </span>
                     <button
                       className="btn btn-ghost btn-sm no-print"
