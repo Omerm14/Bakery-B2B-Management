@@ -489,6 +489,9 @@ export default function Landing() {
               >כניסה</Link>
             </div>
           </div>
+          <div style={{ maxWidth: 1180, margin: '8px auto 0', padding: '0 24px', textAlign: 'center' }}>
+            <a href="https://aaa-tech.com" target="_blank" rel="noopener" style={{ fontSize: 12, color: '#6E7B74', textDecoration: 'none' }}>מבית AAA — סוכנות סוכני AI</a>
+          </div>
         </footer>
       </div>
     </div>
