@@ -216,7 +216,9 @@ export default function App() {
             <Route path="/" element={!session ? <Landing /> : isCustomer ? <Navigate to="/login" replace /> : <Navigate to={staffHome} replace />} />
             <Route path="/login" element={session && !isCustomer ? <Navigate to={staffHome} replace /> : <Login />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/privacy.html" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<TermsOfService />} />
+            <Route path="/terms.html" element={<TermsOfService />} />
             <Route path="/portal/*" element={<Navigate to="/" replace />} />
             {session && isStaff ? (
               <>
