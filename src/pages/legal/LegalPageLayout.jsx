@@ -38,6 +38,9 @@ export default function LegalPageLayout({ title, updated, children }) {
         <div style={{ maxWidth: 820, margin: '0 auto', padding: '0 24px', fontSize: 13, color: '#6E7B74' }}>
           © 2025 Floory — Smart Floor Management
         </div>
+        <div style={{ maxWidth: 820, margin: '8px auto 0', padding: '0 24px' }}>
+          <a href="https://aaa-tech.com" target="_blank" rel="noopener" style={{ fontSize: 12, color: '#6E7B74', textDecoration: 'none' }}>מבית AAA — סוכנות סוכני AI</a>
+        </div>
       </footer>
     </div>
   )
