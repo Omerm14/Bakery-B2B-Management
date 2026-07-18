@@ -864,14 +864,14 @@ function ImportTab() {
           <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
             <input
               className="input"
-              placeholder="Name (e.g. Giorno)"
+              placeholder="Name (e.g. Jorno)"
               value={newOrgName}
               onChange={e => setNewOrgName(e.target.value)}
             />
             <input
               className="input"
               dir="ltr"
-              placeholder="slug (e.g. giorno)"
+              placeholder="slug (e.g. jorno)"
               value={newOrgSlug}
               onChange={e => setNewOrgSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
               onKeyDown={e => e.key === 'Enter' && createOrganization()}

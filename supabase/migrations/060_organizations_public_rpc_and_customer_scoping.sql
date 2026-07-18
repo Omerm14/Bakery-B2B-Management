@@ -2,7 +2,7 @@
 -- customer auth RPCs.
 --
 -- The customer portal now needs to know which bakery it's serving BEFORE
--- login (path-based org slug, e.g. /portal/giorno/login — see plan §6),
+-- login (path-based org slug, e.g. /portal/jorno/login — see plan §6),
 -- both to show the right branding and because a phone number is only
 -- unique WITHIN one org's customer list, not globally (two different
 -- bakery clients could each have a wholesale customer with the same phone
@@ -77,7 +77,7 @@ GRANT EXECUTE ON FUNCTION get_own_organization_support_contact() TO authenticate
 --
 -- get_active_menu_items() (migrations 024/047/048) returned EVERY active
 -- menu item across ALL organizations to any authenticated customer
--- session — a Giorno customer's order screen would show Urban Bakery's
+-- session — a Jorno customer's order screen would show Urban Bakery's
 -- entire catalog too. Scope it to the calling customer's own org.
 CREATE OR REPLACE FUNCTION get_active_menu_items()
 RETURNS TABLE (
