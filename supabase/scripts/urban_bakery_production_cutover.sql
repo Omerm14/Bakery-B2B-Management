@@ -1,15 +1,22 @@
 -- ============================================================================
--- PRODUCTION CUTOVER MIGRATION — DO NOT RUN until staging validation (plan
--- Phase B) has passed in full against a rehearsal copy of this exact
--- sequence. This is the one migration in the whole redesign that touches
--- Urban Bakery's live, real data in place. Everything before this file
--- (055-062) is purely additive/backward-compatible and safe to apply to
--- production at any time; this one is not — it backfills every existing
+-- PRODUCTION CUTOVER SCRIPT — NOT a migration; deliberately kept out of
+-- supabase/migrations/ (same reasoning as cleanup_pre_2026_03_01.sql in this
+-- folder) so it can never be swept up by an automated migration replay —
+-- the Supabase CLI, a preview/branch environment, or any future CI —
+-- whether against a fresh database or, worse, production itself. Run this
+-- by hand in the Supabase SQL editor, and only after staging validation
+-- (plan Phase B) has passed in full against a rehearsal copy of this exact
+-- sequence.
+--
+-- This is the one step in the whole multi-tenant redesign that touches
+-- Urban Bakery's live, real data in place. Everything in supabase/migrations/
+-- 055-062 is purely additive/backward-compatible and safe to apply to
+-- production at any time; this script is not — it backfills every existing
 -- row to a single new "Urban Bakery" organization, flips 4 columns to
 -- NOT NULL, and migrates the 3 app_config rows into it. `app_config` and
 -- `staff_allowlist` are deliberately left in place afterwards (not
--- dropped) as a rollback window — only removed in migration 064, once
--- production has been stable for a bake-in period post-cutover.
+-- dropped) as a rollback window — only removed in a later cleanup pass,
+-- once production has been stable for a bake-in period post-cutover.
 -- ============================================================================
 
 DO $$
