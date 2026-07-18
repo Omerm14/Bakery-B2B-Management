@@ -29,6 +29,13 @@ CREATE POLICY "customer_delete_own" ON customer_favorite_items FOR DELETE TO aut
 -- own SECURITY DEFINER context (same mechanism already relied on in
 -- log_order_line_audit()) -- returns null for staff sessions, so
 -- is_favorite is always false for staff.
+--
+-- Postgres won't let CREATE OR REPLACE change a function's RETURNS TABLE
+-- shape, even by only adding a column (migration 024's version was 6
+-- columns; this is 7) -- must drop first, same pattern later migrations
+-- 037/041 use for the same reason.
+DROP FUNCTION IF EXISTS get_active_menu_items();
+
 CREATE OR REPLACE FUNCTION get_active_menu_items()
 RETURNS TABLE (
   id uuid,
