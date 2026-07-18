@@ -1,5 +1,8 @@
 import posthog from 'posthog-js'
-import { isPortalHost } from './host'
+
+// The customer portal now lives at /portal/:orgSlug/* on the same domain
+// as the staff app (see App.jsx) rather than a separate subdomain.
+const isPortalPath = window.location.pathname.startsWith('/portal/')
 
 const key = import.meta.env.VITE_POSTHOG_KEY
 const host = import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com'
@@ -18,7 +21,7 @@ export function initAnalytics() {
     disable_session_recording: true,
     respect_dnt: true,
   })
-  posthog.register({ app: isPortalHost ? 'portal' : 'staff' })
+  posthog.register({ app: isPortalPath ? 'portal' : 'staff' })
   enabled = true
 }
 

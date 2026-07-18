@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { useAutoSyncPref } from '../../hooks/useAutoSyncPref'
 import { useTranslation } from '../../context/LanguageContext'
+import { useTenant } from '../../context/TenantContext'
 import { customerDisplayName } from '../../lib/displayName'
 import { weekdayLabel, formatShortDate } from '../../constants/days'
 import { timeAgo } from '../../lib/time'
@@ -29,6 +30,7 @@ const POLL_MS = 30000
 // notice a change on their own.
 function NotificationBell() {
   const { t, lang } = useTranslation()
+  const { organizationId } = useTenant()
   const userEmail = useCurrentUser()
   const navigate = useNavigate()
   const [showAutoSync] = useAutoSyncPref()
@@ -41,11 +43,13 @@ function NotificationBell() {
   const wrapRef = useRef(null)
 
   const refreshCount = useCallback(async () => {
+    if (!organizationId) { setUnseenCount(0); return }
     if (showAutoSync) {
       const { count } = await supabase
         .from('order_change_notifications')
         .select('id', { count: 'exact', head: true })
         .is('seen_at', null)
+        .eq('organization_id', organizationId)
       setUnseenCount(count || 0)
       return
     }
@@ -58,6 +62,7 @@ function NotificationBell() {
       .from('order_change_notifications')
       .select('id, customer_id, week_id, created_at')
       .is('seen_at', null)
+      .eq('organization_id', organizationId)
       .order('created_at', { ascending: false })
       .limit(200)
     const list = data || []
@@ -66,7 +71,7 @@ function NotificationBell() {
       return rows.length > 0 && rows.every(r => r.change_reason === 'auto_copy')
     }))
     setUnseenCount(flags.filter(isAutoSync => !isAutoSync).length)
-  }, [showAutoSync])
+  }, [showAutoSync, organizationId])
 
   useEffect(() => {
     refreshCount()
@@ -97,6 +102,7 @@ function NotificationBell() {
       .select('delivery_date, item_name_he, old_quantity, new_quantity, change_reason, changed_via, menu_items(name_he, name_en)')
       .eq('customer_id', n.customer_id)
       .eq('week_id', n.week_id)
+      .eq('organization_id', organizationId)
       .in('changed_via', ['customer_portal', 'auto_copy_weekly'])
       .gte('created_at', new Date(center - 10000).toISOString())
       .lte('created_at', new Date(center + 10000).toISOString())
@@ -135,6 +141,7 @@ function NotificationBell() {
     const { data } = await supabase
       .from('order_change_notifications')
       .select('id, customer_id, week_id, created_at, seen_at, customers(name, name_en), weeks(label, start_date)')
+      .eq('organization_id', organizationId)
       .order('created_at', { ascending: false })
       .limit(showAutoSync ? 20 : 60)
     const list = data || []

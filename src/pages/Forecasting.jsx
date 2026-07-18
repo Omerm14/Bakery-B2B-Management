@@ -6,10 +6,12 @@ import { useMenuItems } from '../hooks/useMenuItems'
 import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
 import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { useTranslation } from '../context/LanguageContext'
+import { useTenant } from '../context/TenantContext'
 import { customerDisplayName } from '../lib/displayName'
 
 export default function Forecasting() {
   const { t, lang } = useTranslation()
+  const { organizationId } = useTenant()
   const week = useWeek()
   const { customers } = useCustomers()
   const { menuItems } = useMenuItems()
@@ -30,7 +32,7 @@ export default function Forecasting() {
   useEffect(() => {
     if (selectedCustomer) loadForecast()
     else { setForecast({}); setOverrides({}); setLocked({}) }
-  }, [selectedCustomer, week.weekStartISO])
+  }, [selectedCustomer, week.weekStartISO, organizationId])
 
   async function loadForecast() {
     if (!selectedCustomer) return
@@ -45,7 +47,7 @@ export default function Forecasting() {
       }
 
       const { data: weekRows } = await supabase
-        .from('weeks').select('id, start_date').in('start_date', prevWeeks)
+        .from('weeks').select('id, start_date').in('start_date', prevWeeks).eq('organization_id', organizationId)
 
       const weekMap = {} // iso → id
       for (const w of weekRows || []) weekMap[w.start_date] = w.id
@@ -56,6 +58,7 @@ export default function Forecasting() {
             .select('menu_item_id, delivery_date, quantity, week_id')
             .in('week_id', weekIds)
             .eq('customer_id', selectedCustomer.id)
+            .eq('organization_id', organizationId)
             .gt('quantity', 0)
         : { data: [] }
 
@@ -92,6 +95,7 @@ export default function Forecasting() {
         .select('menu_item_id, delivery_date, quantity')
         .eq('week_id', wid)
         .eq('customer_id', selectedCustomer.id)
+        .eq('organization_id', organizationId)
         .eq('source', 'forecast')
 
       const lockedMap = {}

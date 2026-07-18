@@ -1,18 +1,22 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, Upload, Image as ImageIcon, Pencil, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { portalOrigin } from '../lib/host'
+import { portalPath } from '../lib/host'
 import { useImport } from '../context/ImportContext'
 import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
 import { useToast } from '../context/ToastContext'
 import SearchInput from '../components/SearchInput'
 import { useTranslation } from '../context/LanguageContext'
+import { useTenant } from '../context/TenantContext'
+import { useCurrentUser } from '../hooks/useCurrentUser'
 import { trackEvent } from '../lib/posthog'
 
 export default function Settings() {
   const toast = useToast()
   const { t } = useTranslation()
+  const { organizationId, isSuperAdmin, organizations, setOrganizationId } = useTenant()
+  const userEmail = useCurrentUser()
   const [tab, setTab] = useState('menu')
   const { menuItems, setMenuItems } = useMenuItems({ activeOnly: false })
   const { customers, setCustomers, createCustomer } = useCustomers({ activeOnly: false })
@@ -31,33 +35,39 @@ export default function Settings() {
   const [showCategories, setShowCategories] = useState(false)
 
   useEffect(() => {
-    supabase.from('suppliers').select('*').order('name').then(({ data, error }) => {
+    if (!organizationId) { setSuppliers([]); return }
+    supabase.from('suppliers').select('*').eq('organization_id', organizationId).order('name').then(({ data, error }) => {
       if (error) { console.error('[Settings suppliers]', error); toast.error(t('settings.toast.suppliersLoadFailed')) }
       setSuppliers(data || [])
     })
-  }, [])
+  }, [organizationId])
 
   useEffect(() => {
-    supabase.from('categories').select('*').order('name').then(({ data, error }) => {
+    if (!organizationId) { setCategories([]); return }
+    supabase.from('categories').select('*').eq('organization_id', organizationId).order('name').then(({ data, error }) => {
       if (error) { console.error('[Settings categories]', error); toast.error(t('settings.toast.categoriesLoadFailed')) }
       setCategories(data || [])
     })
-  }, [])
+  }, [organizationId])
 
   // ── Branding (customer login page white-label) ──────────────────────
+  // Reads/writes organizations.business_name/logo_url directly (migration
+  // 055) — replaces the old app_config('branding') key/value row now that
+  // branding is a real per-org column, not a global singleton.
   const [branding, setBranding] = useState({ logo_url: null, business_name: null })
   const [uploadingLogo, setUploadingLogo] = useState(false)
 
   useEffect(() => {
-    supabase.from('app_config').select('value').eq('key', 'branding').maybeSingle().then(({ data, error }) => {
+    if (!organizationId) return
+    supabase.from('organizations').select('business_name, logo_url').eq('id', organizationId).maybeSingle().then(({ data, error }) => {
       if (error) { console.error('[Settings branding]', error); return }
-      if (data?.value) setBranding(data.value)
+      if (data) setBranding({ business_name: data.business_name, logo_url: data.logo_url })
     })
-  }, [])
+  }, [organizationId])
 
   async function saveBranding(next) {
     setBranding(next)
-    const { error } = await supabase.from('app_config').update({ value: next }).eq('key', 'branding')
+    const { error } = await supabase.from('organizations').update({ business_name: next.business_name, logo_url: next.logo_url }).eq('id', organizationId)
     if (error) { console.error('[Settings saveBranding]', error); toast.error(t('settings.toast.brandingSaveFailed')) }
   }
 
@@ -87,21 +97,24 @@ export default function Settings() {
     await saveBranding({ ...branding, logo_url: null })
   }
 
-  // ── Staff access allowlist ───────────────────────────────────────────
+  // ── Staff access (memberships — migration 056, replaces staff_allowlist) ──
   const [staffEmails, setStaffEmails] = useState([])
   const [newStaffEmail, setNewStaffEmail] = useState('')
 
   useEffect(() => {
-    supabase.from('staff_allowlist').select('email').order('email').then(({ data, error }) => {
-      if (error) { console.error('[Settings staffAllowlist]', error); return }
+    if (!organizationId) { setStaffEmails([]); return }
+    supabase.from('memberships').select('email').eq('organization_id', organizationId).order('email').then(({ data, error }) => {
+      if (error) { console.error('[Settings memberships]', error); return }
       setStaffEmails(data || [])
     })
-  }, [])
+  }, [organizationId])
 
   async function addStaffEmail() {
     const email = newStaffEmail.trim().toLowerCase()
     if (!email) return
-    const { data, error } = await supabase.from('staff_allowlist').insert({ email }).select('email').single()
+    const { data, error } = await supabase.from('memberships')
+      .insert({ email, organization_id: organizationId, added_by: userEmail })
+      .select('email').single()
     if (error) { toast.error(t('settings.toast.staffAddFailed')); return }
     setStaffEmails(prev => [...prev, data].sort((a, b) => a.email.localeCompare(b.email)))
     setNewStaffEmail('')
@@ -110,8 +123,32 @@ export default function Settings() {
 
   async function removeStaffEmail(email) {
     setStaffEmails(prev => prev.filter(s => s.email !== email))
-    const { error } = await supabase.from('staff_allowlist').delete().eq('email', email)
+    const { error } = await supabase.from('memberships').delete().eq('email', email).eq('organization_id', organizationId)
     if (error) { toast.error(t('settings.toast.staffRemoveFailed')) }
+  }
+
+  // ── Super-admin only: create a new client organization ──────────────
+  const [newOrgName, setNewOrgName] = useState('')
+  const [newOrgSlug, setNewOrgSlug] = useState('')
+  const [creatingOrg, setCreatingOrg] = useState(false)
+
+  async function createOrganization() {
+    const name = newOrgName.trim()
+    const slug = newOrgSlug.trim().toLowerCase()
+    if (!name || !slug) return
+    setCreatingOrg(true)
+    try {
+      const { data, error } = await supabase.from('organizations')
+        .insert({ name, slug, created_by: userEmail })
+        .select('id, name, slug').single()
+      if (error) { toast.error(error.message); return }
+      toast.success(`Organization created: ${data.name}`)
+      setNewOrgName('')
+      setNewOrgSlug('')
+      setOrganizationId(data.id)
+    } finally {
+      setCreatingOrg(false)
+    }
   }
 
   async function addMenuItem() {
@@ -121,6 +158,7 @@ export default function Settings() {
       supplier_id: newItem.supplier_id || null,
       price: newItem.price ? parseFloat(newItem.price) : null,
       active: true,
+      organization_id: organizationId,
     }).select('*, suppliers(name)').single()
     if (error) {
       toast.error(t('settings.toast.itemAddFailed'))
@@ -168,7 +206,7 @@ export default function Settings() {
     const value = name.trim()
     if (!value) return
     if (knownCategories.includes(value)) { toast.error(t('settings.toast.categoryAlreadyExists')); return }
-    const { data, error } = await supabase.from('categories').insert({ name: value }).select().single()
+    const { data, error } = await supabase.from('categories').insert({ name: value, organization_id: organizationId }).select().single()
     if (error) { toast.error(t('settings.toast.categoryUpdateFailed')); return }
     setCategories(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name, 'he')))
     setNewCategoryName('')
@@ -192,9 +230,9 @@ export default function Settings() {
 
     const [{ error: catError }, { error: itemsError }] = await Promise.all([
       mergingIntoExisting
-        ? supabase.from('categories').delete().eq('name', oldName)
-        : supabase.from('categories').update({ name: value }).eq('name', oldName),
-      supabase.from('menu_items').update({ category: value }).eq('category', oldName),
+        ? supabase.from('categories').delete().eq('name', oldName).eq('organization_id', organizationId)
+        : supabase.from('categories').update({ name: value }).eq('name', oldName).eq('organization_id', organizationId),
+      supabase.from('menu_items').update({ category: value }).eq('category', oldName).eq('organization_id', organizationId),
     ])
     if (catError || itemsError) {
       setCategories(prevCategories)
@@ -210,8 +248,8 @@ export default function Settings() {
     setCategories(prev => prev.filter(c => c.name !== name))
     setMenuItems(prev => prev.map(i => i.category === name ? { ...i, category: null } : i))
     const [{ error: catError }, { error: itemsError }] = await Promise.all([
-      supabase.from('categories').delete().eq('name', name),
-      supabase.from('menu_items').update({ category: null }).eq('category', name),
+      supabase.from('categories').delete().eq('name', name).eq('organization_id', organizationId),
+      supabase.from('menu_items').update({ category: null }).eq('category', name).eq('organization_id', organizationId),
     ])
     if (catError || itemsError) {
       setCategories(prevCategories)
@@ -388,8 +426,15 @@ export default function Settings() {
     return String(Math.floor(100000 + Math.random() * 900000)) // 6 random digits
   }
 
+  const [currentOrgSlug, setCurrentOrgSlug] = useState(null)
+  useEffect(() => {
+    if (!organizationId) return
+    supabase.from('organizations').select('slug').eq('id', organizationId).maybeSingle()
+      .then(({ data }) => setCurrentOrgSlug(data?.slug || null))
+  }, [organizationId])
+
   function portalUrlFor(customer) {
-    return `${portalOrigin()}/login?phone=${encodeURIComponent(customer.phone)}`
+    return `${window.location.origin}${portalPath(currentOrgSlug, customer.phone)}`
   }
 
   async function generateAndSetPin(customer) {
@@ -533,7 +578,7 @@ function ImportTab() {
       </div>
 
       <div className="settings-tabs" style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
-        {[['menu', t('settings.tabs.menu')], ['customers', t('common.customers')], ['import', t('settings.importExcel')], ['branding', t('settings.tabs.branding')], ['staff', t('settings.tabs.staff')]].map(([k, l]) => (
+        {[['menu', t('settings.tabs.menu')], ['customers', t('common.customers')], ['import', t('settings.importExcel')], ['branding', t('settings.tabs.branding')], ['staff', t('settings.tabs.staff')], ...(isSuperAdmin ? [['orgs', 'Organizations']] : [])].map(([k, l]) => (
           <button key={k} className={'btn btn-sm ' + (tab === k ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -805,6 +850,49 @@ function ImportTab() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ORGANIZATIONS (super-admin only) */}
+      {tab === 'orgs' && isSuperAdmin && (
+        <div className="card" style={{ maxWidth: 480 }}>
+          <div className="section-title">Client organizations</div>
+          <div style={{ fontSize: 13, color: 'var(--t2)', marginBottom: 20, lineHeight: 1.6 }}>
+            Create a new client organization, or switch which one you're currently viewing/editing.
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+            <input
+              className="input"
+              placeholder="Name (e.g. Giorno)"
+              value={newOrgName}
+              onChange={e => setNewOrgName(e.target.value)}
+            />
+            <input
+              className="input"
+              dir="ltr"
+              placeholder="slug (e.g. giorno)"
+              value={newOrgSlug}
+              onChange={e => setNewOrgSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))}
+              onKeyDown={e => e.key === 'Enter' && createOrganization()}
+            />
+            <button className="btn btn-primary btn-sm" onClick={createOrganization} disabled={creatingOrg || !newOrgName.trim() || !newOrgSlug.trim()}>
+              {creatingOrg ? '…' : t('common.add')}
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {organizations.map(o => (
+              <div key={o.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderRadius: 'var(--rs)', background: o.id === organizationId ? 'var(--accent-tint)' : 'var(--surf2)' }}>
+                <span style={{ fontSize: 13 }}>{o.name} <span style={{ color: 'var(--t3)', fontSize: 11 }} dir="ltr">/{o.slug}</span></span>
+                {o.id === organizationId ? (
+                  <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>Viewing</span>
+                ) : (
+                  <button className="btn btn-ghost btn-sm" onClick={() => setOrganizationId(o.id)}>Switch</button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

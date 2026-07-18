@@ -4,6 +4,7 @@ import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { weekStart, formatWeekLabel, toLocalISODate } from '../constants/days'
 import { useTranslation } from '../context/LanguageContext'
+import { useTenant } from '../context/TenantContext'
 import { customerDisplayName } from '../lib/displayName'
 
 const TREND_WINDOW = 8
@@ -140,20 +141,25 @@ function buildHistorySegment(weeksDesc, itemRows, customerRows) {
     })
 }
 
-const CACHE_KEY = 'dashboard_cache_v1'
+// Keyed per-organization — otherwise a super-admin switching between
+// client orgs would briefly see the previously-viewed org's cached
+// dashboard data flash in before the fresh fetch completes.
+function cacheKey(organizationId) {
+  return `dashboard_cache_v1_${organizationId}`
+}
 
-function readCache() {
+function readCache(organizationId) {
   try {
-    const raw = sessionStorage.getItem(CACHE_KEY)
+    const raw = sessionStorage.getItem(cacheKey(organizationId))
     return raw ? JSON.parse(raw) : null
   } catch {
     return null
   }
 }
 
-function writeCache(weekHistory, viewedIndex, hasMoreHistory) {
+function writeCache(organizationId, weekHistory, viewedIndex, hasMoreHistory) {
   try {
-    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ weekHistory, viewedIndex, hasMoreHistory }))
+    sessionStorage.setItem(cacheKey(organizationId), JSON.stringify({ weekHistory, viewedIndex, hasMoreHistory }))
   } catch {
     // sessionStorage full/unavailable — caching is a nice-to-have, safe to skip
   }
@@ -161,23 +167,36 @@ function writeCache(weekHistory, viewedIndex, hasMoreHistory) {
 
 export default function Dashboard() {
   const { t, lang } = useTranslation()
+  const { organizationId } = useTenant()
   const locale = lang === 'en' ? 'en-US' : 'he-IL'
-  const cached = useRef(readCache()).current
-  const [loading, setLoading] = useState(!cached)
+  const [loading, setLoading] = useState(true)
   // Ascending list of weeks that actually have order data, each pre-computed
   // with its own qty/active-customers/top-items — lets every part of the
   // page (KPI cards, top-items panel, trend chart) navigate together off a
   // single index with zero additional queries per click.
-  const [weekHistory, setWeekHistory] = useState(cached?.weekHistory || [])
-  const [viewedIndex, setViewedIndex] = useState(cached?.viewedIndex ?? -1)
+  const [weekHistory, setWeekHistory] = useState([])
+  const [viewedIndex, setViewedIndex] = useState(-1)
   // Whether older weeks might still exist further back than what's loaded —
   // starts optimistic; loadMoreHistory sets it false once a fetch comes back
   // short (or empty), meaning we've reached the actual beginning.
-  const [hasMoreHistory, setHasMoreHistory] = useState(cached?.hasMoreHistory ?? true)
+  const [hasMoreHistory, setHasMoreHistory] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [chartMode, setChartMode] = useState('customer')
 
-  useEffect(() => { loadDashboard(!!cached) }, [])
+  useEffect(() => {
+    if (!organizationId) return
+    const cached = readCache(organizationId)
+    if (cached) {
+      setWeekHistory(cached.weekHistory)
+      setViewedIndex(cached.viewedIndex)
+      setHasMoreHistory(cached.hasMoreHistory)
+    } else {
+      setWeekHistory([])
+      setViewedIndex(-1)
+      setHasMoreHistory(true)
+    }
+    loadDashboard(!!cached)
+  }, [organizationId])
 
   // Base "current week" on the most recent week, no later than today, that
   // actually has order data — calendar navigation and the customer ordering
@@ -204,6 +223,7 @@ export default function Dashboard() {
         .from('weeks')
         .select('id, start_date')
         .lte('start_date', nextWeekIso)
+        .eq('organization_id', organizationId)
         .order('start_date', { ascending: false })
         .limit(HISTORY_BATCH)
 
@@ -225,7 +245,7 @@ export default function Dashboard() {
       setWeekHistory(historyAsc)
       setViewedIndex(defaultIndex)
       setHasMoreHistory(moreLikely)
-      writeCache(historyAsc, defaultIndex, moreLikely)
+      writeCache(organizationId, historyAsc, defaultIndex, moreLikely)
     } finally {
       setLoading(false)
     }
@@ -243,6 +263,7 @@ export default function Dashboard() {
         .from('weeks')
         .select('id, start_date')
         .lt('start_date', oldestLoadedDate)
+        .eq('organization_id', organizationId)
         .order('start_date', { ascending: false })
         .limit(HISTORY_BATCH)
 
@@ -263,7 +284,7 @@ export default function Dashboard() {
       setWeekHistory(merged)
       setViewedIndex(newIndex)
       setHasMoreHistory(moreLikely)
-      writeCache(merged, newIndex, moreLikely)
+      writeCache(organizationId, merged, newIndex, moreLikely)
     } finally {
       setLoadingMore(false)
     }

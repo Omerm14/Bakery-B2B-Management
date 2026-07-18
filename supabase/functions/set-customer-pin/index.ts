@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
 
   const { data: customer } = await supabase
     .from('customers')
-    .select('id, phone, auth_user_id, auth_email')
+    .select('id, phone, auth_user_id, auth_email, organization_id')
     .eq('id', customer_id)
     .maybeSingle()
 
@@ -67,7 +67,13 @@ Deno.serve(async (req) => {
   if (!customer.phone) return json({ ok: false, error: 'צריך מספר טלפון לפני הגדרת קוד גישה' }, 400)
 
   if (customer.auth_user_id) {
-    const { error: updateErr } = await supabase.auth.admin.updateUserById(customer.auth_user_id, { password: pin })
+    // Re-set app_metadata on every PIN reset too (not just first
+    // creation) — cheap, and self-heals an account whose organization_id
+    // claim predates this customer being (re)assigned to an org.
+    const { error: updateErr } = await supabase.auth.admin.updateUserById(customer.auth_user_id, {
+      password: pin,
+      app_metadata: { role: 'customer', customer_id: customer.id, organization_id: customer.organization_id },
+    })
     if (updateErr) {
       return json({ ok: false, error: updateErr.message }, 500)
     }
@@ -78,7 +84,7 @@ Deno.serve(async (req) => {
       email: authEmail,
       password: pin,
       email_confirm: true,
-      app_metadata: { role: 'customer', customer_id: customer.id },
+      app_metadata: { role: 'customer', customer_id: customer.id, organization_id: customer.organization_id },
     })
     if (createErr || !created?.user) {
       return json({ ok: false, error: createErr?.message || 'failed to create auth user' }, 500)

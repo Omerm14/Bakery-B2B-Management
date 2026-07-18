@@ -3,18 +3,17 @@ import { supabase } from '../../lib/supabase'
 
 // Shown inline (per locked day-cell) or as a full-page state (when every
 // visible day is locked) once a customer is past the edit cutoff. Contact
-// info is sourced from app_config, not hardcoded, so it can change without
-// a redeploy.
+// info is sourced from the org's own support-contact columns (migration
+// 055), not hardcoded, so it can change without a redeploy.
 export default function CutoffBlockedNotice({ compact }) {
   const [contact, setContact] = useState(null)
 
   useEffect(() => {
-    supabase.from('app_config').select('value').eq('key', 'support_contact').maybeSingle()
-      .then(({ data }) => setContact(data?.value || null))
+    supabase.rpc('get_own_organization_support_contact').then(({ data }) => setContact(data?.[0] || null))
   }, [])
 
-  const name = contact?.name || 'הצוות'
-  const waLink = contact?.whatsapp_link
+  const name = contact?.support_contact_name || 'הצוות'
+  const waLink = contact?.support_contact_whatsapp_link
 
   if (compact) {
     return (
@@ -29,7 +28,7 @@ export default function CutoffBlockedNotice({ compact }) {
       <div>
         <div style={{ fontWeight: 600, marginBottom: 4 }}>מועד השינוי חלף</div>
         <div style={{ fontSize: 13 }}>
-          לא ניתן לבצע שינוי בשעה זו. יש לפנות ל{name} {contact?.phone ? `בטלפון ${contact.phone}` : ''}
+          לא ניתן לבצע שינוי בשעה זו. יש לפנות ל{name} {contact?.support_contact_phone ? `בטלפון ${contact.support_contact_phone}` : ''}
           {waLink && (
             <>
               {' '}או{' '}

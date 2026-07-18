@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { weekStart, dayDate, formatWeekLabel, toLocalISODate } from '../constants/days'
 import { supabase } from '../lib/supabase'
+import { useTenant } from '../context/TenantContext'
 
 export function useWeek() {
+  const { organizationId } = useTenant()
   const [currentWeekStart, setCurrentWeekStart] = useState(() => weekStart())
 
   function prevWeek() {
@@ -32,6 +34,7 @@ export function useWeek() {
   }
 
   async function getOrCreateWeek() {
+    if (!organizationId) throw new Error('getOrCreateWeek called with no organization in context')
     const isoStart = toLocalISODate(currentWeekStart)
     const label = formatWeekLabel(currentWeekStart)
 
@@ -39,13 +42,14 @@ export function useWeek() {
       .from('weeks')
       .select('id')
       .eq('start_date', isoStart)
+      .eq('organization_id', organizationId)
       .single()
 
     if (existing) return existing.id
 
     const { data: created, error } = await supabase
       .from('weeks')
-      .insert({ start_date: isoStart, label })
+      .insert({ start_date: isoStart, label, organization_id: organizationId })
       .select('id')
       .single()
 

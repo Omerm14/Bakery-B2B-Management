@@ -1,18 +1,11 @@
-// Host-based app split: portal.urbanbakery.co serves the customer portal at
-// clean paths (/login, /orders), while every other host — floory.urbanbakery.co,
-// the raw *.vercel.app domain, localhost — serves the management app.
-// Locally, open portal.localhost:5173 to exercise the portal side (browsers
-// resolve *.localhost to 127.0.0.1 and the Vite dev server accepts it).
-const { hostname } = window.location
-
-export const isPortalHost = hostname.startsWith('portal.')
-
-// Absolute origin of the customer portal, for links generated on the
-// management host (e.g. the "copy portal link" action in Settings).
-export function portalOrigin() {
-  if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
-    const { protocol, port } = window.location
-    return `${protocol}//portal.localhost${port ? `:${port}` : ''}`
-  }
-  return 'https://portal.urbanbakery.co'
+// The customer portal used to live on a separate subdomain
+// (portal.urbanbakery.co); it now lives at /portal/:orgSlug/* on the same
+// domain as the staff app (see App.jsx) — a second/third bakery client
+// can't each get their own subdomain the way a single-tenant deployment
+// could. `portalPath(orgSlug)` builds the customer-facing link for a given
+// org (used by Settings' "set/reset PIN" -> "copy portal link" action);
+// there is no longer a separate host to resolve.
+export function portalPath(orgSlug, phone) {
+  const query = phone ? `?phone=${encodeURIComponent(phone)}` : ''
+  return `/portal/${orgSlug}/login${query}`
 }

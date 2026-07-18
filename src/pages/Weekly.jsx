@@ -7,6 +7,7 @@ import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
 import { CATEGORY_ORDER } from '../constants/categories'
 import { buildWeeklyProductionHtml, printViaIframe } from '../lib/printHtml'
 import { useTranslation } from '../context/LanguageContext'
+import { useTenant } from '../context/TenantContext'
 
 const CATEGORY_EN = {
   'מאפים': 'Pastries',
@@ -26,6 +27,7 @@ const TREND_KEY = {
 export default function Weekly() {
   const { t, lang } = useTranslation()
   const locale = lang === 'en' ? 'en-US' : 'he-IL'
+  const { organizationId } = useTenant()
   const week = useWeek()
   const [rows, setRows] = useState([])
   const [prevRows, setPrevRows] = useState([]) // previous week for comparison
@@ -41,14 +43,14 @@ export default function Weekly() {
     return group
   }
 
-  useEffect(() => { loadWeekly() }, [week.weekStartISO])
+  useEffect(() => { loadWeekly() }, [week.weekStartISO, organizationId])
 
   async function loadWeekly() {
     setLoading(true)
     try {
       const [{ data: weekRow }, { data: prevWeekRow }] = await Promise.all([
-        supabase.from('weeks').select('id').eq('start_date', week.weekStartISO).single(),
-        supabase.from('weeks').select('id').eq('start_date', prevWeekIso()).single(),
+        supabase.from('weeks').select('id').eq('start_date', week.weekStartISO).eq('organization_id', organizationId).single(),
+        supabase.from('weeks').select('id').eq('start_date', prevWeekIso()).eq('organization_id', organizationId).single(),
       ])
 
       const [current, previous] = await Promise.all([

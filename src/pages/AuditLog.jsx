@@ -3,12 +3,14 @@ import { ArrowUp, ArrowDown, Eye, EyeOff } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import SearchInput from '../components/SearchInput'
 import { useTranslation } from '../context/LanguageContext'
+import { useTenant } from '../context/TenantContext'
 import { weekdayLabel, formatShortDate } from '../constants/days'
 import { timeAgo } from '../lib/time'
 import { useAutoSyncPref } from '../hooks/useAutoSyncPref'
 
 export default function AuditLog() {
   const { t, lang } = useTranslation()
+  const { organizationId } = useTenant()
   const [rows, setRows] = useState([])
   const [autoSyncCount, setAutoSyncCount] = useState(0)
   const [filterText, setFilterText] = useState('')
@@ -34,20 +36,24 @@ export default function AuditLog() {
     // by hand) can insert far more than 200 rows at once, which would other-
     // wise fill the entire window with auto-sync entries and leave nothing
     // to show once they're hidden, even though older real entries exist.
+    if (!organizationId) { setRows([]); return }
     let query = supabase.from('order_line_audit')
       .select('created_at, customer_name, item_name_he, delivery_date, old_quantity, new_quantity, source, change_reason, change_note, changed_by, changed_via, menu_items(name_he, name_en)')
+      .eq('organization_id', organizationId)
       .order('created_at', { ascending: false })
       .limit(200)
     if (!showAutoSync) query = query.neq('change_reason', 'auto_copy')
     query.then(({ data }) => setRows(data || []))
-  }, [showAutoSync])
+  }, [showAutoSync, organizationId])
 
   useEffect(() => {
+    if (!organizationId) { setAutoSyncCount(0); return }
     supabase.from('order_line_audit')
       .select('id', { count: 'exact', head: true })
       .eq('change_reason', 'auto_copy')
+      .eq('organization_id', organizationId)
       .then(({ count }) => setAutoSyncCount(count || 0))
-  }, [])
+  }, [organizationId])
 
   const filtered = rows.filter(r =>
     (r.customer_name || '').includes(filterText.trim())

@@ -1,14 +1,18 @@
 import { useState, useEffect } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useParams } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 
-// Single-screen phone + PIN login. No OTP, no messaging service of any
-// kind: get_customer_auth_email() resolves the phone to the customer's
-// synthetic auth email (set up by staff via Settings' "set/reset PIN"
-// button), then a plain signInWithPassword() call mints the session —
-// picked up automatically by App.jsx's existing onAuthStateChange
-// listener, same as the staff Google-OAuth flow.
+// Single-screen phone + PIN login, scoped to one bakery client via the
+// :orgSlug URL segment (/portal/:orgSlug/login — see App.jsx) since phone
+// numbers are only unique WITHIN one org's customer list, not globally.
+// No OTP, no messaging service of any kind: get_customer_auth_email()
+// resolves (orgSlug, phone) to the customer's synthetic auth email (set up
+// by staff via Settings' "set/reset PIN" button), then a plain
+// signInWithPassword() call mints the session — picked up automatically by
+// App.jsx's existing onAuthStateChange listener, same as the staff
+// Google-OAuth flow.
 export default function CustomerLogin() {
+  const { orgSlug } = useParams()
   const [searchParams] = useSearchParams()
   // The link staff shares (Settings -> customer -> "set/reset PIN") embeds
   // the customer's own phone number, so they only need to type the PIN.
@@ -19,12 +23,15 @@ export default function CustomerLogin() {
   const [contact, setContact] = useState(null)
   const [customerName, setCustomerName] = useState(null)
   const [branding, setBranding] = useState({ logo_url: null, business_name: null })
+  const [orgNotFound, setOrgNotFound] = useState(false)
 
   useEffect(() => {
-    supabase.from('app_config').select('value').eq('key', 'support_contact').maybeSingle()
-      .then(({ data }) => setContact(data?.value || null))
-    supabase.from('app_config').select('value').eq('key', 'branding').maybeSingle()
-      .then(({ data }) => { if (data?.value) setBranding(data.value) })
+    supabase.rpc('get_organization_public_info', { p_slug: orgSlug }).then(({ data, error }) => {
+      const org = data?.[0]
+      if (error || !org) { setOrgNotFound(true); return }
+      setBranding({ business_name: org.business_name, logo_url: org.logo_url })
+      setContact({ name: org.support_contact_name, phone: org.support_contact_phone, whatsapp_link: org.support_contact_whatsapp_link })
+    })
 
     // Only look up a name for the phone pre-filled from the shared link
     // (not on every keystroke as someone types a phone manually) — keeps
@@ -32,10 +39,10 @@ export default function CustomerLogin() {
     // not an open phone-to-name lookup surface.
     const initialPhone = searchParams.get('phone')
     if (initialPhone) {
-      supabase.rpc('get_customer_display_name', { p_phone: initialPhone })
+      supabase.rpc('get_customer_display_name', { p_org_slug: orgSlug, p_phone: initialPhone })
         .then(({ data }) => { if (data) setCustomerName(data) })
     }
-  }, [])
+  }, [orgSlug])
 
   useEffect(() => {
     document.title = branding.business_name ? `כניסה — ${branding.business_name}` : 'כניסה להזמנות'
@@ -46,7 +53,7 @@ export default function CustomerLogin() {
     setLoading(true)
     setError('')
 
-    const { data: authEmail, error: lookupErr } = await supabase.rpc('get_customer_auth_email', { p_phone: phone.trim() })
+    const { data: authEmail, error: lookupErr } = await supabase.rpc('get_customer_auth_email', { p_org_slug: orgSlug, p_phone: phone.trim() })
     if (lookupErr || !authEmail) {
       setLoading(false)
       setError('מספר טלפון או קוד שגויים')
@@ -57,7 +64,19 @@ export default function CustomerLogin() {
     setLoading(false)
     if (signInErr) { setError('מספר טלפון או קוד שגויים'); return }
     // No navigate() needed — App.jsx's onAuthStateChange picks up the new
-    // session and routes to /orders on its own.
+    // session and routes to /portal/:orgSlug/orders on its own.
+  }
+
+  if (orgNotFound) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+        <div className="card" style={{ width: '100%', maxWidth: 360, textAlign: 'center', direction: 'rtl' }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>🔍</div>
+          <div style={{ fontWeight: 700, fontSize: 17 }}>העסק לא נמצא</div>
+          <div style={{ fontSize: 13, color: 'var(--t3)', marginTop: 8 }}>הקישור שקיבלת אינו תקין. פנו לצוות שממנו קיבלתם את הקישור.</div>
+        </div>
+      </div>
+    )
   }
 
   return (

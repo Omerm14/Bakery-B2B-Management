@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { isoToday, toLocalISODate } from '../constants/days'
 import { buildProductionListHtml, printViaIframe } from '../lib/printHtml'
 import { useTranslation } from '../context/LanguageContext'
+import { useTenant } from '../context/TenantContext'
 import { customerDisplayName } from '../lib/displayName'
 import { CATEGORY_ORDER, displayCategoryLabel } from '../constants/categories'
 import { trackEvent } from '../lib/posthog'
@@ -53,6 +54,7 @@ function tomorrowIso() {
 
 export default function Production() {
   const { t, lang } = useTranslation()
+  const { organizationId } = useTenant()
   const locale = lang === 'en' ? 'en-US' : 'he-IL'
   const STATUS_CYCLE = { pending: 'done', done: 'pending' }
   const STATUS_LABEL = { pending: t('production.status.pending'), done: t('production.status.done') }
@@ -64,7 +66,7 @@ export default function Production() {
   const [loading, setLoading] = useState(false)
   const [filterSupplier, setFilterSupplier] = useState('all')
 
-  useEffect(() => { loadProduction() }, [selectedDate])
+  useEffect(() => { loadProduction() }, [selectedDate, organizationId])
 
   function displayName(item) {
     return lang === 'en' ? (item.name_en || item.name_he) : item.name_he
@@ -80,11 +82,13 @@ export default function Production() {
           .eq('delivery_date', selectedDate)
           .eq('status', 'ok')
           .eq('customers.active', true)
+          .eq('organization_id', organizationId)
           .gt('quantity', 0),
         supabase
           .from('production_checks')
           .select('menu_item_id, status')
-          .eq('delivery_date', selectedDate),
+          .eq('delivery_date', selectedDate)
+          .eq('organization_id', organizationId),
       ])
 
       // Build status map

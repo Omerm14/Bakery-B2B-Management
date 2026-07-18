@@ -6,6 +6,7 @@ import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
 import SearchInput from '../components/SearchInput'
 import { useTranslation } from '../context/LanguageContext'
+import { useTenant } from '../context/TenantContext'
 import { customerDisplayName } from '../lib/displayName'
 
 const CustomTooltip = ({ active, payload, label, locale }) => {
@@ -91,6 +92,7 @@ async function fetchAllPages(buildQuery) {
 
 export default function History() {
   const { t, lang } = useTranslation()
+  const { organizationId } = useTenant()
   const locale = lang === 'en' ? 'en-US' : 'he-IL'
   const location = useLocation()
   const navigate = useNavigate()
@@ -127,7 +129,7 @@ export default function History() {
     if (viewMode === 'customer' && selectedCustomer) loadCustomerHistory()
     else if (viewMode === 'item' && selectedItem) loadItemHistory()
     else setTableData(null)
-  }, [viewMode, selectedCustomer, selectedItem])
+  }, [viewMode, selectedCustomer, selectedItem, organizationId])
 
   async function loadCustomerHistory() {
     if (!selectedCustomer) return
@@ -138,6 +140,7 @@ export default function History() {
           .from('order_lines')
           .select('week_id, menu_item_id, quantity, weeks(start_date), menu_items(name_he, name_en, unit)')
           .eq('customer_id', selectedCustomer.id)
+          .eq('organization_id', organizationId)
           .gt('quantity', 0)
           .range(from, to)
       )
@@ -196,6 +199,7 @@ export default function History() {
           .select('week_id, customer_id, quantity, weeks(start_date), customers!inner(name, name_en, active)')
           .eq('menu_item_id', selectedItem.id)
           .eq('customers.active', true)
+          .eq('organization_id', organizationId)
           .gt('quantity', 0)
           .range(from, to)
       )

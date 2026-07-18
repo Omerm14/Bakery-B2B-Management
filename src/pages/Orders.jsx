@@ -6,6 +6,7 @@ import { useWeek } from '../hooks/useWeek'
 import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
 import { useCurrentUser } from '../hooks/useCurrentUser'
+import { useTenant } from '../context/TenantContext'
 import { useToast } from '../context/ToastContext'
 import { useTranslation } from '../context/LanguageContext'
 import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
@@ -26,6 +27,7 @@ export default function Orders() {
   }
   const location = useLocation()
   const navigate = useNavigate()
+  const { organizationId } = useTenant()
   const week = useWeek()
   const { customers, createCustomer } = useCustomers()
   const { menuItems } = useMenuItems()
@@ -72,7 +74,7 @@ export default function Orders() {
     else setOrderLines({})
     setChangeNote('')
     setShowNoteInput(false)
-  }, [selectedCustomer, week.weekStartISO])
+  }, [selectedCustomer, week.weekStartISO, organizationId])
 
   async function loadOrders() {
     setLoading(true)
@@ -85,6 +87,7 @@ export default function Orders() {
         .select('id, menu_item_id, delivery_date, quantity, source, status, change_reason, change_note, changed_by')
         .eq('week_id', wid)
         .eq('customer_id', selectedCustomer.id)
+        .eq('organization_id', organizationId)
 
       const map = {}
       for (const l of lines || []) {
@@ -174,7 +177,7 @@ export default function Orders() {
       const prevStart = new Date(week.weekStartISO)
       prevStart.setDate(prevStart.getDate() - 7)
       const { data: prevWeekRow } = await supabase
-        .from('weeks').select('id').eq('start_date', toLocalISODate(prevStart)).single()
+        .from('weeks').select('id').eq('start_date', toLocalISODate(prevStart)).eq('organization_id', organizationId).single()
       if (!prevWeekRow) { toast.info(t('orders.toastNoPrevWeek')); return }
 
       const { data: prevLines } = await supabase
@@ -182,6 +185,7 @@ export default function Orders() {
         .select('menu_item_id, delivery_date, quantity')
         .eq('week_id', prevWeekRow.id)
         .eq('customer_id', selectedCustomer.id)
+        .eq('organization_id', organizationId)
         .gt('quantity', 0)
 
       if (!prevLines?.length) { toast.info(t('orders.toastNoPrevWeek')); return }

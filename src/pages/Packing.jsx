@@ -4,10 +4,12 @@ import { supabase } from '../lib/supabase'
 import { isoToday, toLocalISODate } from '../constants/days'
 import { buildPackingListHtml, printViaIframe } from '../lib/printHtml'
 import { useTranslation } from '../context/LanguageContext'
+import { useTenant } from '../context/TenantContext'
 import { customerDisplayName } from '../lib/displayName'
 
 export default function Packing() {
   const { t, lang } = useTranslation()
+  const { organizationId } = useTenant()
   const locale = lang === 'en' ? 'en-US' : 'he-IL'
   const [selectedDate, setSelectedDate] = useState(isoToday())
   const [clients, setClients] = useState([])
@@ -16,7 +18,7 @@ export default function Packing() {
   const [expanded, setExpanded] = useState({})
   const [allDone, setAllDone] = useState(false)
 
-  useEffect(() => { loadPacking() }, [selectedDate])
+  useEffect(() => { loadPacking() }, [selectedDate, organizationId])
 
   function displayName(item) {
     return lang === 'en' ? (item.name_en || item.name_he) : item.name_he
@@ -35,6 +37,7 @@ export default function Packing() {
         `)
         .eq('delivery_date', selectedDate)
         .eq('customers.active', true)
+        .eq('organization_id', organizationId)
         .gt('quantity', 0)
         .order('customer_id')
 

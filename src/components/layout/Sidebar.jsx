@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useTranslation } from '../../context/LanguageContext'
 import { useBranding } from '../../hooks/useBranding'
+import { useTenant } from '../../context/TenantContext'
 import {
   LayoutDashboard, ClipboardList, ShoppingCart, PackageCheck, CalendarDays, ScrollText, History, TrendingUp, Settings, X, LogOut, ChevronLeft,
 } from 'lucide-react'
@@ -29,6 +30,7 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isDark }) {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const branding = useBranding()
+  const { isSuperAdmin, organizations, organizationId, setOrganizationId } = useTenant()
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('floory_sidebar_collapsed') === '1')
 
   function toggleCollapsed() {
@@ -75,6 +77,18 @@ export default function Sidebar({ mobileOpen, setMobileOpen, isDark }) {
             </div>
           ) : (
             <div style={{ padding: '8px 10px 22px' }}>
+              {isSuperAdmin && organizations.length > 0 && (
+                <select
+                  value={organizationId || ''}
+                  onChange={e => setOrganizationId(e.target.value)}
+                  title="Acting as organization"
+                  style={{ width: '100%', fontSize: 12, padding: '4px 8px', marginBottom: 10, borderRadius: 6, border: '1px solid var(--bdr2)', background: 'var(--surf2)', color: 'var(--t1)' }}
+                >
+                  {organizations.map(o => (
+                    <option key={o.id} value={o.id}>{o.name}</option>
+                  ))}
+                </select>
+              )}
               {branding.logo_url && (
                 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
                   <img src={branding.logo_url} alt="" style={{ height: 40, maxWidth: 180, objectFit: 'contain' }} />

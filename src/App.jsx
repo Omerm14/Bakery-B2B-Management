@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 import { Analytics } from '@vercel/analytics/react'
 import { supabase } from './lib/supabase'
 import Sidebar from './components/layout/Sidebar'
@@ -17,6 +17,7 @@ import Forecasting from './pages/Forecasting'
 import { ImportProvider, useImport } from './context/ImportContext'
 import { ToastProvider } from './context/ToastContext'
 import { LanguageProvider } from './context/LanguageContext'
+import { TenantProvider } from './context/TenantContext'
 import ToastHost from './components/ToastHost'
 import SearchOverlay from './components/search/SearchOverlay'
 import Landing from './pages/Landing'
@@ -25,15 +26,15 @@ import TermsOfService from './pages/legal/TermsOfService'
 import CustomerLogin from './pages/customer/CustomerLogin'
 import CustomerOrders from './pages/customer/CustomerOrders'
 import CustomerPortalDemo from './pages/customer/CustomerPortalDemo'
-import { isPortalHost } from './lib/host'
 import { identifyUser, resetAnalytics, trackPageview } from './lib/posthog'
 
-// Pre-subdomain deep links (/portal/orders etc.) still arrive on the portal
-// host from old bookmarks and shared links — send them to the clean path.
-function StripPortalPrefix() {
-  const location = useLocation()
-  const target = location.pathname.replace(/^\/portal/, '') || '/'
-  return <Navigate to={{ pathname: target, search: location.search }} replace />
+// Redirects between /portal/:orgSlug/login and /portal/:orgSlug/orders while
+// preserving whichever org slug is already in the URL — e.g. a customer with
+// an active session who lands on their own login link gets bounced straight
+// to orders, without losing the slug the link named.
+function CustomerPortalRedirect({ to }) {
+  const { orgSlug } = useParams()
+  return <Navigate to={`/portal/${orgSlug}/${to}`} replace />
 }
 
 function RouteChangeTracker() {
@@ -186,32 +187,20 @@ export default function App() {
   }
 
   return (
+    <TenantProvider>
     <ToastProvider>
       <ImportProvider>
         <BrowserRouter>
           <RouteChangeTracker />
-          {isPortalHost ? (
-          /* portal.urbanbakery.co — customer portal at clean paths. Only
-             customer sessions are honored here; staff or role-less sessions
-             see the customer login (full per-host session isolation is a
-             follow-up — see the auth note in the subdomain handoff doc). */
-          <Routes>
-            <Route path="/login" element={session && isCustomer ? <Navigate to="/orders" replace /> : <CustomerLogin />} />
-            <Route path="/preview" element={<CustomerPortalDemo />} />
-            <Route path="/portal/*" element={<StripPortalPrefix />} />
-            {session && isCustomer ? (
-              <>
-                <Route path="/orders" element={<CustomerOrders />} />
-                <Route path="*" element={<Navigate to="/orders" replace />} />
-              </>
-            ) : (
-              <Route path="*" element={<Navigate to="/login" replace />} />
-            )}
-          </Routes>
-          ) : (
-          /* floory.urbanbakery.co / *.vercel.app / localhost — management app.
-             The customer portal moved to the portal subdomain, so /portal/*
-             is blocked here and customer sessions get the staff login. */
+          {/* Single merged route tree, one shared domain — the previous
+              host-based split (portal.urbanbakery.co vs everything else)
+              is replaced by a path-based org slug for the customer portal
+              (/portal/:orgSlug/*, see migration 060's get_organization_public_info
+              and get_customer_auth_email(p_org_slug, p_phone)), since a
+              second/third bakery client can't share a subdomain the way
+              Urban Bakery's single deployment did. Real tenant isolation is
+              still enforced by RLS regardless of what's in the URL — the
+              slug is routing/UX only. */}
           <Routes>
             <Route path="/" element={!session ? <Landing /> : isCustomer ? <Navigate to="/login" replace /> : <Navigate to={staffHome} replace />} />
             <Route path="/login" element={session && !isCustomer ? <Navigate to={staffHome} replace /> : <Login />} />
@@ -219,7 +208,9 @@ export default function App() {
             <Route path="/privacy.html" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<TermsOfService />} />
             <Route path="/terms.html" element={<TermsOfService />} />
-            <Route path="/portal/*" element={<Navigate to="/" replace />} />
+            <Route path="/preview" element={<CustomerPortalDemo />} />
+            <Route path="/portal/:orgSlug/login" element={session && isCustomer ? <CustomerPortalRedirect to="orders" /> : <CustomerLogin />} />
+            <Route path="/portal/:orgSlug/orders" element={session && isCustomer ? <CustomerOrders /> : <CustomerPortalRedirect to="login" />} />
             {session && isStaff ? (
               <>
                 <Route path="/dashboard" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Dashboard /></ProtectedLayout>} />
@@ -242,10 +233,10 @@ export default function App() {
               <Route path="*" element={<Navigate to="/login" replace />} />
             )}
           </Routes>
-          )}
         </BrowserRouter>
       </ImportProvider>
       <Analytics />
     </ToastProvider>
+    </TenantProvider>
   )
 }

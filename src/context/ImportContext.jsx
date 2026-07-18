@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { toLocalISODate } from '../constants/days'
 import { trackEvent } from '../lib/posthog'
+import { useTenant } from './TenantContext'
 
 // ── helpers (copied from Settings so they run in context, not component) ──────
 
@@ -193,6 +194,7 @@ function workbookHash(wb) {
 const ImportContext = createContext(null)
 
 export function ImportProvider({ children }) {
+  const { organizationId } = useTenant()
   const [logs, setLogs] = useState([])
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
@@ -209,12 +211,13 @@ export function ImportProvider({ children }) {
   async function categorizeItems(items, itemCategories) {
     const categorized = items.filter(name => itemCategories[name])
     if (!categorized.length) return 0
-    const err = await upsertBatch('menu_items', categorized.map(name_he => ({ name_he, category: itemCategories[name_he] })), 'name_he')
+    const err = await upsertBatch('menu_items', categorized.map(name_he => ({ name_he, category: itemCategories[name_he], organization_id: organizationId })), 'organization_id,name_he')
     if (err) { log(`⚠️ שגיאה בסיווג קטגוריות: ${err.message}`); return 0 }
     return categorized.length
   }
 
   async function importWorkbook(wb, fileName) {
+    if (!organizationId) { log('❌ לא נבחר ארגון פעיל — לא ניתן לייבא'); log('──────────'); return }
     log(`📂 קובץ: ${fileName}`)
 
     const hash = workbookHash(wb)
@@ -241,12 +244,12 @@ export function ImportProvider({ children }) {
     log(`👤 לקוחות: ${customers.length} | 🥐 פריטים: ${items.length} | 📋 שורות: ${orderLines.length}`)
 
     if (customers.length) {
-      const err = await upsertBatch('customers', customers.map(name => ({ name, active: true })), 'name')
+      const err = await upsertBatch('customers', customers.map(name => ({ name, active: true, organization_id: organizationId })), 'organization_id,name')
       if (err) { log(`❌ שגיאה בלקוחות: ${err.message}`); log('──────────'); return }
     }
 
     if (items.length) {
-      const err = await upsertBatch('menu_items', items.map(name_he => ({ name_he, unit: 'יח׳', active: true })), 'name_he')
+      const err = await upsertBatch('menu_items', items.map(name_he => ({ name_he, unit: 'יח׳', active: true, organization_id: organizationId })), 'organization_id,name_he')
       if (err) { log(`❌ שגיאה בפריטי תפריט: ${err.message}`); log('──────────'); return }
     }
 
@@ -256,14 +259,14 @@ export function ImportProvider({ children }) {
     if (categorizedCount) log(`🏷️ סווגו ${categorizedCount} פריטים לפי קטגוריה`)
 
     {
-      const err = await upsertBatch('weeks', [{ start_date: wsIso, label }], 'start_date')
+      const err = await upsertBatch('weeks', [{ start_date: wsIso, label, organization_id: organizationId }], 'organization_id,start_date')
       if (err) { log(`❌ שגיאה בשבוע: ${err.message}`); log('──────────'); return }
     }
 
     const [{ data: custRows }, { data: itemRows }, { data: weekRows }] = await Promise.all([
-      supabase.from('customers').select('id,name').in('name', customers),
-      supabase.from('menu_items').select('id,name_he').in('name_he', items),
-      supabase.from('weeks').select('id,start_date').eq('start_date', wsIso),
+      supabase.from('customers').select('id,name').eq('organization_id', organizationId).in('name', customers),
+      supabase.from('menu_items').select('id,name_he').eq('organization_id', organizationId).in('name_he', items),
+      supabase.from('weeks').select('id,start_date').eq('organization_id', organizationId).eq('start_date', wsIso),
     ])
 
     const custMap = Object.fromEntries((custRows || []).map(r => [r.name, r.id]))
