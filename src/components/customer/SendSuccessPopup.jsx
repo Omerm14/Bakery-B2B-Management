@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { CheckCircle2, X } from 'lucide-react'
 import Confetti from './Confetti'
 
@@ -10,10 +10,19 @@ import Confetti from './Confetti'
 const AUTO_CLOSE_MS = 3000
 
 export default function SendSuccessPopup({ note, onClose }) {
+  // Read via a ref, not a useEffect dependency — the caller passes an
+  // inline arrow function that's a new identity on every render, and the
+  // parent page re-renders periodically (a live cutoff-lock clock ticking
+  // every minute) independent of whether this popup is open. Depending on
+  // `onClose` directly would reset the timer from scratch on any such
+  // re-render that happens to land while this is visible, delaying auto-close.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
   useEffect(() => {
-    const id = setTimeout(onClose, AUTO_CLOSE_MS)
+    const id = setTimeout(() => onCloseRef.current(), AUTO_CLOSE_MS)
     return () => clearTimeout(id)
-  }, [onClose])
+  }, [])
 
   return (
     <div className="overlay" onClick={onClose}>

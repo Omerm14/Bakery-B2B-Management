@@ -302,16 +302,28 @@ export default function CustomerOrders() {
           change_reason: 'customer_request',
           changed_by: customer.phone || customer.name,
           changed_via: 'customer_portal',
-          // Set explicitly every time (even `false`) — an upsert only
-          // touches columns present in the payload, so omitting this on a
-          // re-edit of an already-flagged row would leave a stale `true`.
-          no_carry_forward: oneTimeByKey[key] ?? false,
+          // Set explicitly every time — an upsert only touches columns
+          // present in the payload, so omitting this on a re-edit of an
+          // already-flagged row would leave a stale value in place. Falls
+          // back to the row's OWN existing flag (not a hardcoded false) for
+          // a pending line with no real quantity delta — reviewOrder() never
+          // shows those in the modal (nothing to review), so the customer
+          // never got a chance to touch its oneTime toggle; without this
+          // fallback, retyping a cell back to its original value would
+          // silently clear a one-time flag set in an earlier session.
+          no_carry_forward: oneTimeByKey[key] ?? line.no_carry_forward ?? false,
           updated_at: new Date().toISOString(),
         })
       }
 
       if (!upserts.length) {
+        // Reachable when every reviewed line's delivery date crosses its
+        // cutoff while the review modal sits open (canEdit is live state,
+        // rechecked here independently of reviewOrder()'s snapshot) — without
+        // this, the modal would just vanish with no indication the order
+        // was never actually sent.
         setPendingChanges(null)
+        toast.error('הימים שנבחרו ננעלו לעדכון בינתיים — ההזמנה לא נשלחה, נסו שוב')
         return
       }
 

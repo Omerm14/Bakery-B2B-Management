@@ -31,6 +31,13 @@ CREATE POLICY "customer_delete_own" ON customer_favorite_items FOR DELETE TO aut
 -- is_favorite is always false for staff. Postgres won't let CREATE OR
 -- REPLACE change a function's RETURNS TABLE shape, even by only adding a
 -- column -- must drop first (same reasoning as migrations 037/041).
+--
+-- This DROP was added retroactively, after 040 had already run in
+-- production without it and failed with 42P13 (see migrations 047/048,
+-- which exist specifically to patch that forward). This edit only helps a
+-- FRESH environment replaying 001->latest from scratch -- it does nothing
+-- for any already-migrated environment, which got the real fix from 047/048
+-- and must keep them. Do not delete 047/048 because this looks "fixed" now.
 DROP FUNCTION IF EXISTS get_active_menu_items();
 
 CREATE OR REPLACE FUNCTION get_active_menu_items()
