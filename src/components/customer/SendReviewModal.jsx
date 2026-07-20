@@ -6,7 +6,7 @@ import { ArrowUp, ArrowDown, Repeat } from 'lucide-react'
 // copy-prev-week button), then only calls onConfirm (the real upsert) once
 // the customer explicitly proceeds. Nothing has been written to the DB yet
 // while this is showing.
-export default function SendReviewModal({ changes, onToggleOneTime, onConfirm, onCancel, sending }) {
+export default function SendReviewModal({ changes, onToggleOneTime, onSetAllOneTime, onConfirm, onCancel, sending }) {
   return (
     <div className="overlay" onClick={sending ? undefined : onCancel}>
       <div className="modal" style={{ width: 460 }} onClick={e => e.stopPropagation()}>
@@ -14,6 +14,17 @@ export default function SendReviewModal({ changes, onToggleOneTime, onConfirm, o
         <p style={{ margin: '-8px 0 16px', fontSize: 13, color: 'var(--t3)' }}>
           סמנו "חד-פעמי" בכל שורה שלא צריכה לחזור אוטומטית לשבוע הבא.
         </p>
+        {changes.length > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, fontSize: 12, color: 'var(--t3)' }}>
+            <span>סמן הכל:</span>
+            <button type="button" className="btn btn-ghost btn-sm" style={{ padding: '2px 8px' }} onClick={() => onSetAllOneTime(true)}>
+              חד-פעמי
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" style={{ padding: '2px 8px' }} onClick={() => onSetAllOneTime(false)}>
+              קבוע
+            </button>
+          </div>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {changes.map(c => {
             const isNew = c.from === 0 || c.from == null

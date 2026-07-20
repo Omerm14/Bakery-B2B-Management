@@ -265,6 +265,10 @@ export default function CustomerOrders() {
     setPendingChanges(prev => prev.map(c => c.key === key ? { ...c, oneTime: !c.oneTime } : c))
   }
 
+  function setAllOneTime(value) {
+    setPendingChanges(prev => prev.map(c => ({ ...c, oneTime: value })))
+  }
+
   // Runs only after the customer confirms the pre-send review modal.
   // Rebuilds the full upsert set from orderLines the same way the old
   // single-step sendOrder() did (every `pending` line, not just ones with
@@ -482,6 +486,7 @@ export default function CustomerOrders() {
         <SendReviewModal
           changes={pendingChanges}
           onToggleOneTime={toggleOneTime}
+          onSetAllOneTime={setAllOneTime}
           onConfirm={confirmSend}
           onCancel={() => setPendingChanges(null)}
           sending={sending}
