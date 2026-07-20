@@ -10,7 +10,7 @@ import { CATEGORY_ORDER } from '../../constants/categories'
 import DayOrderView from './DayOrderView'
 import WeekSummaryView from './WeekSummaryView'
 import SendReviewModal from '../../components/customer/SendReviewModal'
-import Confetti from '../../components/customer/Confetti'
+import SendSuccessPopup from '../../components/customer/SendSuccessPopup'
 import flooryLogoOnDark from '../../assets/floory/logo-horizontal-ondark.png'
 import { trackEvent } from '../../lib/posthog'
 
@@ -42,10 +42,10 @@ export default function CustomerOrders() {
   // shown BEFORE anything is written to the DB. Each entry carries its own
   // `oneTime` toggle state, flipped in place by the modal via toggleOneTime.
   const [pendingChanges, setPendingChanges] = useState(null)
-  // Brief confetti burst on a successful send — mounted for a few seconds
-  // then unmounted, alongside the toast; no item list (that's the pre-send
-  // review modal's job), just the celebratory moment itself.
-  const [celebrate, setCelebrate] = useState(false)
+  // null = hidden. Object (possibly {note: null}) = show the post-send
+  // success popup (checkmark + confetti, self-dismissing) — no item list,
+  // that's the pre-send review modal's job.
+  const [successPopup, setSuccessPopup] = useState(null)
   // Optimistic overrides for is_favorite, keyed by menu_item_id — simpler
   // than threading a setter through useCustomerMenuItems, which owns the
   // base list. Merged over each item's server-fetched is_favorite.
@@ -329,9 +329,7 @@ export default function CustomerOrders() {
       const oneTimeCount = pendingChanges.filter(c => c.oneTime).length
       setPendingChanges(null)
       await loadWeek()
-      toast.success(skippedLocked > 0 ? `ההזמנה נשלחה — ${skippedLocked} ימים נעולים לא עודכנו` : 'ההזמנה נשלחה בהצלחה')
-      setCelebrate(true)
-      setTimeout(() => setCelebrate(false), 2500)
+      setSuccessPopup({ note: skippedLocked > 0 ? `${skippedLocked} ימים נעולים לא עודכנו` : null })
       trackEvent('order_submitted', { items_changed: changedCount, lines_submitted: upserts.length, skipped_locked: skippedLocked, one_time_count: oneTimeCount })
     } catch (err) {
       console.error('[CustomerOrders.confirmSend]', err)
@@ -500,7 +498,7 @@ export default function CustomerOrders() {
         />
       )}
 
-      {celebrate && <Confetti />}
+      {successPopup && <SendSuccessPopup note={successPopup.note} onClose={() => setSuccessPopup(null)} />}
     </div>
   )
 }
