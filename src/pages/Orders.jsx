@@ -82,7 +82,7 @@ export default function Orders() {
 
       const { data: lines } = await supabase
         .from('order_lines')
-        .select('id, menu_item_id, delivery_date, quantity, source, status, change_reason, change_note, changed_by')
+        .select('id, menu_item_id, delivery_date, quantity, source, status, change_reason, change_note, changed_by, no_carry_forward')
         .eq('week_id', wid)
         .eq('customer_id', selectedCustomer.id)
 
@@ -183,6 +183,7 @@ export default function Orders() {
         .eq('week_id', prevWeekRow.id)
         .eq('customer_id', selectedCustomer.id)
         .gt('quantity', 0)
+        .eq('no_carry_forward', false)
 
       if (!prevLines?.length) { toast.info(t('orders.toastNoPrevWeek')); return }
 
@@ -436,6 +437,7 @@ export default function Orders() {
                                       line?.change_reason ? `${t('orders.reasonPrefix')}: ${REASON_LABELS[line.change_reason] || line.change_reason}` : '',
                                       line?.change_note ? `${t('orders.notePrefix')}: ${line.change_note}` : '',
                                       line?.changed_by ? `${t('orders.changedByPrefix')} ${line.changed_by}` : '',
+                                      line?.no_carry_forward ? t('orders.oneTimeNote') : '',
                                     ].filter(Boolean).join(' · ')}
                                   />
                                 </td>

@@ -35,7 +35,7 @@ export default function AuditLog() {
     // wise fill the entire window with auto-sync entries and leave nothing
     // to show once they're hidden, even though older real entries exist.
     let query = supabase.from('order_line_audit')
-      .select('created_at, customer_name, item_name_he, delivery_date, old_quantity, new_quantity, source, change_reason, change_note, changed_by, changed_via, menu_items(name_he, name_en)')
+      .select('created_at, customer_name, item_name_he, delivery_date, old_quantity, new_quantity, source, change_reason, change_note, changed_by, changed_via, no_carry_forward, menu_items(name_he, name_en)')
       .order('created_at', { ascending: false })
       .limit(200)
     if (!showAutoSync) query = query.neq('change_reason', 'auto_copy')
@@ -117,7 +117,10 @@ export default function AuditLog() {
                     </span>
                   </td>
                   <td style={{ fontSize: 12, color: 'var(--t3)' }}>{row.source}</td>
-                  <td style={{ fontSize: 12 }}>{AUDIT_REASON_LABELS[row.change_reason] || row.change_reason || '—'}</td>
+                  <td style={{ fontSize: 12 }}>
+                    {AUDIT_REASON_LABELS[row.change_reason] || row.change_reason || '—'}
+                    {row.no_carry_forward && <span style={{ color: 'var(--t3)' }}> · חד-פעמי</span>}
+                  </td>
                   <td style={{ fontSize: 12, color: 'var(--t3)' }}>{row.change_note || '—'}</td>
                   <td style={{ fontSize: 12, color: 'var(--t3)' }}>{row.changed_by || '—'}</td>
                 </tr>

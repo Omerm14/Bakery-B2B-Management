@@ -194,7 +194,12 @@ export default function App() {
           /* portal.urbanbakery.co — customer portal at clean paths. Only
              customer sessions are honored here; staff or role-less sessions
              see the customer login (full per-host session isolation is a
-             follow-up — see the auth note in the subdomain handoff doc). */
+             follow-up — see the auth note in the subdomain handoff doc).
+             ToastHost lives here (not just in ProtectedLayout, which the
+             portal never uses) -- without it, every toast.*() call in the
+             portal (CustomerOrders, CustomerLogin) pushes into ToastContext
+             but nothing ever renders it. */
+          <>
           <Routes>
             <Route path="/login" element={session && isCustomer ? <Navigate to="/orders" replace /> : <CustomerLogin />} />
             <Route path="/preview" element={<CustomerPortalDemo />} />
@@ -208,6 +213,8 @@ export default function App() {
               <Route path="*" element={<Navigate to="/login" replace />} />
             )}
           </Routes>
+          <ToastHost />
+          </>
           ) : (
           /* floory.urbanbakery.co / *.vercel.app / localhost — management app.
              The customer portal moved to the portal subdomain, so /portal/*
