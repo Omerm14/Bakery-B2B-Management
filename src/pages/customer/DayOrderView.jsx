@@ -78,6 +78,7 @@ export default function DayOrderView({
                 const line = orderLines[key]
                 const isAutoCopy = line?.change_reason === 'auto_copy'
                 const isPending = !!line?.pending
+                const isOneTime = line?.no_carry_forward === true
                 return (
                   <div key={item.id} className="day-list-row">
                     <button
@@ -93,6 +94,7 @@ export default function DayOrderView({
                         {item.name_he}
                         {isAutoCopy && <span className="badge-autocopy">הועתק משבוע שעבר</span>}
                         {isPending && <span className="badge-pending">טרם נשלח</span>}
+                        {isOneTime && <span className="badge-onetime">חד-פעמי</span>}
                       </div>
                       <div className="day-list-item-unit">
                         {item.unit}{item.price != null ? ` · ${item.price}₪` : ''}

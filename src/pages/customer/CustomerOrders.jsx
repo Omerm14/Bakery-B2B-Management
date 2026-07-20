@@ -9,7 +9,7 @@ import { WEEK_DAYS, formatShortDate, dayDate, toLocalISODate } from '../../const
 import { CATEGORY_ORDER } from '../../constants/categories'
 import DayOrderView from './DayOrderView'
 import WeekSummaryView from './WeekSummaryView'
-import SendOrderModal from '../../components/customer/SendOrderModal'
+import SendReviewModal from '../../components/customer/SendReviewModal'
 import flooryLogoOnDark from '../../assets/floory/logo-horizontal-ondark.png'
 import { trackEvent } from '../../lib/posthog'
 
@@ -36,9 +36,11 @@ export default function CustomerOrders() {
   const [dayOffset, setDayOffset] = useState(() => new Date().getDay())
   const [nowTick, setNowTick] = useState(() => Date.now())
   const [sending, setSending] = useState(false)
-  // null = modal closed; array (possibly empty) = show the post-send
-  // confetti/summary modal with these changes.
-  const [sendSummary, setSendSummary] = useState(null)
+  // null = confirm modal closed. Array (never empty — reviewOrder() only
+  // opens it when there's something to review) = the pending diff list,
+  // shown BEFORE anything is written to the DB. Each entry carries its own
+  // `oneTime` toggle state, flipped in place by the modal via toggleOneTime.
+  const [pendingChanges, setPendingChanges] = useState(null)
   // Optimistic overrides for is_favorite, keyed by menu_item_id — simpler
   // than threading a setter through useCustomerMenuItems, which owns the
   // base list. Merged over each item's server-fetched is_favorite.
@@ -80,7 +82,7 @@ export default function CustomerOrders() {
 
     const { data: prevLines } = await supabase
       .from('order_lines')
-      .select('menu_item_id, delivery_date, quantity')
+      .select('menu_item_id, delivery_date, quantity, no_carry_forward')
       .eq('week_id', prevWeekRow.id)
       .eq('customer_id', customer.id)
       .gt('quantity', 0)
@@ -90,6 +92,9 @@ export default function CustomerOrders() {
 
     const result = {}
     for (const l of prevLines || []) {
+      // Lines the customer marked "one-time" don't carry into next week —
+      // same rule the Wednesday cron and staff's copy-prev-week enforce.
+      if (l.no_carry_forward) continue
       const offset = dateToOffset[l.delivery_date]
       if (offset != null) result[`${l.menu_item_id}_${offset}`] = l.quantity
     }
@@ -124,7 +129,7 @@ export default function CustomerOrders() {
       if (wid) {
         const { data: lines, error: linesError } = await supabase
           .from('order_lines')
-          .select('id, menu_item_id, delivery_date, quantity, change_reason')
+          .select('id, menu_item_id, delivery_date, quantity, change_reason, no_carry_forward')
           .eq('week_id', wid)
           .eq('customer_id', customer.id)
         if (linesError) { setLoadError(true); toast.error('טעינת ההזמנה נכשלה — נסו שוב') }
@@ -222,18 +227,57 @@ export default function CustomerOrders() {
     })
   }
 
-  // The one action that actually updates the real order for anything the
-  // customer has genuinely touched this session — untouched defaults are
-  // already real (loadWeek writes those through immediately), so this
-  // only ever sends `pending` entries, not the whole week.
-  async function sendOrder() {
+  // Builds the diff list from anything the customer has genuinely touched
+  // this session (`pending` with a real quantity delta) and opens the
+  // pre-send confirm modal. No DB write happens here — see confirmSend()
+  // for the actual upsert, which only runs after the customer reviews
+  // (and optionally flags lines "one-time") and confirms.
+  function reviewOrder() {
     if (!customer || !weekId || sending) return
+    let skippedLocked = 0
+    const changes = []
+    for (const [key, line] of Object.entries(orderLines)) {
+      if (!line.pending) continue
+      const [menuItemId, date] = key.split('_')
+      if (canEdit[date] === false) { skippedLocked++; continue }
+      if (line.quantity === (line.original_quantity ?? 0)) continue
+      const item = menuItems.find(i => i.id === menuItemId)
+      changes.push({
+        key,
+        itemName: item ? (item.name_he || item.name_en) : '—',
+        dateLabel: formatShortDate(date),
+        from: line.original_quantity ?? 0,
+        to: line.quantity,
+        // Reflects the row's CURRENT flag so re-editing an already
+        // one-time-flagged line doesn't silently reset it back to recurring.
+        oneTime: line.no_carry_forward ?? false,
+      })
+    }
+
+    if (!changes.length) {
+      toast.info(skippedLocked > 0 ? 'כל הימים הרלוונטיים נעולים לעדכון' : 'אין שינויים לשליחה')
+      return
+    }
+    setPendingChanges(changes)
+  }
+
+  function toggleOneTime(key) {
+    setPendingChanges(prev => prev.map(c => c.key === key ? { ...c, oneTime: !c.oneTime } : c))
+  }
+
+  // Runs only after the customer confirms the pre-send review modal.
+  // Rebuilds the full upsert set from orderLines the same way the old
+  // single-step sendOrder() did (every `pending` line, not just ones with
+  // a delta — a value typed back to its original is still a valid write),
+  // baking in each line's one-time decision from the confirm modal.
+  async function confirmSend() {
+    if (!customer || !weekId || sending || !pendingChanges) return
+    const oneTimeByKey = Object.fromEntries(pendingChanges.map(c => [c.key, c.oneTime]))
 
     setSending(true)
     try {
       let skippedLocked = 0
       const upserts = []
-      const changes = []
       for (const [key, line] of Object.entries(orderLines)) {
         if (!line.pending) continue
         const [menuItemId, date] = key.split('_')
@@ -249,21 +293,16 @@ export default function CustomerOrders() {
           change_reason: 'customer_request',
           changed_by: customer.phone || customer.name,
           changed_via: 'customer_portal',
+          // Set explicitly every time (even `false`) — an upsert only
+          // touches columns present in the payload, so omitting this on a
+          // re-edit of an already-flagged row would leave a stale `true`.
+          no_carry_forward: oneTimeByKey[key] ?? false,
           updated_at: new Date().toISOString(),
         })
-        const item = menuItems.find(i => i.id === menuItemId)
-        if (line.quantity !== (line.original_quantity ?? 0)) {
-          changes.push({
-            itemName: item ? (item.name_he || item.name_en) : '—',
-            dateLabel: formatShortDate(date),
-            from: line.original_quantity ?? 0,
-            to: line.quantity,
-          })
-        }
       }
 
       if (!upserts.length) {
-        toast.info(skippedLocked > 0 ? 'כל הימים הרלוונטיים נעולים לעדכון' : 'אין שינויים לשליחה')
+        setPendingChanges(null)
         return
       }
 
@@ -275,14 +314,16 @@ export default function CustomerOrders() {
       const { error: notifyErr } = await supabase
         .from('order_change_notifications')
         .insert({ customer_id: customer.id, week_id: weekId })
-      if (notifyErr) console.error('[CustomerOrders.sendOrder] notification insert failed', notifyErr)
+      if (notifyErr) console.error('[CustomerOrders.confirmSend] notification insert failed', notifyErr)
 
+      const changedCount = pendingChanges.length
+      const oneTimeCount = pendingChanges.filter(c => c.oneTime).length
+      setPendingChanges(null)
       await loadWeek()
-      setSendSummary(changes)
       toast.success(skippedLocked > 0 ? `ההזמנה נשלחה — ${skippedLocked} ימים נעולים לא עודכנו` : 'ההזמנה נשלחה בהצלחה')
-      trackEvent('order_submitted', { items_changed: changes.length, lines_submitted: upserts.length, skipped_locked: skippedLocked })
+      trackEvent('order_submitted', { items_changed: changedCount, lines_submitted: upserts.length, skipped_locked: skippedLocked, one_time_count: oneTimeCount })
     } catch (err) {
-      console.error('[CustomerOrders.sendOrder]', err)
+      console.error('[CustomerOrders.confirmSend]', err)
       toast.error('שליחת ההזמנה נכשלה — נסו שוב')
       trackEvent('order_submit_failed')
     } finally {
@@ -394,7 +435,7 @@ export default function CustomerOrders() {
 
       {weekId && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-          <button className="btn btn-primary btn-sm" onClick={sendOrder} disabled={sending}>
+          <button className="btn btn-primary btn-sm" onClick={reviewOrder} disabled={sending}>
             <Send size={14} /> {sending ? 'שולח...' : 'שלח הזמנה'}
           </button>
         </div>
@@ -437,7 +478,15 @@ export default function CustomerOrders() {
         />
       )}
 
-      {sendSummary && <SendOrderModal changes={sendSummary} onClose={() => setSendSummary(null)} />}
+      {pendingChanges && (
+        <SendReviewModal
+          changes={pendingChanges}
+          onToggleOneTime={toggleOneTime}
+          onConfirm={confirmSend}
+          onCancel={() => setPendingChanges(null)}
+          sending={sending}
+        />
+      )}
     </div>
   )
 }
