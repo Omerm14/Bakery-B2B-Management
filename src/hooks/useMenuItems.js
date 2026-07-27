@@ -11,7 +11,7 @@ export function useMenuItems({ activeOnly = true } = {}) {
     setLoading(true)
     let q = supabase
       .from('menu_items')
-      .select('id, name_he, name_en, unit, category, supplier_id, active, price, suppliers(name)')
+      .select('id, name_he, name_en, unit, category, supplier_id, active, price, restrict_customers, suppliers(name)')
       .order('category').order('name_he')
     if (activeOnly) q = q.eq('active', true)
     const { data, error } = await q

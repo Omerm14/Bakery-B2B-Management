@@ -5,6 +5,7 @@ import { portalOrigin } from '../lib/host'
 import { useImport } from '../context/ImportContext'
 import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
+import { useMenuItemAccess } from '../hooks/useMenuItemAccess'
 import { useToast } from '../context/ToastContext'
 import SearchInput from '../components/SearchInput'
 import { useTranslation } from '../context/LanguageContext'
@@ -16,6 +17,10 @@ export default function Settings() {
   const [tab, setTab] = useState('menu')
   const { menuItems, setMenuItems } = useMenuItems({ activeOnly: false })
   const { customers, setCustomers, createCustomer } = useCustomers({ activeOnly: false })
+  const { accessByItem, setAccessByItem } = useMenuItemAccess()
+  const [accessMenuOpenId, setAccessMenuOpenId] = useState(null)
+  const [accessSearch, setAccessSearch] = useState('')
+  const accessMenuRef = useRef(null)
   const [suppliers, setSuppliers] = useState([])
   const [categories, setCategories] = useState([])
   const [newCategoryName, setNewCategoryName] = useState('')
@@ -138,6 +143,45 @@ export default function Settings() {
     if (error) {
       setMenuItems(prev => prev.map(i => i.id === id ? { ...i, active: current } : i))
       toast.error(t('settings.toast.statusUpdateFailed'))
+    }
+  }
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (accessMenuRef.current && !accessMenuRef.current.contains(e.target)) setAccessMenuOpenId(null)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // selectedIds is the full set of customers who should be able to order this
+  // item. Selecting every active customer clears the restriction entirely
+  // (restrict_customers=false, no access rows) rather than storing an
+  // "all selected" row set, so a newly added customer isn't silently
+  // excluded from items that were never meant to be restricted.
+  async function updateItemCustomerAccess(id, selectedIds) {
+    const activeCustomerIds = customers.filter(c => c.active).map(c => c.id)
+    const isUnrestricted = selectedIds.length === activeCustomerIds.length && activeCustomerIds.every(cid => selectedIds.includes(cid))
+
+    const prevRestrict = menuItems.find(i => i.id === id)?.restrict_customers
+    const prevAccess = accessByItem[id]
+
+    setMenuItems(prev => prev.map(i => i.id === id ? { ...i, restrict_customers: !isUnrestricted } : i))
+    setAccessByItem(prev => ({ ...prev, [id]: new Set(selectedIds) }))
+
+    const [{ error: updateError }, { error: delError }] = await Promise.all([
+      supabase.from('menu_items').update({ restrict_customers: !isUnrestricted }).eq('id', id),
+      supabase.from('menu_item_customer_access').delete().eq('menu_item_id', id),
+    ])
+    let insError = null
+    if (!isUnrestricted && selectedIds.length > 0) {
+      const { error } = await supabase.from('menu_item_customer_access').insert(selectedIds.map(customer_id => ({ menu_item_id: id, customer_id })))
+      insError = error
+    }
+    if (updateError || delError || insError) {
+      setMenuItems(prev => prev.map(i => i.id === id ? { ...i, restrict_customers: prevRestrict } : i))
+      setAccessByItem(prev => ({ ...prev, [id]: prevAccess }))
+      toast.error(t('settings.toast.customerAccessUpdateFailed'))
     }
   }
 
@@ -561,11 +605,16 @@ function ImportTab() {
                   <th>{t('common.category')}</th>
                   <th>{t('common.supplier')}</th>
                   <th>{t('settings.col.price')}</th>
+                  <th>{t('settings.col.customerAccess')}</th>
                   <th>{t('settings.col.status')}</th>
                 </tr>
               </thead>
               <tbody>
-                {sortedMenuItems.filter(item => item.name_he.includes(filterText.trim())).map(item => (
+                {sortedMenuItems.filter(item => item.name_he.includes(filterText.trim())).map(item => {
+                  const activeCustomers = sortedCustomers.filter(c => c.active)
+                  const allowedIds = item.restrict_customers ? (accessByItem[item.id] || new Set()) : null
+                  const allowedCount = allowedIds ? allowedIds.size : activeCustomers.length
+                  return (
                   <tr key={item.id} style={{ opacity: item.active ? 1 : 0.45 }}>
                     <td>
                       <input
@@ -630,13 +679,69 @@ function ImportTab() {
                         onBlur={e => updateItemPrice(item.id, e.target.value)}
                       />
                     </td>
+                    <td style={{ position: 'relative' }} ref={accessMenuOpenId === item.id ? accessMenuRef : null}>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => { setAccessMenuOpenId(accessMenuOpenId === item.id ? null : item.id); setAccessSearch('') }}
+                      >
+                        {item.restrict_customers
+                          ? `${allowedCount}/${activeCustomers.length} ${t('settings.customersLabel')}`
+                          : t('settings.allCustomers')}
+                      </button>
+                      {accessMenuOpenId === item.id && (
+                        <div className="access-panel">
+                          <input
+                            className="input"
+                            style={{ width: '100%', marginBottom: 8 }}
+                            placeholder={t('settings.searchCustomerPlaceholder')}
+                            value={accessSearch}
+                            onChange={e => setAccessSearch(e.target.value)}
+                            autoFocus
+                          />
+                          <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                            <button type="button" className="btn btn-ghost btn-sm" onClick={() => updateItemCustomerAccess(item.id, activeCustomers.map(c => c.id))}>
+                              {t('settings.selectAll')}
+                            </button>
+                            <button type="button" className="btn btn-ghost btn-sm" onClick={() => updateItemCustomerAccess(item.id, [])}>
+                              {t('settings.deselectAll')}
+                            </button>
+                          </div>
+                          <div className="access-panel-list">
+                            {activeCustomers
+                              .filter(c => c.name.includes(accessSearch.trim()))
+                              .map(c => {
+                                const checked = item.restrict_customers ? (allowedIds?.has(c.id) ?? false) : true
+                                return (
+                                  <label key={c.id} className="access-panel-row">
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={e => {
+                                        const current = new Set(item.restrict_customers ? allowedIds : activeCustomers.map(x => x.id))
+                                        if (e.target.checked) current.add(c.id); else current.delete(c.id)
+                                        updateItemCustomerAccess(item.id, [...current])
+                                      }}
+                                    />
+                                    {c.name}
+                                  </label>
+                                )
+                              })}
+                            {activeCustomers.filter(c => c.name.includes(accessSearch.trim())).length === 0 && (
+                              <div className="access-panel-empty">{t('common.noResults')}</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </td>
                     <td>
                       <button className={'btn btn-sm ' + (item.active ? 'btn-success' : 'btn-ghost')} onClick={() => toggleItemActive(item.id, item.active)}>
                         {item.active ? t('settings.active') : t('settings.inactive')}
                       </button>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
             </div>
