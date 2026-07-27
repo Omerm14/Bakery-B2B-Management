@@ -24,6 +24,7 @@ export default {
     'common.supplier': 'ספק',
     'common.quantity': 'כמות',
     'common.total': 'סה״כ',
+    'common.noResults': 'לא נמצאו תוצאות',
   },
   en: {
     'common.save': 'Save',
@@ -48,5 +49,6 @@ export default {
     'common.supplier': 'Supplier',
     'common.quantity': 'Quantity',
     'common.total': 'Total',
+    'common.noResults': 'No results found',
   },
 }
