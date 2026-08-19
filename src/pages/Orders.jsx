@@ -168,6 +168,11 @@ export default function Orders() {
 
   async function copyPrevWeek() {
     if (!selectedCustomer || !weekId) return
+    // Staff turned automatic carry-forward off for this customer (migration
+    // 057). This button is an explicit staff action rather than automation,
+    // so it stays available — but confirm, since copying here is exactly what
+    // the flag exists to prevent happening on its own.
+    if (selectedCustomer.auto_sync === false && !window.confirm(t('orders.confirmCopyAutoSyncOff'))) return
     setCopying(true)
     try {
       // Get previous week

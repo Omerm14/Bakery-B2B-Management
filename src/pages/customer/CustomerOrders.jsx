@@ -64,7 +64,7 @@ export default function CustomerOrders() {
     supabase.auth.getSession().then(({ data }) => {
       const customerId = data.session?.user?.app_metadata?.customer_id
       if (!customerId) return
-      supabase.from('customers').select('id, name, phone').eq('id', customerId).maybeSingle()
+      supabase.from('customers').select('id, name, phone, auto_sync').eq('id', customerId).maybeSingle()
         .then(({ data: c }) => setCustomer(c))
     })
   }, [])
@@ -145,7 +145,17 @@ export default function CustomerOrders() {
         // just triggered by a view instead of a schedule), not just shown
         // locally, so the customer never has to "confirm" a default that
         // hasn't changed. Only touches days still open for editing.
-        const prevQtyByItemOffset = await fetchPreviousWeekQtyByOffset()
+        //
+        // Staff can exempt a customer from auto-sync entirely
+        // (customers.auto_sync, migration 057) — the same flag the Wednesday
+        // cron honors. An exempt customer starts every week empty, so skip
+        // the previous-week lookup and leave the map empty: every cell then
+        // fails the `prevQty > 0` test below, so nothing is written and no
+        // notification fires. Checked against `false` explicitly so a row
+        // fetched without the column still behaves like today's default.
+        const prevQtyByItemOffset = customer.auto_sync === false
+          ? {}
+          : await fetchPreviousWeekQtyByOffset()
         const autoDefaults = []
         for (const item of menuItems) {
           for (const d of WEEK_DAYS) {
