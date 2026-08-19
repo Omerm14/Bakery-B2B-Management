@@ -323,6 +323,19 @@ export default function Settings() {
     }
   }
 
+  // Mirrors toggleCustomerActive above. Off means this customer is skipped by
+  // both automatic carry-forward paths — the Wednesday cron rollover and the
+  // portal's fill-on-view — so their week starts empty. Purely forward-looking:
+  // lines already copied into a future week are left alone.
+  async function toggleCustomerAutoSync(id, current) {
+    setCustomers(prev => prev.map(c => c.id === id ? { ...c, auto_sync: !current } : c))
+    const { error } = await supabase.from('customers').update({ auto_sync: !current }).eq('id', id)
+    if (error) {
+      setCustomers(prev => prev.map(c => c.id === id ? { ...c, auto_sync: current } : c))
+      toast.error(t('settings.toast.autoSyncUpdateFailed'))
+    }
+  }
+
   async function updateCustomerPhone(id, phone) {
     const prevPhone = customers.find(c => c.id === id)?.phone
     if (phone === prevPhone) return
@@ -353,7 +366,7 @@ export default function Settings() {
   // field (including name, which has no inline editor at all) in one place
   // instead of growing the table with more inline columns.
   const [editingCustomer, setEditingCustomer] = useState(null)
-  const [editForm, setEditForm] = useState({ name: '', name_en: '', phone: '', contact_person: '', email: '' })
+  const [editForm, setEditForm] = useState({ name: '', name_en: '', phone: '', contact_person: '', email: '', auto_sync: true })
   const [savingCustomer, setSavingCustomer] = useState(false)
 
   function openEditCustomer(c) {
@@ -364,6 +377,7 @@ export default function Settings() {
       phone: c.phone || '',
       contact_person: c.contact_person || '',
       email: c.email || '',
+      auto_sync: c.auto_sync !== false,
     })
   }
 
@@ -377,6 +391,7 @@ export default function Settings() {
       phone: editForm.phone.trim() || null,
       contact_person: editForm.contact_person.trim() || null,
       email: editForm.email.trim() || null,
+      auto_sync: editForm.auto_sync,
     }
     const prev = editingCustomer
     setSavingCustomer(true)
@@ -763,9 +778,9 @@ function ImportTab() {
           <SearchInput value={filterText} onChange={setFilterText} placeholder={t('settings.searchCustomerPlaceholder')} />
           <div className="card" style={{ padding: 0 }}>
             <div className="itbl-wrap">
-            <table className="itbl" style={{ minWidth: 700 }}>
+            <table className="itbl" style={{ minWidth: 820 }}>
               <thead>
-                <tr><th>{t('settings.col.name')}</th><th>{t('settings.col.nameEn')}</th><th>{t('settings.col.phone')}</th><th>{t('settings.col.portalAccess')}</th><th>{t('settings.col.status')}</th><th></th></tr>
+                <tr><th>{t('settings.col.name')}</th><th>{t('settings.col.nameEn')}</th><th>{t('settings.col.phone')}</th><th>{t('settings.col.portalAccess')}</th><th>{t('settings.col.status')}</th><th>{t('settings.col.autoSync')}</th><th></th></tr>
               </thead>
               <tbody>
                 {sortedCustomers.filter(c => c.name.includes(filterText.trim())).map(c => (
@@ -806,6 +821,15 @@ function ImportTab() {
                     <td>
                       <button className={'btn btn-sm ' + (c.active ? 'btn-success' : 'btn-ghost')} onClick={() => toggleCustomerActive(c.id, c.active)}>
                         {c.active ? t('settings.active') : t('settings.inactive')}
+                      </button>
+                    </td>
+                    <td>
+                      <button
+                        className={'btn btn-sm ' + (c.auto_sync !== false ? 'btn-success' : 'btn-ghost')}
+                        onClick={() => toggleCustomerAutoSync(c.id, c.auto_sync !== false)}
+                        title={t('settings.autoSyncTitle')}
+                      >
+                        {c.auto_sync !== false ? t('settings.autoSyncOn') : t('settings.autoSyncOff')}
                       </button>
                     </td>
                     <td>
@@ -1029,6 +1053,17 @@ function ImportTab() {
                   onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))}
                   onKeyDown={e => e.key === 'Enter' && saveEditCustomer()}
                 />
+              </div>
+              <div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={editForm.auto_sync}
+                    onChange={e => setEditForm(f => ({ ...f, auto_sync: e.target.checked }))}
+                  />
+                  <span className="lbl" style={{ margin: 0 }}>{t('settings.autoSyncLabel')}</span>
+                </label>
+                <div style={{ fontSize: 12.5, color: 'var(--t3)', marginTop: 4 }}>{t('settings.autoSyncHint')}</div>
               </div>
             </div>
             <div className="modal-footer">
