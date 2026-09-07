@@ -25,7 +25,9 @@ const MOCK_ITEMS = [
 ]
 
 const START = weekStart()
-const LOCKED_DAY_OFFSETS = new Set([5, 6]) // Fri/Sat locked, for the preview
+// Thu/Fri/Sat locked, for the preview -- those three delivery days all
+// close on the Wednesday before them under the default cutoff rules.
+const LOCKED_DAY_OFFSETS = new Set([4, 5, 6])
 
 function dateKey(itemId, offset) { return `${itemId}_${dayDate(START, offset)}` }
 

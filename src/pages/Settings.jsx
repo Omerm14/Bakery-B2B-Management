@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { Plus, Upload, Image as ImageIcon, Pencil, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { portalOrigin } from '../lib/host'
@@ -9,7 +9,14 @@ import { useMenuItemAccess } from '../hooks/useMenuItemAccess'
 import { useToast } from '../context/ToastContext'
 import SearchInput from '../components/SearchInput'
 import { useTranslation } from '../context/LanguageContext'
+import { WEEK_DAYS, cutoffDayKey, weekStart, dayDate, formatShortDate } from '../constants/days'
 import { trackEvent } from '../lib/posthog'
+
+// Offsets a cutoff may sit at, in days before the delivery date. 0 is the
+// delivery day itself; 7 is the same weekday a full week earlier, which is
+// why both ends get an explicit label instead of just a day name.
+const CUTOFF_OFFSETS = [0, 1, 2, 3, 4, 5, 6, 7]
+const CUTOFF_FALLBACK = { offset_days: 1, time: '10:30' }
 
 export default function Settings() {
   const toast = useToast()
@@ -64,6 +71,60 @@ export default function Settings() {
     setBranding(next)
     const { error } = await supabase.from('app_config').update({ value: next }).eq('key', 'branding')
     if (error) { console.error('[Settings saveBranding]', error); toast.error(t('settings.toast.brandingSaveFailed')) }
+  }
+
+  // ── Order edit cutoff (per delivery weekday) ────────────────────────
+  // Mirrors the branding block above: one app_config row, optimistic save,
+  // rollback + toast on failure. The stored shape is
+  // { lock_time, per_day: { "<dow>": { offset_days, time } } } and is read
+  // server-side by order_edit_lock_at() (migration 058), so an edit here
+  // moves the real lock — including the order_lines RLS check — not just
+  // what the portal draws.
+  const [cutoff, setCutoff] = useState({})
+
+  useEffect(() => {
+    supabase.from('app_config').select('value').eq('key', 'cutoff_rules').maybeSingle().then(({ data, error }) => {
+      if (error) { console.error('[Settings cutoff]', error); return }
+      if (data?.value) setCutoff(data.value)
+    })
+  }, [])
+
+  function cutoffRule(dow) {
+    return { ...CUTOFF_FALLBACK, ...(cutoff.per_day?.[String(dow)] ?? {}) }
+  }
+
+  async function saveCutoffDay(dow, patch) {
+    const prev = cutoff
+    const next = {
+      ...cutoff,
+      per_day: { ...(cutoff.per_day ?? {}), [String(dow)]: { ...cutoffRule(dow), ...patch } },
+    }
+    setCutoff(next)
+    const { error } = await supabase.from('app_config').update({ value: next }).eq('key', 'cutoff_rules')
+    if (error) {
+      console.error('[Settings saveCutoffDay]', error)
+      setCutoff(prev)
+      toast.error(t('settings.toast.cutoffSaveFailed'))
+    }
+  }
+
+  // "closes on <weekday>" label for a given offset, disambiguating the two
+  // offsets that land on the delivery day's own weekday name.
+  function offsetLabel(dow, offset) {
+    if (offset === 0) return `${t('settings.cutoffSameDay')} (${WEEK_DAYS[dow].label})`
+    const label = WEEK_DAYS[cutoffDayKey(dow, offset)].label
+    return offset === 7 ? `${label} (${t('settings.cutoffPreviousWeek')})` : label
+  }
+
+  // Worked example on the current week's real dates, so the effect of an
+  // offset (especially the ones that reach into the previous week) is
+  // visible before leaving the page.
+  function cutoffPreview(dow) {
+    const rule = cutoffRule(dow)
+    const start = weekStart()
+    const delivery = dayDate(start, dow)
+    const lock = dayDate(start, dow - rule.offset_days)
+    return `${WEEK_DAYS[dow].label} ${formatShortDate(delivery)} ← ${offsetLabel(dow, rule.offset_days)} ${formatShortDate(lock)}, ${rule.time}`
   }
 
   async function uploadLogo(file) {
@@ -592,7 +653,7 @@ function ImportTab() {
       </div>
 
       <div className="settings-tabs" style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
-        {[['menu', t('settings.tabs.menu')], ['customers', t('common.customers')], ['import', t('settings.importExcel')], ['branding', t('settings.tabs.branding')], ['staff', t('settings.tabs.staff')]].map(([k, l]) => (
+        {[['menu', t('settings.tabs.menu')], ['customers', t('common.customers')], ['import', t('settings.importExcel')], ['branding', t('settings.tabs.branding')], ['cutoff', t('settings.tabs.cutoff')], ['staff', t('settings.tabs.staff')]].map(([k, l]) => (
           <button key={k} className={'btn btn-sm ' + (tab === k ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -898,6 +959,51 @@ function ImportTab() {
                 <button className="btn btn-ghost btn-sm" onClick={removeLogo}>{t('settings.removeLogo')}</button>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ORDER EDIT CUTOFF (per delivery weekday) */}
+      {tab === 'cutoff' && (
+        <div className="card" style={{ maxWidth: 560 }}>
+          <div className="section-title">{t('settings.cutoffSectionTitle')}</div>
+          <div style={{ fontSize: 13, color: 'var(--t2)', marginBottom: 20, lineHeight: 1.6 }}>
+            {t('settings.cutoffDescription')}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr 1fr', gap: 12, alignItems: 'center' }}>
+            <label className="lbl" style={{ margin: 0 }}>{t('settings.cutoffDeliveryDayLabel')}</label>
+            <label className="lbl" style={{ margin: 0 }}>{t('settings.cutoffClosesOnLabel')}</label>
+            <label className="lbl" style={{ margin: 0 }}>{t('settings.cutoffTimeLabel')}</label>
+
+            {WEEK_DAYS.map(d => (
+              <Fragment key={d.key}>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>{d.label}</div>
+                <select
+                  className="input"
+                  value={cutoffRule(d.key).offset_days}
+                  onChange={e => saveCutoffDay(d.key, { offset_days: Number(e.target.value) })}
+                >
+                  {CUTOFF_OFFSETS.map(o => <option key={o} value={o}>{offsetLabel(d.key, o)}</option>)}
+                </select>
+                <input
+                  className="input"
+                  type="time"
+                  dir="ltr"
+                  value={cutoffRule(d.key).time}
+                  onChange={e => { if (e.target.value) saveCutoffDay(d.key, { time: e.target.value }) }}
+                />
+              </Fragment>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--bdr)' }}>
+            <label className="lbl">{t('settings.cutoffPreviewLabel')}</label>
+            {WEEK_DAYS.map(d => (
+              <div key={d.key} style={{ fontSize: 12.5, color: 'var(--t3)', lineHeight: 1.9 }}>
+                {cutoffPreview(d.key)}
+              </div>
+            ))}
           </div>
         </div>
       )}
