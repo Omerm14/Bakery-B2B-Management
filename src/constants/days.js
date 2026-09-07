@@ -8,6 +8,14 @@ export const WEEK_DAYS = [
   { key: 6, label: 'שבת',   short: 'ש׳', short_en: 'Sat' },
 ]
 
+// Weekday index (0=Sunday, matching WEEK_DAYS and Postgres extract(dow)) that
+// a cutoff lands on, given the delivery day's weekday and how many days
+// before delivery the cutoff falls. An offset of 7 wraps back to the same
+// weekday name a full week earlier, which is why callers label it explicitly.
+export function cutoffDayKey(deliveryDow, offsetDays) {
+  return ((deliveryDow - offsetDays) % 7 + 7) % 7
+}
+
 // Formats a Date by its LOCAL calendar fields (Y/M/D) — NOT `.toISOString()`,
 // which converts to UTC first and silently shifts the date back a day
 // whenever the local timezone is ahead of UTC (e.g. Israel) for any Date

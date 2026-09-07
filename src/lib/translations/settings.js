@@ -6,6 +6,7 @@ export default {
 
     'settings.tabs.menu': 'תפריט',
     'settings.tabs.branding': 'מיתוג',
+    'settings.tabs.cutoff': 'מועדי סגירה',
     'settings.tabs.staff': 'גישת צוות',
 
     // Menu tab
@@ -107,6 +108,15 @@ export default {
     // Branding tab
     'settings.brandingSectionTitle': 'מיתוג — עמוד כניסה ללקוחות',
     'settings.brandingDescription': 'הלוגו ושם העסק שיוצגו ללקוחות במסך הכניסה (portal/login), במקום מסך גנרי.',
+
+    'settings.cutoffSectionTitle': 'מועדי סגירה להזמנות',
+    'settings.cutoffDescription': 'עד מתי לקוח יכול לעדכן הזמנה לכל יום אספקה. השעה היא לפי שעון ישראל, וההגדרה חלה גם על החסימה בשרת ולא רק על התצוגה בפורטל.',
+    'settings.cutoffDeliveryDayLabel': 'יום אספקה',
+    'settings.cutoffClosesOnLabel': 'נסגר ביום',
+    'settings.cutoffTimeLabel': 'בשעה',
+    'settings.cutoffSameDay': 'אותו יום',
+    'settings.cutoffPreviousWeek': 'שבוע קודם',
+    'settings.cutoffPreviewLabel': 'לדוגמה — השבוע הנוכחי',
     'settings.businessNameLabel': 'שם העסק המוצג ללקוחות',
     'settings.businessNamePlaceholder': 'לדוגמה: מאפיית הבוקר',
     'settings.logoLabel': 'לוגו',
@@ -149,6 +159,7 @@ export default {
     'settings.toast.categoriesLoadFailed': 'טעינת הקטגוריות נכשלה',
     'settings.toast.categoryAlreadyExists': 'הקטגוריה כבר קיימת',
     'settings.toast.brandingSaveFailed': 'שמירת המיתוג נכשלה',
+    'settings.toast.cutoffSaveFailed': 'שמירת מועדי הסגירה נכשלה',
     'settings.toast.logoUploadSuccess': 'הלוגו הועלה בהצלחה',
     'settings.toast.logoUploadFailed': 'העלאת הלוגו נכשלה',
     'settings.toast.itemAddFailed': 'הוספת הפריט נכשלה',
@@ -172,6 +183,7 @@ export default {
 
     'settings.tabs.menu': 'Menu',
     'settings.tabs.branding': 'Branding',
+    'settings.tabs.cutoff': 'Order Cutoff',
     'settings.tabs.staff': 'Staff Access',
 
     // Menu tab
@@ -273,6 +285,15 @@ export default {
     // Branding tab
     'settings.brandingSectionTitle': 'Branding — Customer Login Page',
     'settings.brandingDescription': 'The logo and business name shown to customers on the login screen (portal/login), instead of a generic screen.',
+
+    'settings.cutoffSectionTitle': 'Order Edit Cutoff',
+    'settings.cutoffDescription': 'How late a customer may update an order for each delivery day. Times are Israel local time, and the setting also drives the server-side lock, not just the portal display.',
+    'settings.cutoffDeliveryDayLabel': 'Delivery day',
+    'settings.cutoffClosesOnLabel': 'Closes on',
+    'settings.cutoffTimeLabel': 'At',
+    'settings.cutoffSameDay': 'Same day',
+    'settings.cutoffPreviousWeek': 'previous week',
+    'settings.cutoffPreviewLabel': 'Example — the current week',
     'settings.businessNameLabel': 'Business Name Shown to Customers',
     'settings.businessNamePlaceholder': 'e.g. Morning Bakery',
     'settings.logoLabel': 'Logo',
@@ -315,6 +336,7 @@ export default {
     'settings.toast.categoriesLoadFailed': 'Failed to load categories',
     'settings.toast.categoryAlreadyExists': 'Category already exists',
     'settings.toast.brandingSaveFailed': 'Failed to save branding',
+    'settings.toast.cutoffSaveFailed': 'Failed to save order cutoff times',
     'settings.toast.logoUploadSuccess': 'Logo uploaded successfully',
     'settings.toast.logoUploadFailed': 'Failed to upload logo',
     'settings.toast.itemAddFailed': 'Failed to add item',
