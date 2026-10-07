@@ -11,6 +11,7 @@ import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
 import { customerDisplayName } from '../lib/displayName'
 import LineHistoryModal from '../components/audit/LineHistoryModal'
+import DateFilterInput from '../components/audit/DateFilterInput'
 import { AuditQuantity } from '../components/audit/auditFormat'
 import { auditReasonLabel } from '../lib/auditLabels'
 
@@ -35,7 +36,10 @@ function windowStartISO(toIso) {
 // 16/10" means 16/10 Israel time, not UTC.
 function localDayStartISO(iso, plusDays = 0) {
   const [y, m, d] = iso.split('-').map(Number)
-  return new Date(y, m - 1, d + plusDays).toISOString()
+  // setFullYear, not new Date(y, …): the constructor maps years 0–99 to 19xx.
+  const dt = new Date(2000, 0, 1)
+  dt.setFullYear(y, m - 1, d + plusDays)
+  return dt.toISOString()
 }
 
 // Every filter is applied server-side and index-backed (migration 060), so
@@ -201,22 +205,14 @@ export default function AuditLog() {
             ))}
           </select>
         </label>
-        <label style={labelStyle}>
-          {t('settings.auditChangedFrom')}
-          <input type="date" className="input" style={inputStyle} value={filters.changedFrom} onChange={e => setFilter('from', e.target.value)} />
-        </label>
-        <label style={labelStyle}>
-          {t('settings.auditChangedTo')}
-          <input type="date" className="input" style={inputStyle} value={raw.changedTo} onChange={e => setFilter('to', e.target.value)} />
-        </label>
-        <label style={labelStyle}>
-          {t('settings.auditDeliveryFrom')}
-          <input type="date" className="input" style={inputStyle} value={raw.deliveryFrom} onChange={e => setFilter('dfrom', e.target.value)} />
-        </label>
-        <label style={labelStyle}>
-          {t('settings.auditDeliveryTo')}
-          <input type="date" className="input" style={inputStyle} value={raw.deliveryTo} onChange={e => setFilter('dto', e.target.value)} />
-        </label>
+        <DateFilterInput label={t('settings.auditChangedFrom')} style={labelStyle} inputStyle={inputStyle}
+          value={raw.changedFrom} onCommit={v => setFilter('from', v)} />
+        <DateFilterInput label={t('settings.auditChangedTo')} style={labelStyle} inputStyle={inputStyle}
+          value={raw.changedTo} onCommit={v => setFilter('to', v)} />
+        <DateFilterInput label={t('settings.auditDeliveryFrom')} style={labelStyle} inputStyle={inputStyle}
+          value={raw.deliveryFrom} onCommit={v => setFilter('dfrom', v)} />
+        <DateFilterInput label={t('settings.auditDeliveryTo')} style={labelStyle} inputStyle={inputStyle}
+          value={raw.deliveryTo} onCommit={v => setFilter('dto', v)} />
         {hasFilters && (
           <button className="btn btn-ghost btn-sm" onClick={clearFilters}><X size={14} />{t('settings.auditClearFilters')}</button>
         )}
