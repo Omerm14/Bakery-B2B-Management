@@ -32,6 +32,37 @@ function toIso(d) {
   return toLocalISODate(new Date(d))
 }
 
+// An order sheet is never filled in more than a few weeks ahead.
+const MAX_FUTURE_DAYS = 28
+
+// Year for a "DD.MM" date written without one. Picks the most recent
+// occurrence that isn't more than MAX_FUTURE_DAYS ahead of today — so an
+// October sheet imported in July lands on LAST October, not next October.
+// Plain "current year" (the old rule) turned a batch of last year's
+// historical files into phantom orders months in the future, which then
+// blocked the weekly carry-forward from filling those cells.
+function inferYear(day, month, today = new Date()) {
+  const limit = new Date(today.getFullYear(), today.getMonth(), today.getDate() + MAX_FUTURE_DAYS)
+  for (let y = today.getFullYear() + 1; y >= today.getFullYear() - 1; y--) {
+    if (new Date(y, month - 1, day) <= limit) return y
+  }
+  return today.getFullYear() - 1
+}
+
+// Year for a day/month column inside a sheet whose week is already known —
+// the year that puts the date closest to the week start, so a week spanning
+// New Year (e.g. 28.12–3.1) gets January of the FOLLOWING year.
+function yearNear(day, month, anchor) {
+  const y = anchor.getFullYear()
+  return [y - 1, y, y + 1].reduce((best, cand) =>
+    Math.abs(new Date(cand, month - 1, day) - anchor) < Math.abs(new Date(best, month - 1, day) - anchor) ? cand : best)
+}
+
+function explicitYear(raw) {
+  if (!raw) return null
+  return raw.length === 2 ? 2000 + parseInt(raw) : parseInt(raw)
+}
+
 function parseExcelWorkbook(wb) {
   let wsIso = null
   let weekStart = null
@@ -59,7 +90,7 @@ function parseExcelWorkbook(wb) {
         const m = cell.v.match(/(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?/)
         if (m) {
           const day = parseInt(m[1]), month = parseInt(m[2])
-          const year = m[3] ? (m[3].length === 2 ? 2000 + parseInt(m[3]) : parseInt(m[3])) : new Date().getFullYear()
+          const year = explicitYear(m[3]) ?? inferYear(day, month)
           const d = new Date(year, month - 1, day)
           if (!isNaN(d.getTime())) {
             while (d.getDay() !== 0) d.setDate(d.getDate() - 1)
@@ -76,8 +107,7 @@ function parseExcelWorkbook(wb) {
     const nm = sheetName.match(/(\d{1,2})[./](\d{1,2})/)
     if (nm) {
       const day = parseInt(nm[1]), month = parseInt(nm[2])
-      const year = new Date().getFullYear()
-      const d = new Date(year, month - 1, day)
+      const d = new Date(inferYear(day, month), month - 1, day)
       if (!isNaN(d.getTime())) {
         while (d.getDay() !== 0) d.setDate(d.getDate() - 1)
         wsIso = toLocalISODate(d)
@@ -115,7 +145,7 @@ function parseExcelWorkbook(wb) {
         const m = cell.v.match(/(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?/)
         if (m) {
           const day = parseInt(m[1]), month = parseInt(m[2])
-          const year = m[3] ? (m[3].length === 2 ? 2000 + parseInt(m[3]) : parseInt(m[3])) : weekStart.getFullYear()
+          const year = explicitYear(m[3]) ?? yearNear(day, month, weekStart)
           dates.push(new Date(year, month - 1, day))
         } else {
           // Hebrew day name
@@ -239,6 +269,28 @@ export function ImportProvider({ children }) {
     const label = `שבוע ${weekStart.getDate().toString().padStart(2, '0')}/${(weekStart.getMonth() + 1).toString().padStart(2, '0')}/${weekStart.getFullYear()}`
     log(`📅 שבוע: ${label} (${wsIso})`)
     log(`👤 לקוחות: ${customers.length} | 🥐 פריטים: ${items.length} | 📋 שורות: ${orderLines.length}`)
+
+    // Guard before anything is written: a file landing far in the future is
+    // almost always a wrong-year date, and its rows would silently pre-fill
+    // (and block the auto-copy for) a week nobody is looking at yet. Same for
+    // delivery dates that fall outside the detected week.
+    const today = new Date()
+    const daysAhead = Math.round((weekStart - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000)
+    const weekEndIso = toLocalISODate(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6))
+    const outOfWeek = orderLines.filter(l => l.ddate < wsIso || l.ddate > weekEndIso).length
+    const warnings = []
+    if (daysAhead > MAX_FUTURE_DAYS) warnings.push(`השבוע ${label} נמצא ${Math.round(daysAhead / 7)} שבועות בעתיד`)
+    if (outOfWeek) warnings.push(`${outOfWeek} שורות עם תאריך אספקה מחוץ לשבוע ${label}`)
+    if (warnings.length) {
+      warnings.forEach(w => log(`⚠️ ${w}`))
+      const ok = window.confirm(`${fileName}\n\n${warnings.join('\n')}\n\nייתכן שהשנה בקובץ זוהתה לא נכון. לייבא בכל זאת?`)
+      if (!ok) {
+        log('⏭️ הייבוא בוטל — לא נכתב דבר')
+        log('──────────')
+        trackEvent('excel_import_cancelled', { days_ahead: daysAhead, out_of_week: outOfWeek })
+        return
+      }
+    }
 
     if (customers.length) {
       const err = await upsertBatch('customers', customers.map(name => ({ name, active: true })), 'name')
