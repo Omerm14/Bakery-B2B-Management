@@ -1,3 +1,6 @@
+-- NOTE: sections 3-4 below are superseded by delete_unedited_import_orders.sql
+-- (deletes across all weeks incl. locked days, refills next week exactly).
+--
 -- Find and clean up "phantom" future orders: order lines written before the
 -- change log existed (2026-07-06), mostly by a bulk import of LAST year's
 -- order sheets whose dates had no year and were stamped with the current
