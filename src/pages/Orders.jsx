@@ -12,6 +12,7 @@ import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
 import SearchInput from '../components/SearchInput'
 import { customerDisplayName } from '../lib/displayName'
 import { trackEvent } from '../lib/posthog'
+import SendReviewModal from '../components/customer/SendReviewModal'
 
 export default function Orders() {
   const toast = useToast()
@@ -42,10 +43,15 @@ export default function Orders() {
   const [copying, setCopying] = useState(false)
   const [bulkFillItem, setBulkFillItem] = useState(null)
   const [bulkFillQty, setBulkFillQty] = useState('')
-  const [bulkFilling, setBulkFilling] = useState(false)
+  // Staff edits are drafts until reviewed: key `${menuItemId}_${date}` =>
+  // { qty, via }. Nothing hits the DB until the review modal is confirmed,
+  // where each line is marked permanent or one-time (no_carry_forward).
+  const [drafts, setDrafts] = useState({})
+  const [pendingChanges, setPendingChanges] = useState(null)
+  const [reviewOpening, setReviewOpening] = useState(false)
+  const draftCount = Object.keys(drafts).length
   const [changeReason, setChangeReason] = useState(() => localStorage.getItem('floory_change_reason') || 'internal_decision')
   const [changeNote, setChangeNote] = useState('')
-  const [showNoteInput, setShowNoteInput] = useState(false)
   const gridRef = useRef(null)
 
   function displayName(item) {
@@ -70,9 +76,24 @@ export default function Orders() {
   useEffect(() => {
     if (selectedCustomer) loadOrders()
     else setOrderLines({})
+    setDrafts({})
+    setPendingChanges(null)
     setChangeNote('')
-    setShowNoteInput(false)
   }, [selectedCustomer, week.weekStartISO])
+
+  // Closing/reloading the tab with unsaved drafts would silently lose them.
+  useEffect(() => {
+    if (!draftCount) return
+    const onBeforeUnload = e => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [draftCount])
+
+  // Guard for anything that swaps the grid out from under open drafts
+  // (customer / week switch). True = OK to proceed.
+  function confirmDiscardDrafts() {
+    return !draftCount || window.confirm(t('orders.confirmDiscardDrafts'))
+  }
 
   async function loadOrders() {
     setLoading(true)
@@ -96,7 +117,7 @@ export default function Orders() {
     }
   }
 
-  async function handleQtyChange(menuItemId, date, value, via = 'orders_grid') {
+  function handleQtyChange(menuItemId, date, value, via = 'orders_grid') {
     // Piece-count items ("יח׳") don't have fractional units in real life —
     // 10.5 loaves isn't a thing — so round those to whole numbers. Weight/
     // volume units (kg, gram, liter, ml) legitimately need decimals.
@@ -104,50 +125,107 @@ export default function Orders() {
     let qty = parseFloat(value) || 0
     if (item?.unit === 'יח׳') qty = Math.round(qty)
     const key = `${menuItemId}_${date}`
+    const saved = orderLines[key]?.quantity ?? 0
 
-    // Optimistic update
-    setOrderLines(prev => ({
-      ...prev,
-      [key]: { ...prev[key], quantity: qty, source: 'manual', status: 'ok', change_reason: changeReason, change_note: changeNote || null, changed_by: userEmail }
-    }))
+    // Local only — typing a cell back to its saved value drops the draft.
+    setDrafts(prev => {
+      const next = { ...prev }
+      if (qty === saved) delete next[key]
+      else next[key] = { qty, via }
+      return next
+    })
+  }
 
-    const prevLine = orderLines[key]
+  // Builds the review list from the drafts and opens the confirm modal.
+  // One-time is pre-selected where it's almost certainly what staff mean:
+  // the change was requested by the customer, or the day is already past
+  // the customer's own cutoff (the "customer called after closing" case
+  // that otherwise silently repeats for weeks). A line already flagged
+  // one-time stays one-time.
+  async function openReview(reason = changeReason) {
+    if (!draftCount || reviewOpening) return
+    setReviewOpening(true)
+    try {
+      const dates = [...new Set(Object.keys(drafts).map(k => k.split('_')[1]))]
+      const pastCutoff = {}
+      await Promise.all(dates.map(async date => {
+        const { data, error } = await supabase.rpc('get_delivery_date_lock_at', { p_delivery_date: date })
+        pastCutoff[date] = !error && data ? Date.now() >= new Date(data).getTime() : false
+      }))
+      const changes = Object.entries(drafts).map(([key, d]) => {
+        const [menuItemId, date] = key.split('_')
+        const item = menuItems.find(m => m.id === menuItemId)
+        const line = orderLines[key]
+        const baseOneTime = !!line?.no_carry_forward || pastCutoff[date]
+        return {
+          key,
+          itemName: item ? displayName(item) : '—',
+          dateLabel: formatShortDate(date),
+          from: line?.quantity ?? 0,
+          to: d.qty,
+          baseOneTime,
+          pastCutoff: pastCutoff[date],
+          oneTime: baseOneTime || reason === 'customer_request',
+        }
+      })
+      setPendingChanges(changes)
+    } finally {
+      setReviewOpening(false)
+    }
+  }
+
+  // Changing the reason inside the modal re-applies the smart default
+  // (manual toggles are reset — the reason is what drives the default).
+  function changeReviewReason(reason) {
+    setChangeReason(reason)
+    localStorage.setItem('floory_change_reason', reason)
+    setPendingChanges(prev => prev && prev.map(c => ({ ...c, oneTime: c.baseOneTime || reason === 'customer_request' })))
+  }
+
+  async function confirmSave() {
+    if (!pendingChanges || saving) return
+    const oneTimeByKey = Object.fromEntries(pendingChanges.map(c => [c.key, c.oneTime]))
     setSaving(true)
     try {
       const wid = weekId || await week.getOrCreateWeek()
-      const { data, error } = await supabase
-        .from('order_lines')
-        .upsert({
+      const now = new Date().toISOString()
+      const upserts = Object.entries(drafts).map(([key, d]) => {
+        const [menuItemId, date] = key.split('_')
+        return {
           week_id: wid,
           customer_id: selectedCustomer.id,
           menu_item_id: menuItemId,
           delivery_date: date,
-          quantity: qty,
+          quantity: d.qty,
           source: 'manual',
           status: 'ok',
           change_reason: changeReason,
           change_note: changeNote || null,
           changed_by: userEmail,
-          changed_via: via,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'week_id,customer_id,menu_item_id,delivery_date' })
-        .select('id')
-        .single()
-
-      if (error) throw error
-      if (data) {
-        setOrderLines(prev => ({ ...prev, [key]: { ...prev[key], id: data.id } }))
-      }
-      trackEvent('order_line_edited', { via, reason: changeReason })
-    } catch (err) {
-      console.error('[handleQtyChange]', err)
-      setOrderLines(prev => {
-        const next = { ...prev }
-        if (prevLine) next[key] = prevLine
-        else delete next[key]
-        return next
+          changed_via: d.via,
+          // Always sent explicitly — an upsert only touches columns in the
+          // payload, so omitting it would leave a stale flag on re-edit.
+          no_carry_forward: oneTimeByKey[key] ?? orderLines[key]?.no_carry_forward ?? false,
+          updated_at: now,
+        }
       })
-      toast.error(t('orders.toastSaveFailed'))
+      const { error } = await supabase
+        .from('order_lines')
+        .upsert(upserts, { onConflict: 'week_id,customer_id,menu_item_id,delivery_date' })
+      if (error) throw error
+
+      const oneTimeCount = upserts.filter(u => u.no_carry_forward).length
+      trackEvent('order_lines_saved', { count: upserts.length, one_time_count: oneTimeCount, reason: changeReason })
+      toast.success(`${t('orders.toastSavedPrefix')} ${upserts.length} ${t('orders.toastSavedSuffix')}`)
+      setDrafts({})
+      setPendingChanges(null)
+      setChangeNote('')
+      await loadOrders()
+    } catch (err) {
+      console.error('[confirmSave]', err)
+      // The inactive-item DB guard (migration 061) carries a readable
+      // Hebrew message — show it as-is rather than the generic one.
+      toast.error(err?.hint === 'inactive_menu_item' ? err.message : t('orders.toastSaveFailed'))
     } finally {
       setSaving(false)
     }
@@ -167,7 +245,7 @@ export default function Orders() {
   }
 
   async function copyPrevWeek() {
-    if (!selectedCustomer || !weekId) return
+    if (!selectedCustomer || !weekId || draftCount) return
     // Staff turned automatic carry-forward off for this customer (migration
     // 057). This button is an explicit staff action rather than automation,
     // so it stays available — but confirm, since copying here is exactly what
@@ -227,25 +305,17 @@ export default function Orders() {
     }
   }
 
-  async function confirmBulkFill() {
+  function confirmBulkFill() {
     if (!bulkFillItem) return
     const qty = parseFloat(bulkFillQty)
     if (!(qty >= 0)) { toast.error(t('orders.toastInvalidQty')); return }
-    setBulkFilling(true)
-    try {
-      // Sequential, not concurrent — reuses the exact same save path as manual
-      // entry (handleQtyChange), one day at a time, so there's no risk of a
-      // duplicate-week-creation race if weekId weren't resolved yet.
-      for (const d of WEEK_DAYS) {
-        const date = week.dayDate(d.key)
-        await handleQtyChange(bulkFillItem.id, date, bulkFillQty, 'bulk_fill')
-      }
-      toast.success(`${t('orders.toastBulkFilledPrefix')} ${qty} ${t('orders.toastBulkFilledMiddle')} — ${displayName(bulkFillItem)}`)
-      setBulkFillItem(null)
-      setBulkFillQty('')
-    } finally {
-      setBulkFilling(false)
+    // Same draft path as manual entry — staff still review before anything
+    // is written.
+    for (const d of WEEK_DAYS) {
+      handleQtyChange(bulkFillItem.id, week.dayDate(d.key), bulkFillQty, 'bulk_fill')
     }
+    setBulkFillItem(null)
+    setBulkFillQty('')
   }
 
   function handleKeyDown(e, menuItemId, dayIdx, date) {
@@ -272,8 +342,9 @@ export default function Orders() {
   // still counts as "activity" and keeps the row visible.
   function itemHasActivity(item) {
     return WEEK_DAYS.some(d => {
-      const line = orderLines[`${item.id}_${week.dayDate(d.key)}`]
-      return (line?.quantity > 0) || line?.status === 'needs_review'
+      const key = `${item.id}_${week.dayDate(d.key)}`
+      const line = orderLines[key]
+      return (line?.quantity > 0) || line?.status === 'needs_review' || key in drafts
     })
   }
 
@@ -291,7 +362,7 @@ export default function Orders() {
         <h1 className="page-title">{t('orders.title')}</h1>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {saving && <span style={{ fontSize: 12, color: 'var(--t3)' }}>{t('orders.saving')}</span>}
-          <button className="btn btn-ghost btn-sm" onClick={loadOrders} title={t('orders.refresh')}>
+          <button className="btn btn-ghost btn-sm" onClick={loadOrders} disabled={!!draftCount} title={t('orders.refresh')}>
             <RefreshCw size={14} />
           </button>
         </div>
@@ -299,14 +370,14 @@ export default function Orders() {
 
       {/* Week Navigation */}
       <div className="week-nav">
-        <button className="btn btn-ghost btn-sm" onClick={week.prevWeek}>
+        <button className="btn btn-ghost btn-sm" onClick={() => confirmDiscardDrafts() && week.prevWeek()}>
           <ChevronRight size={16} />
         </button>
         <span className="week-label">{week.weekLabel}</span>
-        <button className="btn btn-ghost btn-sm" onClick={week.nextWeek}>
+        <button className="btn btn-ghost btn-sm" onClick={() => confirmDiscardDrafts() && week.nextWeek()}>
           <ChevronLeft size={16} />
         </button>
-        <button className="btn btn-ghost btn-sm" onClick={week.goToToday} style={{ fontSize: 12 }}>
+        <button className="btn btn-ghost btn-sm" onClick={() => confirmDiscardDrafts() && week.goToToday()} style={{ fontSize: 12 }}>
           {t('orders.thisWeek')}
         </button>
       </div>
@@ -326,7 +397,7 @@ export default function Orders() {
               <div
                 key={c.id}
                 className={'customer-pill' + (selectedCustomer?.id === c.id ? ' active' : '')}
-                onClick={() => setSelectedCustomer(c)}
+                onClick={() => c.id !== selectedCustomer?.id && confirmDiscardDrafts() && setSelectedCustomer(c)}
               >
                 {customerDisplayName(c, lang)}
               </div>
@@ -347,18 +418,6 @@ export default function Orders() {
               <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--bdr)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
                 <span style={{ fontWeight: 700, fontSize: 16 }}>{customerDisplayName(selectedCustomer, lang)}</span>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-                  <select
-                    value={changeReason}
-                    onChange={e => { setChangeReason(e.target.value); localStorage.setItem('floory_change_reason', e.target.value) }}
-                    title={t('orders.changeReasonTitle')}
-                    style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--bdr)', background: 'var(--surf2)', color: 'var(--t1)' }}
-                  >
-                    <option value="customer_request">{REASON_LABELS.customer_request}</option>
-                    <option value="internal_decision">{REASON_LABELS.internal_decision}</option>
-                    <option value="correction">{REASON_LABELS.correction}</option>
-                    <option value="other">{REASON_LABELS.other}</option>
-                  </select>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setShowNoteInput(v => !v)} title={t('orders.noteButtonTitle')}>📝</button>
                   <button
                     className={'btn btn-sm ' + (showAllItems ? 'btn-primary' : 'btn-ghost')}
                     onClick={() => setShowAllItems(v => !v)}
@@ -369,22 +428,26 @@ export default function Orders() {
                   <button
                     className="btn btn-ghost btn-sm"
                     onClick={copyPrevWeek}
-                    disabled={copying}
-                    title={t('orders.copyPrevWeekTitle')}
+                    disabled={copying || !!draftCount}
+                    title={draftCount ? t('orders.copyPrevDisabledDrafts') : t('orders.copyPrevWeekTitle')}
                   >
                     <Copy size={13} /> {copying ? t('orders.copying') : t('orders.copyPrevWeek')}
                   </button>
                 </div>
-                {showNoteInput && (
-                  <input
-                    className="input"
-                    style={{ width: '100%', fontSize: 13 }}
-                    placeholder={t('orders.notePlaceholder')}
-                    value={changeNote}
-                    onChange={e => setChangeNote(e.target.value)}
-                  />
-                )}
               </div>
+              {draftCount > 0 && (
+                <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--bdr)', background: 'var(--amber-tint)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 600, fontSize: 13 }}>{draftCount} {t('orders.pendingCount')}</span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => window.confirm(t('orders.confirmDiscardDrafts')) && setDrafts({})}>
+                      {t('orders.discardDrafts')}
+                    </button>
+                    <button className="btn btn-primary btn-sm" onClick={() => openReview()} disabled={reviewOpening}>
+                      {t('orders.reviewAndSave')}
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="order-grid-wrap" ref={gridRef}>
                 <table className="order-grid">
                   <thead>
@@ -422,18 +485,21 @@ export default function Orders() {
                               const date = week.dayDate(d.key)
                               const key = `${item.id}_${date}`
                               const line = orderLines[key]
+                              const draft = drafts[key]
+                              const shownQty = draft ? draft.qty : line?.quantity
                               const cls = [
                                 'qty-cell',
-                                line?.status === 'needs_review' ? 'needs-review' : '',
+                                draft ? 'pending' : '',
+                                !draft && line?.status === 'needs_review' ? 'needs-review' : '',
                               ].filter(Boolean).join(' ')
                               return (
-                                <td key={d.key} style={{ textAlign: 'center' }}>
+                                <td key={d.key} className={!draft && line?.no_carry_forward && line?.quantity > 0 ? 'cell-one-time' : undefined} style={{ textAlign: 'center' }}>
                                   <input
                                     type="number"
                                     className={cls}
                                     min="0"
                                     step={item.unit === 'יח׳' ? '1' : '0.5'}
-                                    value={line?.quantity || ''}
+                                    value={shownQty || ''}
                                     placeholder="—"
                                     onChange={e => handleQtyChange(item.id, date, e.target.value)}
                                     onKeyDown={e => handleKeyDown(e, item.id, d.key, date)}
@@ -469,6 +535,8 @@ export default function Orders() {
               <div style={{ padding: '10px 20px', borderTop: '1px solid var(--bdr)', display: 'flex', gap: 16, fontSize: 12, color: 'var(--t3)' }}>
                 <span>{t('orders.legendManual')}</span>
                 <span style={{ color: 'var(--amber)' }}>{t('orders.legendNeedsReview')}</span>
+                <span>{t('orders.legendPending')}</span>
+                <span style={{ color: 'var(--accent)' }}>{t('orders.legendOneTime')}</span>
               </div>
             </div>
           )}
@@ -499,9 +567,58 @@ export default function Orders() {
         </div>
       )}
 
+      {/* Review-before-save Modal */}
+      {pendingChanges && (
+        <SendReviewModal
+          changes={pendingChanges}
+          onToggleOneTime={key => setPendingChanges(prev => prev.map(c => c.key === key ? { ...c, oneTime: !c.oneTime } : c))}
+          onSetAllOneTime={value => setPendingChanges(prev => prev.map(c => ({ ...c, oneTime: value })))}
+          onConfirm={confirmSave}
+          onCancel={() => setPendingChanges(null)}
+          sending={saving}
+          labels={{
+            title: t('orders.review.title'),
+            hint: t('orders.review.hint'),
+            markAll: t('orders.review.markAll'),
+            oneTime: t('orders.review.oneTime'),
+            permanent: t('orders.review.permanent'),
+            oneTimeTitle: t('orders.review.oneTimeTitle'),
+            permanentTitle: t('orders.review.permanentTitle'),
+            newPrefix: t('orders.review.newPrefix'),
+            cancel: t('common.cancel'),
+            confirm: t('orders.review.confirm'),
+            sending: t('orders.saving'),
+          }}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+            <select
+              className="input"
+              value={changeReason}
+              onChange={e => changeReviewReason(e.target.value)}
+              title={t('orders.changeReasonTitle')}
+            >
+              <option value="customer_request">{REASON_LABELS.customer_request}</option>
+              <option value="internal_decision">{REASON_LABELS.internal_decision}</option>
+              <option value="correction">{REASON_LABELS.correction}</option>
+              <option value="other">{REASON_LABELS.other}</option>
+            </select>
+            <input
+              className="input"
+              style={{ fontSize: 13 }}
+              placeholder={t('orders.notePlaceholder')}
+              value={changeNote}
+              onChange={e => setChangeNote(e.target.value)}
+            />
+            {pendingChanges.some(c => c.pastCutoff) && (
+              <div style={{ fontSize: 12, color: 'var(--amber)' }}>{t('orders.review.pastCutoff')}</div>
+            )}
+          </div>
+        </SendReviewModal>
+      )}
+
       {/* Bulk-fill Modal */}
       {bulkFillItem && (
-        <div className="overlay" onClick={() => !bulkFilling && setBulkFillItem(null)}>
+        <div className="overlay" onClick={() => setBulkFillItem(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-title">{t('orders.bulkFillButtonTitle')} — {displayName(bulkFillItem)}</div>
             <div style={{ marginBottom: 8 }}>
@@ -522,9 +639,9 @@ export default function Orders() {
               {t('orders.bulkFillWarning')}
             </div>
             <div className="modal-footer">
-              <button className="btn btn-ghost" onClick={() => setBulkFillItem(null)} disabled={bulkFilling}>{t('common.cancel')}</button>
-              <button className="btn btn-primary" onClick={confirmBulkFill} disabled={bulkFilling}>
-                {bulkFilling ? t('orders.filling') : t('orders.fill')}
+              <button className="btn btn-ghost" onClick={() => setBulkFillItem(null)}>{t('common.cancel')}</button>
+              <button className="btn btn-primary" onClick={confirmBulkFill}>
+                {t('orders.fill')}
               </button>
             </div>
           </div>

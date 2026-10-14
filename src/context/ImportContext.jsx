@@ -298,7 +298,12 @@ export function ImportProvider({ children }) {
     }
 
     if (items.length) {
-      const err = await upsertBatch('menu_items', items.map(name_he => ({ name_he, unit: 'יח׳', active: true })), 'name_he')
+      // Insert new names only — never touch existing rows, otherwise every
+      // import would flip an item staff deliberately deactivated back on.
+      const { error: err } = await supabase.from('menu_items').upsert(
+        items.map(name_he => ({ name_he, unit: 'יח׳', active: true })),
+        { onConflict: 'name_he', ignoreDuplicates: true },
+      )
       if (err) { log(`❌ שגיאה בפריטי תפריט: ${err.message}`); log('──────────'); return }
     }
 
@@ -314,12 +319,13 @@ export function ImportProvider({ children }) {
 
     const [{ data: custRows }, { data: itemRows }, { data: weekRows }] = await Promise.all([
       supabase.from('customers').select('id,name').in('name', customers),
-      supabase.from('menu_items').select('id,name_he').in('name_he', items),
+      supabase.from('menu_items').select('id,name_he,active').in('name_he', items),
       supabase.from('weeks').select('id,start_date').eq('start_date', wsIso),
     ])
 
     const custMap = Object.fromEntries((custRows || []).map(r => [r.name, r.id]))
     const itemMap = Object.fromEntries((itemRows || []).map(r => [r.name_he, r.id]))
+    const inactiveItemIds = new Set((itemRows || []).filter(r => !r.active).map(r => r.id))
     const weekId = weekRows?.[0]?.id
     if (!weekId) { log('❌ לא ניתן לאחזר מזהה שבוע'); log('──────────'); return }
 
@@ -340,16 +346,30 @@ export function ImportProvider({ children }) {
       }))
       .filter(r => r.customer_id && r.menu_item_id)
 
+    // Inactive items can't be ordered (DB guard, migration 061) — drop their
+    // non-zero lines up front so one dormant item doesn't fail the whole
+    // batch, and tell staff what was skipped.
+    const skippedInactive = rawLines.filter(r => r.quantity > 0 && inactiveItemIds.has(r.menu_item_id))
+    if (skippedInactive.length) {
+      const names = [...new Set(orderLines
+        .filter(({ iname, qty }) => qty > 0 && inactiveItemIds.has(itemMap[iname]))
+        .map(({ iname }) => iname))]
+      log(`⚠️ ${skippedInactive.length} שורות לפריטים לא פעילים לא יובאו: ${names.join(', ')}`)
+    }
+    const activeLines = skippedInactive.length
+      ? rawLines.filter(r => !(r.quantity > 0 && inactiveItemIds.has(r.menu_item_id)))
+      : rawLines
+
     // Collapse rows sharing the same upsert key (e.g. duplicate item rows or
     // duplicate date columns in the sheet) — last occurrence wins. A single
     // upsert cannot affect the same row twice, so duplicates must be merged
     // before batching.
     const lineByKey = new Map()
-    for (const line of rawLines) {
+    for (const line of activeLines) {
       lineByKey.set(`${line.customer_id}_${line.menu_item_id}_${line.delivery_date}`, line)
     }
     const lines = [...lineByKey.values()]
-    const inFileDupCount = rawLines.length - lines.length
+    const inFileDupCount = activeLines.length - lines.length
     if (inFileDupCount > 0) log(`⚠️ נמצאו ${inFileDupCount} שורות כפולות בקובץ (אותו לקוח/פריט/תאריך) — נלקחה הערך האחרון`)
 
     // Check how many already exist to report dup stats

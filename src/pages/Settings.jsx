@@ -9,7 +9,7 @@ import { useMenuItemAccess } from '../hooks/useMenuItemAccess'
 import { useToast } from '../context/ToastContext'
 import SearchInput from '../components/SearchInput'
 import { useTranslation } from '../context/LanguageContext'
-import { WEEK_DAYS, cutoffDayKey, weekStart, dayDate, formatShortDate } from '../constants/days'
+import { WEEK_DAYS, cutoffDayKey, weekStart, dayDate, formatShortDate, toLocalISODate } from '../constants/days'
 import { trackEvent } from '../lib/posthog'
 
 // Offsets a cutoff may sit at, in days before the delivery date. 0 is the
@@ -41,6 +41,22 @@ export default function Settings() {
   const [newItem, setNewItem] = useState({ name_he: '', name_en: '', unit: 'יח׳', category: '', supplier_id: '', price: '' })
   const [showAddItem, setShowAddItem] = useState(false)
   const [showCategories, setShowCategories] = useState(false)
+
+  // Dormant = active item with no real order in the last DORMANT_DAYS.
+  // null until loaded, so nothing is flagged on a failed/slow fetch.
+  const DORMANT_DAYS = 56
+  const [recentlyOrderedIds, setRecentlyOrderedIds] = useState(null)
+  const [showDormantOnly, setShowDormantOnly] = useState(false)
+  useEffect(() => {
+    if (tab !== 'menu') return
+    const since = new Date()
+    since.setDate(since.getDate() - DORMANT_DAYS)
+    supabase.rpc('recently_ordered_item_ids', { p_since: toLocalISODate(since) }).then(({ data, error }) => {
+      if (error) { console.error('[Settings dormant items]', error); return }
+      setRecentlyOrderedIds(new Set((data || []).map(r => r.menu_item_id)))
+    })
+  }, [tab])
+  const isDormant = item => item.active && recentlyOrderedIds != null && !recentlyOrderedIds.has(item.id)
 
   useEffect(() => {
     supabase.from('suppliers').select('*').order('name').then(({ data, error }) => {
@@ -199,6 +215,24 @@ export default function Settings() {
   }
 
   async function toggleItemActive(id, current) {
+    // Deactivating zeroes the item's lines from today onward (DB trigger,
+    // migration 061) — show staff how much that touches before doing it.
+    if (current) {
+      const { data: futureLines, error } = await supabase
+        .from('order_lines')
+        .select('customer_id')
+        .eq('menu_item_id', id)
+        .gte('delivery_date', toLocalISODate(new Date()))
+        .gt('quantity', 0)
+      if (error) { toast.error(t('settings.toast.statusUpdateFailed')); return }
+      if (futureLines?.length) {
+        const customerCount = new Set(futureLines.map(l => l.customer_id)).size
+        const msg = t('settings.confirmDeactivateItem')
+          .replace('{lines}', futureLines.length)
+          .replace('{customers}', customerCount)
+        if (!window.confirm(msg)) return
+      }
+    }
     setMenuItems(prev => prev.map(i => i.id === id ? { ...i, active: !current } : i))
     const { error } = await supabase.from('menu_items').update({ active: !current }).eq('id', id)
     if (error) {
@@ -670,6 +704,16 @@ function ImportTab() {
             </button>
           </div>
           <SearchInput value={filterText} onChange={setFilterText} placeholder={t('settings.searchItemPlaceholder')} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <button
+              className={'btn btn-sm ' + (showDormantOnly ? 'btn-primary' : 'btn-ghost')}
+              onClick={() => setShowDormantOnly(v => !v)}
+              disabled={recentlyOrderedIds == null}
+              title={t('settings.dormantFilterTitle')}
+            >
+              {t('settings.dormantFilter')} ({menuItems.filter(isDormant).length})
+            </button>
+          </div>
           <div className="card" style={{ padding: 0 }}>
             <div className="itbl-wrap">
             <table className="itbl" style={{ minWidth: 800 }}>
@@ -686,7 +730,7 @@ function ImportTab() {
                 </tr>
               </thead>
               <tbody>
-                {sortedMenuItems.filter(item => item.name_he.includes(filterText.trim())).map(item => {
+                {sortedMenuItems.filter(item => item.name_he.includes(filterText.trim()) && (!showDormantOnly || isDormant(item))).map(item => {
                   const activeCustomers = sortedCustomers.filter(c => c.active)
                   const allowedIds = item.restrict_customers ? (accessByItem[item.id] || new Set()) : null
                   const allowedCount = allowedIds ? allowedIds.size : activeCustomers.length
@@ -814,6 +858,11 @@ function ImportTab() {
                       <button className={'btn btn-sm ' + (item.active ? 'btn-success' : 'btn-ghost')} onClick={() => toggleItemActive(item.id, item.active)}>
                         {item.active ? t('settings.active') : t('settings.inactive')}
                       </button>
+                      {isDormant(item) && (
+                        <span title={t('settings.dormantFilterTitle')} style={{ marginInlineStart: 6, fontSize: 11, color: 'var(--amber)', fontWeight: 600 }}>
+                          {t('settings.dormantBadge')}
+                        </span>
+                      )}
                     </td>
                   </tr>
                   )

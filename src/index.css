@@ -308,6 +308,10 @@ body {
 .qty-cell:focus { border-color: var(--accent-bdr); box-shadow: 0 0 0 2px var(--accent-tint); }
 .qty-cell.qty-cell-locked { border-color: var(--accent-bdr); background: var(--accent-tint); }
 .qty-cell.needs-review { border-color: var(--amber-bdr); background: var(--amber-tint); animation: amberPulse 2s infinite; }
+.qty-cell.pending { border-color: var(--amber-bdr); box-shadow: 0 0 0 2px var(--amber-tint); }
+/* Staff Orders grid: saved line flagged no_carry_forward (one-time). */
+.cell-one-time { position: relative; }
+.cell-one-time::after { content: '1×'; position: absolute; top: 1px; inset-inline-end: 2px; font-size: 9px; font-weight: 700; color: var(--accent); pointer-events: none; }
 .qty-cell::-webkit-inner-spin-button, .qty-cell::-webkit-outer-spin-button { -webkit-appearance: none; }
 
 /* ─── PACKING CHECKLIST ─── */
