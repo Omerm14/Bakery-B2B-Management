@@ -12,6 +12,14 @@
 --      item from any path (staff grid, portal, import, scripts). Clearing or
 --      lowering a line is still allowed.
 
+-- 0. Allow the new changed_via value written by the deactivation cleanup
+-- below. Full list carried over from migration 026 plus 'item_deactivated'.
+ALTER TABLE order_lines DROP CONSTRAINT IF EXISTS order_lines_changed_via_check;
+ALTER TABLE order_lines ADD CONSTRAINT order_lines_changed_via_check
+  CHECK (changed_via IS NULL OR changed_via IN
+    ('orders_grid', 'bulk_fill', 'copy_prev_week', 'import', 'forecast_lock', 'auto_copy_weekly', 'customer_portal',
+     'item_deactivated'));
+
 -- 1. Full redefinition of run_weekly_rollover() carried over from migration
 -- 057 (CREATE OR REPLACE swaps the whole body, so the no_carry_forward and
 -- auto_sync filters and the notifications CTE must be reproduced here). The
