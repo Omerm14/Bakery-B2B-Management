@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, Fragment } from 'react'
-import { Plus, Upload, Image as ImageIcon, Pencil, Trash2 } from 'lucide-react'
+import { Plus, Upload, Image as ImageIcon, Pencil, Trash2, ChevronUp, ChevronDown } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { portalOrigin } from '../lib/host'
 import { useImport } from '../context/ImportContext'
@@ -66,7 +66,7 @@ export default function Settings() {
   }, [])
 
   useEffect(() => {
-    supabase.from('categories').select('*').order('name').then(({ data, error }) => {
+    supabase.from('categories').select('*').order('sort_order').order('name').then(({ data, error }) => {
       if (error) { console.error('[Settings categories]', error); toast.error(t('settings.toast.categoriesLoadFailed')) }
       setCategories(data || [])
     })
@@ -307,10 +307,34 @@ export default function Settings() {
     const value = name.trim()
     if (!value) return
     if (knownCategories.includes(value)) { toast.error(t('settings.toast.categoryAlreadyExists')); return }
-    const { data, error } = await supabase.from('categories').insert({ name: value }).select().single()
+    const sortOrder = Math.max(0, ...categories.map(c => c.sort_order ?? 0)) + 1
+    const { data, error } = await supabase.from('categories').insert({ name: value, sort_order: sortOrder }).select().single()
     if (error) { toast.error(t('settings.toast.categoryUpdateFailed')); return }
-    setCategories(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name, 'he')))
+    setCategories(prev => [...prev, data])
     setNewCategoryName('')
+  }
+
+  // Swaps a category with its neighbour and renumbers the whole list 1..n.
+  // Upserting by name also gives a row to any category that so far only
+  // existed as free text on menu_items, so its position sticks too.
+  async function moveCategory(name, dir) {
+    const from = knownCategories.indexOf(name)
+    const to = from + dir
+    if (from < 0 || to < 0 || to >= knownCategories.length) return
+    const next = [...knownCategories]
+    ;[next[from], next[to]] = [next[to], next[from]]
+    const rows = next.map((n, i) => ({ name: n, sort_order: i + 1 }))
+    const prevCategories = categories
+    const byName = new Map(categories.map(c => [c.name, c]))
+    setCategories(rows.map(r => ({ ...byName.get(r.name), ...r })))
+
+    const { data, error } = await supabase.from('categories').upsert(rows, { onConflict: 'name' }).select()
+    if (error) {
+      setCategories(prevCategories)
+      toast.error(t('settings.toast.categoryUpdateFailed'))
+      return
+    }
+    setCategories([...data].sort((a, b) => a.sort_order - b.sort_order))
   }
 
   // Renaming to an existing category name is allowed on purpose — it's the
@@ -577,8 +601,14 @@ export default function Settings() {
   // Union of the categories table (source of truth, including categories
   // with zero items) and whatever's still on menu_items — covers rows
   // written before the categories table existed, or any other drift.
-  const knownCategories = [...new Set([...categories.map(c => c.name), ...menuItems.map(i => i.category).filter(Boolean)])]
+  // Table rows come in their staff-set order; drift-only names follow
+  // alphabetically, same as on every other screen.
+  const orderedTableNames = [...categories]
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name, 'he'))
+    .map(c => c.name)
+  const driftNames = menuItems.map(i => i.category).filter(c => c && !orderedTableNames.includes(c))
     .sort((a, b) => a.localeCompare(b, 'he'))
+  const knownCategories = [...new Set([...orderedTableNames, ...driftNames])]
 
   const sortedMenuItems = [...menuItems].sort((a, b) => {
     if (a.active !== b.active) return a.active ? -1 : 1
@@ -1253,8 +1283,30 @@ function ImportTab() {
               <div style={{ color: 'var(--t3)', fontSize: 13.5 }}>{t('settings.categoriesEmpty')}</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {knownCategories.map(cat => (
+                {knownCategories.map((cat, idx) => (
                   <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        style={{ padding: '0 4px', minHeight: 0 }}
+                        onClick={() => moveCategory(cat, -1)}
+                        disabled={idx === 0}
+                        aria-label={t('settings.moveCategoryUp')}
+                      >
+                        <ChevronUp size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        style={{ padding: '0 4px', minHeight: 0 }}
+                        onClick={() => moveCategory(cat, 1)}
+                        disabled={idx === knownCategories.length - 1}
+                        aria-label={t('settings.moveCategoryDown')}
+                      >
+                        <ChevronDown size={14} />
+                      </button>
+                    </div>
                     <input
                       className="input"
                       style={{ flex: 1 }}

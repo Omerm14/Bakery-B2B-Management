@@ -6,7 +6,8 @@ import { useCustomerMenuItems } from '../../hooks/useCustomerMenuItems'
 import { useBranding } from '../../hooks/useBranding'
 import { useToast } from '../../context/ToastContext'
 import { WEEK_DAYS, formatShortDate, dayDate, toLocalISODate } from '../../constants/days'
-import { CATEGORY_ORDER } from '../../constants/categories'
+import { orderCategoryBuckets } from '../../constants/categories'
+import { useCategoryOrder } from '../../hooks/useCategoryOrder'
 import DayOrderView from './DayOrderView'
 import WeekSummaryView from './WeekSummaryView'
 import SendReviewModal from '../../components/customer/SendReviewModal'
@@ -17,6 +18,7 @@ import { trackEvent } from '../../lib/posthog'
 const FAVORITES_KEY = '__favorites__'
 
 export default function CustomerOrders() {
+  const categoryOrder = useCategoryOrder()
   const toast = useToast()
   const week = useCustomerWeek()
   const { menuItems, loading: itemsLoading } = useCustomerMenuItems()
@@ -411,9 +413,8 @@ export default function CustomerOrders() {
 
   // Ordered-bucket grouping (same pattern as Weekly.jsx's groupRows()):
   // favorited items are pinned into their own bucket first — moved there
-  // instead of their normal category, never duplicated — then
-  // CATEGORY_ORDER buckets in order, then any leftover categories
-  // alphabetically.
+  // instead of their normal category, never duplicated — then categories
+  // in the order staff set in Settings.
   const grouped = (() => {
     const buckets = {}
     for (const item of menuItems) {
@@ -422,12 +423,8 @@ export default function CustomerOrders() {
       if (!buckets[key]) buckets[key] = []
       buckets[key].push({ ...item, is_favorite: isFavorite })
     }
-    const result = {}
-    if (buckets[FAVORITES_KEY]?.length) result[FAVORITES_KEY] = buckets[FAVORITES_KEY]
-    for (const k of CATEGORY_ORDER) if (buckets[k]?.length) result[k] = buckets[k]
-    const rest = Object.keys(buckets).filter(k => k !== FAVORITES_KEY && !CATEGORY_ORDER.includes(k)).sort((a, b) => a.localeCompare(b, 'he'))
-    for (const k of rest) result[k] = buckets[k]
-    return result
+    const { [FAVORITES_KEY]: favorites, ...rest } = buckets
+    return { ...(favorites?.length ? { [FAVORITES_KEY]: favorites } : {}), ...orderCategoryBuckets(rest, categoryOrder) }
   })()
 
   const selectedDate = week.dayDate(dayOffset)

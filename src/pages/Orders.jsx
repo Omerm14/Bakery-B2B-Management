@@ -5,6 +5,8 @@ import { supabase } from '../lib/supabase'
 import { useWeek } from '../hooks/useWeek'
 import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
+import { useCategoryOrder } from '../hooks/useCategoryOrder'
+import { orderCategoryBuckets, UNCATEGORIZED } from '../constants/categories'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useToast } from '../context/ToastContext'
 import { useTranslation } from '../context/LanguageContext'
@@ -30,6 +32,7 @@ export default function Orders() {
   const week = useWeek()
   const { customers, createCustomer } = useCustomers()
   const { menuItems } = useMenuItems()
+  const categoryOrder = useCategoryOrder()
   const userEmail = useCurrentUser()
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [customerFilter, setCustomerFilter] = useState('')
@@ -349,12 +352,12 @@ export default function Orders() {
   }
 
   // Group menu items by category
-  const grouped = (selectedCustomer && !showAllItems ? menuItems.filter(itemHasActivity) : menuItems).reduce((acc, item) => {
-    const cat = item.category || 'כללי'
+  const grouped = orderCategoryBuckets((selectedCustomer && !showAllItems ? menuItems.filter(itemHasActivity) : menuItems).reduce((acc, item) => {
+    const cat = item.category || UNCATEGORIZED
     if (!acc[cat]) acc[cat] = []
     acc[cat].push(item)
     return acc
-  }, {})
+  }, {}), categoryOrder)
 
   return (
     <div className="page orders-page">

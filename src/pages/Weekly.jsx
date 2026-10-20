@@ -4,7 +4,8 @@ import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { useWeek } from '../hooks/useWeek'
 import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
-import { CATEGORY_ORDER } from '../constants/categories'
+import { orderCategoryBuckets } from '../constants/categories'
+import { useCategoryOrder } from '../hooks/useCategoryOrder'
 import { buildWeeklyProductionHtml, printViaIframe } from '../lib/printHtml'
 import { useTranslation } from '../context/LanguageContext'
 
@@ -24,6 +25,7 @@ const TREND_KEY = {
 }
 
 export default function Weekly() {
+  const categoryOrder = useCategoryOrder()
   const { t, lang } = useTranslation()
   const locale = lang === 'en' ? 'en-US' : 'he-IL'
   const week = useWeek()
@@ -135,7 +137,7 @@ export default function Weekly() {
   }
 
   function printWeekly() {
-    const grouped = groupRows(rows) // honors CATEGORY_ORDER
+    const grouped = groupRows(rows) // honors the Settings category order
     const dir = lang === 'en' ? 'ltr' : 'rtl'
     const sections = Object.entries(grouped).map(([group, items]) => ({
       heading: groupLabel(group),
@@ -192,11 +194,7 @@ export default function Weekly() {
       if (!buckets[k]) buckets[k] = []
       buckets[k].push(row)
     }
-    const result = {}
-    for (const k of CATEGORY_ORDER) if (buckets[k]?.length) result[k] = buckets[k]
-    const rest = Object.keys(buckets).filter(k => !CATEGORY_ORDER.includes(k)).sort((a, b) => a.localeCompare(b, 'he'))
-    for (const k of rest) result[k] = buckets[k]
-    return result
+    return orderCategoryBuckets(buckets, categoryOrder)
   }
 
   const grouped = groupRows(rows)

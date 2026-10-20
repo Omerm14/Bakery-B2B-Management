@@ -5,23 +5,20 @@ import { isoToday, toLocalISODate } from '../constants/days'
 import { buildProductionListHtml, printViaIframe } from '../lib/printHtml'
 import { useTranslation } from '../context/LanguageContext'
 import { customerDisplayName } from '../lib/displayName'
-import { CATEGORY_ORDER, displayCategoryLabel } from '../constants/categories'
+import { orderCategoryBuckets, displayCategoryLabel } from '../constants/categories'
+import { useCategoryOrder } from '../hooks/useCategoryOrder'
 import { trackEvent } from '../lib/posthog'
 
-// Ordered-bucket grouping (same pattern as Weekly.jsx's groupRows()): fixed
-// CATEGORY_ORDER first, then any leftover categories sorted alphabetically.
-function groupByCategory(itemList) {
+// Ordered-bucket grouping (same pattern as Weekly.jsx's groupRows()), in the
+// category order staff set in Settings.
+function groupByCategory(itemList, order) {
   const buckets = {}
   for (const item of itemList) {
     const k = item.category
     if (!buckets[k]) buckets[k] = []
     buckets[k].push(item)
   }
-  const result = {}
-  for (const k of CATEGORY_ORDER) if (buckets[k]?.length) result[k] = buckets[k]
-  const rest = Object.keys(buckets).filter(k => !CATEGORY_ORDER.includes(k)).sort((a, b) => a.localeCompare(b, 'he'))
-  for (const k of rest) result[k] = buckets[k]
-  return result
+  return orderCategoryBuckets(buckets, order)
 }
 
 function AnimatedNumber({ value, loading, locale }) {
@@ -59,6 +56,7 @@ export default function Production() {
   const STATUS_COLOR = { pending: 'var(--t3)', done: 'var(--green)' }
   const STATUS_BG = { pending: 'transparent', done: 'var(--green-tint)' }
   const [selectedDate, setSelectedDate] = useState(tomorrowIso())
+  const categoryOrder = useCategoryOrder()
   const [items, setItems] = useState([])
   const [prodStatus, setProdStatus] = useState({}) // menu_item_id → status
   const [loading, setLoading] = useState(false)
@@ -148,7 +146,7 @@ export default function Production() {
   }
 
   function exportByDepartment() {
-    const byCategory = groupByCategory(items)
+    const byCategory = groupByCategory(items, categoryOrder)
     const sections = Object.entries(byCategory).map(([cat, catItems]) => ({
       heading: displayCategoryLabel(cat),
       items: catItems
@@ -176,7 +174,7 @@ export default function Production() {
   const suppliers = ['all', ...new Set(items.map(i => i.supplier))]
   const filtered = filterSupplier === 'all' ? items : items.filter(i => i.supplier === filterSupplier)
 
-  const byCategory = groupByCategory(filtered)
+  const byCategory = groupByCategory(filtered, categoryOrder)
 
   const totalItems = filtered.length
   const totalQty = filtered.reduce((s, i) => s + i.total_qty, 0)

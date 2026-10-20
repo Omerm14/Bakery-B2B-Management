@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase'
 import { useWeek } from '../hooks/useWeek'
 import { useCustomers } from '../hooks/useCustomers'
 import { useMenuItems } from '../hooks/useMenuItems'
+import { useCategoryOrder } from '../hooks/useCategoryOrder'
+import { orderCategoryBuckets, UNCATEGORIZED } from '../constants/categories'
 import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
 import { ChevronRight, ChevronLeft } from 'lucide-react'
 import { useTranslation } from '../context/LanguageContext'
@@ -13,6 +15,7 @@ export default function Forecasting() {
   const week = useWeek()
   const { customers } = useCustomers()
   const { menuItems } = useMenuItems()
+  const categoryOrder = useCategoryOrder()
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [forecast, setForecast] = useState({}) // key: `${itemId}_${date}` => qty
   const [overrides, setOverrides] = useState({}) // same key => qty (user edits)
@@ -126,12 +129,12 @@ export default function Forecasting() {
   }
 
   // Group items by category
-  const grouped = menuItems.reduce((acc, item) => {
-    const cat = item.category || 'כללי'
+  const grouped = orderCategoryBuckets(menuItems.reduce((acc, item) => {
+    const cat = item.category || UNCATEGORIZED
     if (!acc[cat]) acc[cat] = []
     acc[cat].push(item)
     return acc
-  }, {})
+  }, {}), categoryOrder)
 
   const hasForecast = Object.keys(forecast).length > 0
   const lockedCount = Object.keys(locked).length
