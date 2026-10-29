@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: Lint, test & build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  database:
+    name: Database tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      # Plain Postgres 16 + pg_cron, the two things the migrations need beyond
+      # what supabase/tests/prelude.sql stubs (roles, auth, storage).
+      - name: Install Postgres 16 with pg_cron
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q postgresql-16 postgresql-16-cron
+          printf "shared_preload_libraries = 'pg_cron'\ncron.database_name = 'bakery_test'\n" \
+            | sudo tee /etc/postgresql/16/main/conf.d/ci.conf
+          sudo pg_ctlcluster 16 main restart
+          sudo -u postgres createuser --superuser "$USER"
+      - name: Replay migrations and run tests
+        run: bash supabase/tests/run.sh
+        env:
+          TEST_DB: bakery_test
