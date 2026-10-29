@@ -14,9 +14,10 @@
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- 1. REPORT — every one-time line since 2026-10-11 whose next-week cell did
---    not come back at the regular quantity. "1 already hit" = the auto-copy
---    already ran for that next week; "2 at risk" = would be hit next
---    Wednesday (fixed by migration 062, listed for reference).
+--    not come back at the regular quantity. "1 already hit" = the Wednesday
+--    auto-copy for that next week already ran (before migration 062, so it
+--    skipped the line — the cell stays empty unless repaired in section 3);
+--    "2 at risk" = its auto-copy hasn't run yet, so 062 handles it.
 -- ════════════════════════════════════════════════════════════════════════════
 WITH flagged AS (
   SELECT id, customer_id, menu_item_id, delivery_date, quantity
@@ -38,8 +39,9 @@ regular AS (
   WHERE on_flag AND prev_flag IS DISTINCT FROM true
   ORDER BY order_line_id, created_at DESC, id DESC
 )
-SELECT CASE WHEN f.delivery_date + 7 > current_date - extract(dow FROM current_date)::int + 6
-            THEN '2 at risk' ELSE '1 already hit' END AS status,
+SELECT CASE WHEN now() >= ((f.delivery_date - extract(dow FROM f.delivery_date)::int + 3)
+                           + time '03:00') AT TIME ZONE 'UTC'
+            THEN '1 already hit' ELSE '2 at risk' END AS status,
        c.name AS customer, mi.name_he AS item, f.delivery_date,
        trim_scale(r.regular_qty) AS regular_qty, trim_scale(f.quantity) AS one_time_qty,
        f.delivery_date + 7 AS next_date, trim_scale(nx.quantity) AS next_week_qty,
@@ -59,21 +61,23 @@ ORDER BY status, customer, f.delivery_date, item;
 --   FROM ( ...section 1... ) x GROUP BY 1, 2 ORDER BY 1, 2;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- 2. CANDIDATES — cells in the CURRENT week, from today on and still before
---    their cutoff, that are EMPTY (no row at all) while last week's line for
---    the same item/weekday was one-time with a regular quantity > 0. Same
---    rules as run_weekly_rollover(): active customer with auto_sync, active
---    item. Review this list with the floor before section 3.
+-- 2. CANDIDATES — EMPTY cells (no row at all) in the current week from today
+--    on and in NEXT week, still before their cutoff, whose line one week
+--    earlier was one-time with a regular quantity > 0. Next week is included
+--    because its auto-copy already ran (Wednesday of this week) before
+--    migration 062 and won't run again. Same rules as run_weekly_rollover():
+--    active customer with auto_sync, active item. A cell someone already
+--    filled is never touched. Review this list with the floor before section 3.
 -- ════════════════════════════════════════════════════════════════════════════
 DROP TABLE IF EXISTS one_time_repair_candidates;
 CREATE TABLE one_time_repair_candidates AS
-WITH tw AS (SELECT id, start_date FROM weeks
-            WHERE start_date = current_date - extract(dow FROM current_date)::int),
-pw AS (SELECT id FROM weeks WHERE start_date = (SELECT start_date FROM tw) - 7),
+WITH this_week AS (SELECT current_date - extract(dow FROM current_date)::int AS start_date),
 flagged AS (
-  SELECT id, customer_id, menu_item_id, delivery_date
-  FROM order_lines
-  WHERE no_carry_forward AND week_id = (SELECT id FROM pw)
+  SELECT ol.id, ol.customer_id, ol.menu_item_id, ol.delivery_date, w.start_date AS week_start
+  FROM order_lines ol
+  JOIN weeks w ON w.id = ol.week_id
+  WHERE ol.no_carry_forward
+    AND w.start_date IN ((SELECT start_date FROM this_week) - 7, (SELECT start_date FROM this_week))
 ),
 ordered AS (
   SELECT a.order_line_id, a.id, a.created_at, a.old_quantity,
@@ -89,10 +93,11 @@ regular AS (
   WHERE on_flag AND prev_flag IS DISTINCT FROM true
   ORDER BY order_line_id, created_at DESC, id DESC
 )
-SELECT (SELECT id FROM tw) AS week_id, f.customer_id, f.menu_item_id,
+SELECT tw.id AS week_id, f.customer_id, f.menu_item_id,
        f.delivery_date + 7 AS delivery_date, r.regular_qty AS quantity
 FROM flagged f
 JOIN regular r     ON r.order_line_id = f.id AND r.regular_qty > 0
+JOIN weeks tw      ON tw.start_date = f.week_start + 7
 JOIN customers c   ON c.id = f.customer_id AND c.active AND c.auto_sync
 JOIN menu_items mi ON mi.id = f.menu_item_id AND mi.active
 WHERE f.delivery_date + 7 >= current_date
