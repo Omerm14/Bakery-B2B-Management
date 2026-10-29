@@ -12,6 +12,7 @@ import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
 import SearchInput from '../components/SearchInput'
 import { customerDisplayName } from '../lib/displayName'
 import { trackEvent } from '../lib/posthog'
+import { carryForwardQty } from '../lib/carryForward'
 import SendReviewModal from '../components/customer/SendReviewModal'
 
 export default function Orders() {
@@ -103,7 +104,7 @@ export default function Orders() {
 
       const { data: lines } = await supabase
         .from('order_lines')
-        .select('id, menu_item_id, delivery_date, quantity, source, status, change_reason, change_note, changed_by, no_carry_forward')
+        .select('id, menu_item_id, delivery_date, quantity, source, status, change_reason, change_note, changed_by, no_carry_forward, carry_forward_quantity')
         .eq('week_id', wid)
         .eq('customer_id', selectedCustomer.id)
 
@@ -137,12 +138,12 @@ export default function Orders() {
   }
 
   // Builds the review list from the drafts and opens the confirm modal.
-  // One-time is pre-selected where it's almost certainly what staff mean:
-  // the change was requested by the customer, or the day is already past
-  // the customer's own cutoff (the "customer called after closing" case
-  // that otherwise silently repeats for weeks). A line already flagged
-  // one-time stays one-time.
-  async function openReview(reason = changeReason) {
+  // Changes default to permanent. One-time is pre-selected only where it's
+  // almost certainly what staff mean: the day is already past the
+  // customer's own cutoff (the "customer called after closing" case). A
+  // line already flagged one-time stays one-time. Either way a one-time
+  // line reverts to its regular quantity next week (migration 062).
+  async function openReview() {
     if (!draftCount || reviewOpening) return
     setReviewOpening(true)
     try {
@@ -165,7 +166,7 @@ export default function Orders() {
           to: d.qty,
           baseOneTime,
           pastCutoff: pastCutoff[date],
-          oneTime: baseOneTime || reason === 'customer_request',
+          oneTime: baseOneTime,
         }
       })
       setPendingChanges(changes)
@@ -174,12 +175,9 @@ export default function Orders() {
     }
   }
 
-  // Changing the reason inside the modal re-applies the smart default
-  // (manual toggles are reset — the reason is what drives the default).
   function changeReviewReason(reason) {
     setChangeReason(reason)
     localStorage.setItem('floory_change_reason', reason)
-    setPendingChanges(prev => prev && prev.map(c => ({ ...c, oneTime: c.baseOneTime || reason === 'customer_request' })))
   }
 
   async function confirmSave() {
@@ -262,16 +260,18 @@ export default function Orders() {
 
       const { data: prevLines } = await supabase
         .from('order_lines')
-        .select('menu_item_id, delivery_date, quantity')
+        .select('menu_item_id, delivery_date, quantity, no_carry_forward, carry_forward_quantity')
         .eq('week_id', prevWeekRow.id)
         .eq('customer_id', selectedCustomer.id)
-        .gt('quantity', 0)
-        .eq('no_carry_forward', false)
 
-      if (!prevLines?.length) { toast.info(t('orders.toastNoPrevWeek')); return }
+      // One-time lines come back at their regular quantity, not skipped.
+      const toCopy = (prevLines || [])
+        .map(l => ({ ...l, quantity: carryForwardQty(l) }))
+        .filter(l => l.quantity > 0)
+      if (!toCopy.length) { toast.info(t('orders.toastNoPrevWeek')); return }
 
       // Shift dates by 7 days
-      const upserts = prevLines.map(l => {
+      const upserts = toCopy.map(l => {
         const d = new Date(l.delivery_date)
         d.setDate(d.getDate() + 7)
         return {
@@ -508,7 +508,7 @@ export default function Orders() {
                                       line?.change_reason ? `${t('orders.reasonPrefix')}: ${REASON_LABELS[line.change_reason] || line.change_reason}` : '',
                                       line?.change_note ? `${t('orders.notePrefix')}: ${line.change_note}` : '',
                                       line?.changed_by ? `${t('orders.changedByPrefix')} ${line.changed_by}` : '',
-                                      line?.no_carry_forward ? t('orders.oneTimeNote') : '',
+                                      line?.no_carry_forward ? `${t('orders.oneTimeNote')} ${carryForwardQty(line)}` : '',
                                     ].filter(Boolean).join(' · ')}
                                   />
                                 </td>

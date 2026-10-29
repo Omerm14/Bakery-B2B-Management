@@ -1,9 +1,9 @@
 import { ArrowUp, ArrowDown, Repeat } from 'lucide-react'
 
 // Pre-send confirmation gate: shows exactly what's about to be written,
-// lets the customer mark any individual line "one-time" (excluded from
-// all three forward-copy paths — Wednesday cron, portal lazy-fill, staff's
-// copy-prev-week button), then only calls onConfirm (the real upsert) once
+// lets the customer mark any individual line "one-time" (all three
+// forward-copy paths — Wednesday cron, portal lazy-fill, staff's
+// copy-prev-week button — bring it back at its regular quantity), then only calls onConfirm (the real upsert) once
 // the customer explicitly proceeds. Nothing has been written to the DB yet
 // while this is showing.
 //
@@ -12,11 +12,11 @@ import { ArrowUp, ArrowDown, Repeat } from 'lucide-react'
 // The portal passes neither and keeps the Hebrew defaults below.
 const DEFAULT_LABELS = {
   title: 'אישור שינויים לפני שליחה',
-  hint: 'סמנו "חד-פעמי" בכל שורה שלא צריכה לחזור אוטומטית לשבוע הבא.',
+  hint: 'סמנו "חד-פעמי" בכל שינוי שנוגע רק לשבוע הזה — בשבוע הבא הכמות תחזור למה שהייתה.',
   markAll: 'סמן הכל:',
   oneTime: 'חד-פעמי',
   permanent: 'קבוע',
-  oneTimeTitle: 'שינוי חד-פעמי — לא יועתק לשבוע הבא',
+  oneTimeTitle: 'שינוי חד-פעמי — בשבוע הבא חוזרים לכמות הקבועה',
   permanentTitle: 'יחזור אוטומטית לשבוע הבא',
   newPrefix: 'חדש',
   cancel: 'ביטול',

@@ -13,6 +13,7 @@ import SendReviewModal from '../../components/customer/SendReviewModal'
 import SendSuccessPopup from '../../components/customer/SendSuccessPopup'
 import flooryLogoOnDark from '../../assets/floory/logo-horizontal-ondark.png'
 import { trackEvent } from '../../lib/posthog'
+import { carryForwardQty } from '../../lib/carryForward'
 
 const FAVORITES_KEY = '__favorites__'
 
@@ -87,21 +88,19 @@ export default function CustomerOrders() {
 
     const { data: prevLines } = await supabase
       .from('order_lines')
-      .select('menu_item_id, delivery_date, quantity, no_carry_forward')
+      .select('menu_item_id, delivery_date, quantity, no_carry_forward, carry_forward_quantity')
       .eq('week_id', prevWeekRow.id)
       .eq('customer_id', customer.id)
-      .gt('quantity', 0)
 
     const dateToOffset = {}
     WEEK_DAYS.forEach(d => { dateToOffset[dayDate(prevWeekStart, d.key)] = d.key })
 
     const result = {}
     for (const l of prevLines || []) {
-      // Lines the customer marked "one-time" don't carry into next week —
-      // same rule the Wednesday cron and staff's copy-prev-week enforce.
-      if (l.no_carry_forward) continue
+      const qty = carryForwardQty(l)
+      if (!(qty > 0)) continue
       const offset = dateToOffset[l.delivery_date]
-      if (offset != null) result[`${l.menu_item_id}_${offset}`] = l.quantity
+      if (offset != null) result[`${l.menu_item_id}_${offset}`] = qty
     }
     return result
   }, [customer, week.weekStartISO])
