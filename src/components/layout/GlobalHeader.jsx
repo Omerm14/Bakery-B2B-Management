@@ -26,7 +26,9 @@ const POLL_MS = 30000
 // Lets the floor know a customer sent a self-service order update — the
 // customer portal no longer auto-saves silently, so every send is a
 // deliberate signal worth surfacing here rather than staff having to
-// notice a change on their own.
+// notice a change on their own. Also shows rollover drop alerts (migration
+// 063): products the Wednesday auto-copy should have carried into next week
+// but didn't — shown first, since they mean a delivery is about to be short.
 function NotificationBell() {
   const { t, lang } = useTranslation()
   const userEmail = useCurrentUser()
@@ -38,15 +40,20 @@ function NotificationBell() {
   const [loadingItems, setLoadingItems] = useState(false)
   const [auditRows, setAuditRows] = useState({})
   const [hiddenAutoSyncCount, setHiddenAutoSyncCount] = useState(0)
+  const [dropGroups, setDropGroups] = useState([])
   const wrapRef = useRef(null)
 
   const refreshCount = useCallback(async () => {
+    const { count: dropCount } = await supabase
+      .from('rollover_drop_alerts')
+      .select('id', { count: 'exact', head: true })
+      .is('seen_at', null)
     if (showAutoSync) {
       const { count } = await supabase
         .from('order_change_notifications')
         .select('id', { count: 'exact', head: true })
         .is('seen_at', null)
-      setUnseenCount(count || 0)
+      setUnseenCount((count || 0) + (dropCount || 0))
       return
     }
     // Auto-sync is hidden by default, so a plain head-count would badge the
@@ -65,7 +72,7 @@ function NotificationBell() {
       const rows = await fetchAuditRows(n)
       return rows.length > 0 && rows.every(r => r.change_reason === 'auto_copy')
     }))
-    setUnseenCount(flags.filter(isAutoSync => !isAutoSync).length)
+    setUnseenCount(flags.filter(isAutoSync => !isAutoSync).length + (dropCount || 0))
   }, [showAutoSync])
 
   useEffect(() => {
@@ -123,11 +130,45 @@ function NotificationBell() {
     return groups
   }
 
+  // Last two weeks of drop alerts, one group per customer + week (a broken
+  // rollover drops many items for the same customer at once).
+  async function loadDropAlerts() {
+    const since = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString()
+    const { data, error } = await supabase
+      .from('rollover_drop_alerts')
+      .select('id, customer_id, week_id, delivery_date, expected_quantity, created_at, seen_at, customers(name, name_en), menu_items(name_he, name_en), weeks(label, start_date)')
+      .gte('created_at', since)
+      .order('delivery_date', { ascending: true })
+      .limit(300)
+    if (error) { console.error('[NotificationBell drop alerts]', error); return [] }
+    const groups = new Map()
+    for (const a of data || []) {
+      const key = `${a.customer_id}_${a.week_id}`
+      if (!groups.has(key)) {
+        groups.set(key, { key, customer_id: a.customer_id, customers: a.customers, weeks: a.weeks, unseen: false, rows: [] })
+      }
+      const g = groups.get(key)
+      if (!a.seen_at) g.unseen = true
+      g.rows.push(a)
+    }
+    return [...groups.values()]
+  }
+
   async function toggleOpen() {
     const next = !open
     setOpen(next)
     if (!next) return
     setLoadingItems(true)
+    loadDropAlerts().then(async groups => {
+      setDropGroups(groups)
+      const unseenDropIds = groups.flatMap(g => g.rows.filter(r => !r.seen_at).map(r => r.id))
+      if (unseenDropIds.length) {
+        await supabase.from('rollover_drop_alerts')
+          .update({ seen_at: new Date().toISOString(), seen_by: userEmail })
+          .in('id', unseenDropIds)
+        refreshCount()
+      }
+    })
     // Fetch a bigger batch when auto-sync is hidden — a recent bulk rollover
     // batch could otherwise fill the whole top-20 with entries this panel
     // then filters out, leaving it looking empty despite real ones just
@@ -188,6 +229,38 @@ function NotificationBell() {
       </button>
       {open && (
         <div className="notif-panel">
+          {dropGroups.length > 0 && (
+            <>
+              <div className="notif-panel-title notif-drop-title">{t('header.dropAlertsTitle')}</div>
+              {dropGroups.map(g => (
+                <div key={g.key} className={`notif-item notif-drop${g.unseen ? ' unseen' : ''}`}>
+                  <div className="notif-item-header">
+                    <div className="notif-item-name">
+                      {g.customers ? customerDisplayName(g.customers, lang) : t('common.customer')}
+                      <span className="notif-drop-badge">{g.rows.length} {t('header.dropAlertsMissing')}</span>
+                    </div>
+                    <div className="notif-item-meta">{g.weeks?.label || ''}</div>
+                  </div>
+                  <div className="notif-item-detail">
+                    {groupRowsByDate(g.rows).map(group => (
+                      <div key={group.date} className="notif-detail-group">
+                        <div className="notif-detail-day">{weekdayLabel(group.date, lang)} {formatShortDate(group.date)}</div>
+                        {group.rows.map(r => (
+                          <div key={r.id} className="notif-detail-row">
+                            <span>{r.menu_items ? (lang === 'en' ? (r.menu_items.name_en || r.menu_items.name_he) : r.menu_items.name_he) : '—'}</span>
+                            <span style={{ color: 'var(--red)' }}>{t('header.dropAlertsExpected')}: {Number(r.expected_quantity)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                    <button type="button" className="notif-detail-goto" onClick={() => goToOrder(g)}>
+                      {t('header.notificationsGoToOrder')}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
           <div className="notif-panel-title">{t('header.notificationsTitle')}</div>
           {loadingItems ? (
             <div className="notif-empty">{t('common.loading')}</div>

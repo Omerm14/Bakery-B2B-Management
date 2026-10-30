@@ -179,6 +179,12 @@ body {
   background: var(--surf2); color: var(--t1); font-size: 13px; cursor: pointer; font-family: var(--font-ui);
 }
 .notif-detail-goto:hover { background: var(--surf3, var(--surf2)); }
+.notif-drop-title { color: var(--red); }
+.notif-drop.unseen { background: var(--red-tint); }
+.notif-drop-badge {
+  font-size: 10.5px; font-weight: 600; color: var(--red); background: var(--red-tint);
+  border: 1px solid var(--red-bdr); border-radius: 999px; padding: 2px 8px;
+}
 
 /* ─── MENU ITEM CUSTOMER ACCESS ─── */
 .access-panel {

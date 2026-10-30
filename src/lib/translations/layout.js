@@ -27,6 +27,9 @@ export default {
     'header.notificationsGoToOrder': 'מעבר להזמנה',
     'header.notificationsAutoSync': 'סנכרון אוטומטי',
     'header.notificationsAutoSyncHidden': 'עדכוני סנכרון אוטומטי מוסתרים',
+    'header.dropAlertsTitle': 'מוצרים שחסרים בשבוע הבא',
+    'header.dropAlertsMissing': 'חסרים',
+    'header.dropAlertsExpected': 'צפוי',
     'header.lang': 'English',
   },
   en: {
@@ -57,6 +60,9 @@ export default {
     'header.notificationsGoToOrder': 'Go to order',
     'header.notificationsAutoSync': 'Auto-sync',
     'header.notificationsAutoSyncHidden': 'Auto-sync updates hidden',
+    'header.dropAlertsTitle': 'Missing from next week',
+    'header.dropAlertsMissing': 'missing',
+    'header.dropAlertsExpected': 'Expected',
     'header.lang': 'עברית',
   },
 }
