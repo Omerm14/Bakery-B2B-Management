@@ -9,29 +9,13 @@
 // Deploy with JWT verification off (the secret header is the auth):
 //   supabase functions deploy owner-weekly-report --no-verify-jwt
 // Manual test from the SQL editor: select trigger_owner_weekly_report();
-import { initWasm, Resvg } from 'npm:@resvg/resvg-wasm@2.6.2'
+import { svgToPng } from '../_shared/svg-png.ts'
 import { buildWeeklySvg, caption } from './render.js'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 // Overridable only so the function can be exercised against a local stub.
 const TELEGRAM_API = Deno.env.get('TELEGRAM_API_BASE') ?? 'https://api.telegram.org'
-const WASM_URL = 'https://unpkg.com/@resvg/resvg-wasm@2.6.2/index_bg.wasm'
-// Without a browser user agent Google Fonts serves complete TTF files (all
-// scripts in one file), which is what resvg can load.
-const FONTS_CSS = 'https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700;800&family=Spline+Sans+Mono:wght@700'
-
-let ready: Promise<Uint8Array[]> | null = null
-function loadAssets(): Promise<Uint8Array[]> {
-  ready ??= (async () => {
-    await initWasm(fetch(WASM_URL))
-    const css = await (await fetch(FONTS_CSS)).text()
-    const urls = [...css.matchAll(/url\((https:[^)]+\.ttf)\)/g)].map(m => m[1])
-    if (urls.length === 0) throw new Error('no fonts found in Google Fonts CSS')
-    return Promise.all(urls.map(async u => new Uint8Array(await (await fetch(u)).arrayBuffer())))
-  })()
-  return ready
-}
 
 async function rpc(name: string, args: Record<string, unknown> = {}) {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
@@ -59,16 +43,12 @@ Deno.serve(async req => {
     const body = await req.json().catch(() => ({}))
     const summary = await rpc('owner_weekly_summary', body.week_start ? { p_week_start: body.week_start } : {})
 
-    const fonts = await loadAssets()
-    const png = new Resvg(buildWeeklySvg(summary), {
-      fitTo: { mode: 'original' },
-      font: { fontBuffers: fonts, defaultFontFamily: 'Assistant', loadSystemFonts: false },
-    }).render().asPng()
+    const png = await svgToPng(buildWeeklySvg(summary))
 
     const form = new FormData()
     form.append('chat_id', String(config.telegram_chat_id))
     form.append('caption', caption(summary))
-    form.append('photo', new Blob([png], { type: 'image/png' }), 'weekly-summary.png')
+    form.append('photo', new Blob([png as BlobPart], { type: 'image/png' }), 'weekly-summary.png')
     const tg = await fetch(`${TELEGRAM_API}/bot${config.telegram_bot_token}/sendPhoto`, { method: 'POST', body: form })
     const result = await tg.json()
     if (!result.ok) throw new Error(`telegram: ${result.description}`)
