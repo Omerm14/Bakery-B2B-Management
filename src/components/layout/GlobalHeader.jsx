@@ -14,6 +14,7 @@ const TITLE_KEYS = {
   '/orders': 'nav.orders',
   '/production': 'nav.production',
   '/packing': 'nav.packing',
+  '/waste': 'nav.waste',
   '/weekly': 'nav.weekly',
   '/audit': 'nav.audit',
   '/history': 'nav.history',

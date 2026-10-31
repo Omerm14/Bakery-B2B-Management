@@ -747,3 +747,56 @@ body {
   .qty-stepper-btn { width: 34px; height: 34px; }
   .qty-stepper-input { width: 38px; }
 }
+
+/* ── Waste log (src/pages/Waste.jsx) ───────────────────────── */
+.waste-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; flex: 1 1 520px; justify-content: flex-end; }
+.waste-toolbar .input { padding-block: 9px; }
+.waste-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.waste-stat { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; }
+.waste-stat span { font-size: 13px; font-weight: 500; color: var(--t2); }
+.waste-stat strong { font: 600 19px var(--font-mono); color: var(--t1); }
+.waste-form-card { margin-bottom: 16px; }
+.waste-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.waste-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.waste-field label { font-size: 13px; font-weight: 600; color: var(--t2); }
+.waste-field .input { height: 46px; padding-block: 0; }
+.waste-link { background: none; border: none; padding: 0; color: var(--accent); font: 600 12.5px var(--font-ui); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.waste-stepper { display: flex; align-items: center; height: 46px; background: var(--surf2); border: 1px solid var(--bdr); border-radius: var(--rs); overflow: hidden; }
+.waste-stepper button { width: 40px; height: 100%; background: transparent; border: none; color: var(--t2); font-size: 20px; cursor: pointer; touch-action: manipulation; }
+.waste-stepper button:hover { background: var(--surf3); color: var(--t1); }
+.waste-stepper input { width: 64px; height: 100%; background: transparent; border: none; text-align: center; color: var(--t1); font: 600 16px var(--font-mono); outline: none; -moz-appearance: textfield; }
+.waste-stepper input::-webkit-outer-spin-button, .waste-stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.waste-stepper:focus-within { border-color: var(--accent-bdr); box-shadow: 0 0 0 3px var(--accent-tint); }
+.waste-seg { display: flex; height: 46px; padding: 3px; gap: 2px; background: var(--surf2); border: 1px solid var(--bdr); border-radius: var(--rs); }
+.waste-seg button { padding: 0 14px; border: none; border-radius: 6px; background: transparent; color: var(--t2); font: 600 14px var(--font-ui); cursor: pointer; touch-action: manipulation; }
+.waste-seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.waste-save { height: 46px; padding: 0 20px; }
+.waste-table td { vertical-align: middle; }
+.waste-day-row td, .itbl tr.waste-day-row:hover td { background: var(--surf2); padding-block: 9px; }
+.waste-day-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: 13.5px; font-weight: 700; color: var(--t1); }
+.waste-mono { font-family: var(--font-mono); }
+.waste-day-head .waste-mono { font-size: 12.5px; font-weight: 500; color: var(--t2); }
+.waste-avatar { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 999px; background: var(--surf3); color: var(--accent); font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.waste-icon-btn { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: var(--rs); color: var(--t2); cursor: pointer; }
+.waste-icon-btn:hover { background: var(--surf3); color: var(--t1); }
+.waste-danger { background: var(--red-tint); border: 1px solid var(--red-bdr); color: var(--red); }
+.waste-empty { text-align: center; color: var(--t3); padding: 32px 16px !important; font-size: 14px; }
+.waste-cards { display: flex; flex-direction: column; gap: 14px; padding-bottom: 96px; }
+.waste-card { display: flex; flex-direction: column; gap: 8px; padding: 14px; }
+.waste-qty-pill { font: 600 15px var(--font-mono); background: var(--surf2); border-radius: 6px; padding: 3px 8px; white-space: nowrap; }
+.waste-fab { position: fixed; bottom: 24px; inset-inline-end: 20px; z-index: 200; height: 56px; padding: 0 22px 0 20px; display: inline-flex; align-items: center; gap: 8px; border: none; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font: 700 16px var(--font-ui); box-shadow: var(--shadow-pop); cursor: pointer; }
+.waste-sheet-overlay { align-items: flex-end; padding: 0; }
+.waste-sheet { width: 100%; max-height: 92vh; overflow-y: auto; background: var(--surf); border-top: 1px solid var(--bdr2); border-radius: 20px 20px 0 0; padding: 10px 18px 26px; animation: slideUp .25s cubic-bezier(.16,1,.3,1); }
+.waste-sheet-grip { width: 40px; height: 4px; border-radius: 4px; background: var(--bdr2); margin: 0 auto 10px; }
+.waste-sheet .waste-field { flex: 1 1 100% !important; }
+.waste-sheet .waste-field .input, .waste-sheet .waste-stepper, .waste-sheet .waste-seg { height: 52px; }
+.waste-sheet .waste-stepper { flex: 1; }
+.waste-sheet .waste-stepper input { flex: 1; min-width: 0; font-size: 19px; }
+.waste-sheet .waste-save { flex: 1 1 100%; height: 56px; font-size: 17px; border-radius: 12px; }
+@media (max-width: 640px) {
+  .waste-stats { gap: 8px; }
+  .waste-stat { padding: 10px 12px; }
+  .waste-stat strong { font-size: 15px; }
+  .waste-toolbar { justify-content: stretch; }
+}
+@media print { .waste-fab { display: none; } }

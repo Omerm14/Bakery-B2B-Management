@@ -8,6 +8,7 @@ import Login from './pages/Login'
 import Orders from './pages/Orders'
 import Production from './pages/Production'
 import Packing from './pages/Packing'
+import Waste from './pages/Waste'
 import Weekly from './pages/Weekly'
 import AuditLog from './pages/AuditLog'
 import Settings from './pages/Settings'
@@ -233,6 +234,7 @@ export default function App() {
                 <Route path="/orders" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Orders /></ProtectedLayout>} />
                 <Route path="/production" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Production /></ProtectedLayout>} />
                 <Route path="/packing" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Packing /></ProtectedLayout>} />
+                <Route path="/waste" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Waste /></ProtectedLayout>} />
                 <Route path="/weekly" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><Weekly /></ProtectedLayout>} />
                 <Route path="/audit" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><AuditLog /></ProtectedLayout>} />
                 <Route path="/history" element={<ProtectedLayout isDark={isDark} onToggleTheme={toggleTheme}><History /></ProtectedLayout>} />
