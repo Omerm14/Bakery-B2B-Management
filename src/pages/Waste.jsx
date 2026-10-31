@@ -6,7 +6,7 @@ import { useTranslation } from '../context/LanguageContext'
 import { useToast } from '../context/ToastContext'
 import { useMenuItems } from '../hooks/useMenuItems'
 import SearchInput from '../components/SearchInput'
-import WorkersModal from '../components/waste/WorkersModal'
+import { Link } from 'react-router-dom'
 import { isoToday, toLocalISODate, weekdayLabel, formatShortDate } from '../constants/days'
 import { unitFromMenuUnit, parseQty, stepQty, formatQty, formatTotals, groupByDate, matchesText } from '../lib/waste'
 import { trackEvent } from '../lib/posthog'
@@ -67,7 +67,6 @@ export default function Waste() {
   const [saving, setSaving] = useState(false)
   const [confirmId, setConfirmId] = useState(null)
   const [sheetOpen, setSheetOpen] = useState(false)
-  const [workersOpen, setWorkersOpen] = useState(false)
   const itemRef = useRef(null)
   const formRef = useRef(null)
 
@@ -271,7 +270,7 @@ export default function Waste() {
         <div className="waste-field" style={{ flex: '1 1 160px' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
             <label htmlFor="waste-worker">{t('waste.worker')}</label>
-            <button type="button" className="waste-link" onClick={() => setWorkersOpen(true)}>{t('waste.manageWorkers')}</button>
+            <Link className="waste-link" to="/settings?tab=workers">{t('waste.manageWorkers')}</Link>
           </div>
           <select id="waste-worker" className="input" value={form.workerId} onChange={e => setField('workerId', e.target.value)}>
             <option value="">{t('waste.pickWorker')}</option>
@@ -302,7 +301,7 @@ export default function Waste() {
         {!narrow && <span style={{ fontSize: 12.5, color: 'var(--t3)' }}>{t('waste.hint')}</span>}
         {error && <span role="alert" style={{ fontSize: 13, fontWeight: 600, color: 'var(--red)' }}>{error}</span>}
         {workersLoaded && workers.filter(w => w.active).length === 0 && (
-          <button type="button" className="waste-link" onClick={() => setWorkersOpen(true)}>{t('waste.noWorkersHint')}</button>
+          <Link className="waste-link" to="/settings?tab=workers">{t('waste.noWorkersHint')}</Link>
         )}
       </div>
     </>
@@ -477,9 +476,6 @@ export default function Waste() {
         </div>
       )}
 
-      {workersOpen && (
-        <WorkersModal workers={workers} setWorkers={setWorkers} onClose={() => setWorkersOpen(false)} />
-      )}
     </div>
   )
 }

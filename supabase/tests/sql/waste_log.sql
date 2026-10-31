@@ -53,3 +53,11 @@ BEGIN
   DELETE FROM menu_items WHERE id = item;
   PERFORM test.eq((SELECT menu_item_id FROM waste_log WHERE id = r), NULL::uuid, 'deleting the catalog item keeps the waste row');
 END $$;
+
+-- Seeded worker names (migration 068).
+DO $$
+BEGIN
+  PERFORM test.eq((SELECT count(*) FROM waste_workers WHERE name IN (
+    'עמית דיבקר', 'אניה דידקין', 'מאיה עפרון', 'הדס סעדי', 'אסתי גניס', 'רייצ׳ל איפרגן',
+    'דימה יבטושנקו', 'מוחמד איעד', 'איסורו', 'דור', 'ניקו') AND active), 11::bigint, 'all 11 workers seeded and active');
+END $$;
