@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { useTranslation } from '../../context/LanguageContext'
 import { useBranding } from '../../hooks/useBranding'
 import {
-  LayoutDashboard, ClipboardList, ShoppingCart, PackageCheck, CalendarDays, ScrollText, History, TrendingUp, Settings, X, LogOut, ChevronLeft,
+  LayoutDashboard, ClipboardList, ShoppingCart, PackageCheck, Trash2, CalendarDays, ScrollText, History, TrendingUp, Settings, X, LogOut, ChevronLeft,
 } from 'lucide-react'
 import flooryIcon from '../../assets/floory/icon.svg'
 import flooryLogoOnDark from '../../assets/floory/logo-horizontal-ondark.png'
@@ -15,6 +15,7 @@ const links = [
   { to: '/orders',      key: 'nav.orders',      Icon: ClipboardList },
   { to: '/production',  key: 'nav.production',  Icon: ShoppingCart },
   { to: '/packing',     key: 'nav.packing',     Icon: PackageCheck },
+  { to: '/waste',       key: 'nav.waste',       Icon: Trash2 },
   { to: '/weekly',      key: 'nav.weekly',      Icon: CalendarDays },
   { to: '/audit',       key: 'nav.audit',       Icon: ScrollText },
   { to: '/history',     key: 'nav.history',     Icon: History },

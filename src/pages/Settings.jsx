@@ -11,17 +11,22 @@ import SearchInput from '../components/SearchInput'
 import { useTranslation } from '../context/LanguageContext'
 import { WEEK_DAYS, cutoffDayKey, weekStart, dayDate, formatShortDate, toLocalISODate } from '../constants/days'
 import { trackEvent } from '../lib/posthog'
+import { useSearchParams } from 'react-router-dom'
+import WorkersTab from '../components/settings/WorkersTab'
 
 // Offsets a cutoff may sit at, in days before the delivery date. 0 is the
 // delivery day itself; 7 is the same weekday a full week earlier, which is
 // why both ends get an explicit label instead of just a day name.
 const CUTOFF_OFFSETS = [0, 1, 2, 3, 4, 5, 6, 7]
 const CUTOFF_FALLBACK = { offset_days: 1, time: '10:30' }
+const SETTINGS_TABS = ['menu', 'customers', 'import', 'branding', 'cutoff', 'staff', 'workers']
 
 export default function Settings() {
   const toast = useToast()
   const { t } = useTranslation()
-  const [tab, setTab] = useState('menu')
+  // ?tab=workers deep-links from the waste page's "manage names" link.
+  const [searchParams] = useSearchParams()
+  const [tab, setTab] = useState(() => (SETTINGS_TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'menu'))
   const { menuItems, setMenuItems } = useMenuItems({ activeOnly: false })
   const { customers, setCustomers, createCustomer } = useCustomers({ activeOnly: false })
   const { accessByItem, setAccessByItem } = useMenuItemAccess()
@@ -687,7 +692,7 @@ function ImportTab() {
       </div>
 
       <div className="settings-tabs" style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
-        {[['menu', t('settings.tabs.menu')], ['customers', t('common.customers')], ['import', t('settings.importExcel')], ['branding', t('settings.tabs.branding')], ['cutoff', t('settings.tabs.cutoff')], ['staff', t('settings.tabs.staff')]].map(([k, l]) => (
+        {[['menu', t('settings.tabs.menu')], ['customers', t('common.customers')], ['import', t('settings.importExcel')], ['branding', t('settings.tabs.branding')], ['cutoff', t('settings.tabs.cutoff')], ['staff', t('settings.tabs.staff')], ['workers', t('settings.tabs.workers')]].map(([k, l]) => (
           <button key={k} className={'btn btn-sm ' + (tab === k ? 'btn-primary' : 'btn-ghost')} onClick={() => setTab(k)}>{l}</button>
         ))}
       </div>
@@ -1091,6 +1096,8 @@ function ImportTab() {
           )}
         </div>
       )}
+
+      {tab === 'workers' && <WorkersTab />}
 
       {/* Customer Access PIN Modal */}
       {pinModalCustomer && (
