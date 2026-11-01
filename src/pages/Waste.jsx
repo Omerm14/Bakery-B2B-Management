@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import * as XLSX from 'xlsx'
-import { Plus, Pencil, Trash2, Download, X } from 'lucide-react'
+import { Plus, Pencil, Lock, Download, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useTranslation } from '../context/LanguageContext'
 import { useToast } from '../context/ToastContext'
@@ -65,7 +65,11 @@ export default function Waste() {
   const [editingId, setEditingId] = useState(null)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
-  const [confirmId, setConfirmId] = useState(null)
+  // Row awaiting deletion: deleting needs the manager code (migration 069).
+  const [deleteRow, setDeleteRow] = useState(null)
+  const [deleteCode, setDeleteCode] = useState('')
+  const [deleteError, setDeleteError] = useState('')
+  const [deleting, setDeleting] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
   const itemRef = useRef(null)
   const formRef = useRef(null)
@@ -206,15 +210,40 @@ export default function Waste() {
     }
   }
 
-  async function confirmDelete(id) {
-    setConfirmId(null)
-    const prev = rows
-    setRows(r => r.filter(x => x.id !== id))
-    const { error: err } = await supabase.from('waste_log').delete().eq('id', id)
-    if (err) { console.error('[Waste delete]', err); setRows(prev); toast.error(t('waste.deleteFailed')); return }
-    if (editingId === id) resetForm()
-    toast.success(t('waste.deleted'))
-    trackEvent('waste_deleted')
+  function askDelete(row) {
+    setDeleteRow(row)
+    setDeleteCode('')
+    setDeleteError('')
+  }
+
+  function closeDelete() {
+    if (deleting) return
+    setDeleteRow(null)
+    setDeleteCode('')
+    setDeleteError('')
+  }
+
+  async function confirmDelete() {
+    if (!deleteRow || deleting) return
+    if (!deleteCode.trim()) { setDeleteError(t('waste.codeMissing')); return }
+    setDeleting(true)
+    const { data: status, error: err } = await supabase.rpc('delete_waste_entry', { p_id: deleteRow.id, p_code: deleteCode })
+    setDeleting(false)
+    if (err) { console.error('[Waste delete]', err); setDeleteError(t('waste.deleteFailed')); return }
+    if (status === 'deleted' || status === 'not_found') {
+      const id = deleteRow.id
+      setRows(r => (r || []).filter(x => x.id !== id))
+      if (editingId === id) resetForm()
+      setDeleteRow(null)
+      setDeleteCode('')
+      toast.success(t('waste.deleted'))
+      trackEvent('waste_deleted')
+      return
+    }
+    const messages = { bad_code: 'waste.codeWrong', locked: 'waste.codeLocked', no_code: 'waste.codeNotSet' }
+    setDeleteError(t(messages[status] || 'waste.deleteFailed'))
+    if (status === 'bad_code') setDeleteCode('')
+    trackEvent('waste_delete_refused', { status })
   }
 
   function exportXlsx() {
@@ -308,18 +337,10 @@ export default function Waste() {
   )
 
   function actions(row) {
-    if (confirmId === row.id) {
-      return (
-        <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-          <button className="btn btn-sm waste-danger" onClick={() => confirmDelete(row.id)}>{t('waste.confirmDelete')}</button>
-          <button className="btn btn-ghost btn-sm" onClick={() => setConfirmId(null)}>{t('waste.no')}</button>
-        </div>
-      )
-    }
     return (
       <div style={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
         <button className="waste-icon-btn" aria-label={t('waste.edit')} title={t('waste.edit')} onClick={() => startEdit(row)}><Pencil size={15} /></button>
-        <button className="waste-icon-btn" aria-label={t('waste.delete')} title={t('waste.delete')} onClick={() => setConfirmId(row.id)}><Trash2 size={15} /></button>
+        <button className="waste-icon-btn" aria-label={t('waste.delete')} title={t('waste.deleteManagerOnly')} onClick={() => askDelete(row)}><Lock size={15} /></button>
       </div>
     )
   }
@@ -476,6 +497,35 @@ export default function Waste() {
         </div>
       )}
 
+      {deleteRow && (
+        <div className="overlay" onClick={closeDelete}>
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="waste-delete-title" style={{ width: 400 }} onClick={e => e.stopPropagation()}>
+            <div id="waste-delete-title" className="modal-title" style={{ marginBottom: 8 }}>{t('waste.deleteTitle')}</div>
+            <div style={{ fontSize: 14, color: 'var(--t2)', marginBottom: 4 }}>
+              <strong style={{ color: 'var(--t1)' }}>{deleteRow.item_name}</strong> · {formatQty(deleteRow.quantity, deleteRow.unit, t, locale)} · {formatShortDate(deleteRow.waste_date)}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--t3)', marginBottom: 16 }}>{t('waste.deleteExplain')}</div>
+            <label className="lbl" htmlFor="waste-delete-code">{t('waste.managerCode')}</label>
+            <input
+              id="waste-delete-code"
+              className="input"
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              autoFocus
+              dir="ltr"
+              value={deleteCode}
+              onChange={e => { setDeleteCode(e.target.value); if (deleteError) setDeleteError('') }}
+              onKeyDown={e => { if (e.key === 'Enter') confirmDelete(); if (e.key === 'Escape') closeDelete() }}
+            />
+            <div role="alert" style={{ minHeight: 20, marginTop: 8, fontSize: 13, fontWeight: 600, color: 'var(--red)' }}>{deleteError}</div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+              <button className="btn btn-ghost" onClick={closeDelete} disabled={deleting}>{t('waste.no')}</button>
+              <button className="btn waste-danger" onClick={confirmDelete} disabled={deleting}>{deleting ? t('waste.saving') : t('waste.confirmDelete')}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
