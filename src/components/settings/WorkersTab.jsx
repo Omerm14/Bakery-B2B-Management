@@ -105,7 +105,7 @@ export default function WorkersTab() {
           onChange={e => setNewName(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') add() }}
         />
-        <button className="btn btn-primary btn-sm" onClick={add} disabled={busy || !newName.trim()}>{t('workers.add')}</button>
+        <button className="btn btn-primary btn-sm" style={{ whiteSpace: 'nowrap', flexShrink: 0 }} onClick={add} disabled={busy || !newName.trim()}>{t('workers.add')}</button>
       </div>
 
       {workers === null ? (
