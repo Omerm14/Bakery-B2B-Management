@@ -280,7 +280,7 @@ export function ImportProvider({ children }) {
     const outOfWeek = orderLines.filter(l => l.ddate < wsIso || l.ddate > weekEndIso).length
     const warnings = []
     if (daysAhead > MAX_FUTURE_DAYS) warnings.push(`השבוע ${label} נמצא ${Math.round(daysAhead / 7)} שבועות בעתיד`)
-    if (outOfWeek) warnings.push(`${outOfWeek} שורות עם תאריך אספקה מחוץ לשבוע ${label}`)
+    if (outOfWeek) warnings.push(`${outOfWeek} שורות עם תאריך אספקה מחוץ לשבוע ${label} — לא יובאו`)
     if (warnings.length) {
       warnings.forEach(w => log(`⚠️ ${w}`))
       const ok = window.confirm(`${fileName}\n\n${warnings.join('\n')}\n\nייתכן שהשנה בקובץ זוהתה לא נכון. לייבא בכל זאת?`)
@@ -356,9 +356,14 @@ export function ImportProvider({ children }) {
         .map(({ iname }) => iname))]
       log(`⚠️ ${skippedInactive.length} שורות לפריטים לא פעילים לא יובאו: ${names.join(', ')}`)
     }
-    const activeLines = skippedInactive.length
-      ? rawLines.filter(r => !(r.quantity > 0 && inactiveItemIds.has(r.menu_item_id)))
-      : rawLines
+    // A line must be dated inside its week (DB guard, migration 070): rows
+    // outside the detected week are never written — they would be stored
+    // under the wrong week, hidden from the order screens but counted in
+    // Production, and copied forward every Wednesday.
+    const activeLines = rawLines
+      .filter(r => !(r.quantity > 0 && inactiveItemIds.has(r.menu_item_id)))
+      .filter(r => r.delivery_date >= wsIso && r.delivery_date <= weekEndIso)
+    if (outOfWeek) log(`⚠️ ${outOfWeek} שורות מחוץ לשבוע ${label} לא יובאו`)
 
     // Collapse rows sharing the same upsert key (e.g. duplicate item rows or
     // duplicate date columns in the sheet) — last occurrence wins. A single

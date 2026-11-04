@@ -30,11 +30,14 @@ CREATE OR REPLACE FUNCTION test.item(p_name text, p_active boolean DEFAULT true)
   INSERT INTO menu_items (name_he, active) VALUES (p_name, p_active) RETURNING id
 $$ LANGUAGE sql;
 
--- Order line for this week's Monday + p_day_offset (0 = Monday).
+-- Order line for this week's Monday + p_day_offset (0 = Monday). An offset
+-- past Saturday lands in a later week, so the line joins the week its date
+-- falls in (a line outside its own week is rejected, migration 070).
 CREATE OR REPLACE FUNCTION test.line(p_customer uuid, p_item uuid, p_qty numeric, p_day_offset int DEFAULT 0)
 RETURNS uuid AS $$
   INSERT INTO order_lines (week_id, customer_id, menu_item_id, delivery_date, quantity, source, status)
-  VALUES (test.week(test.this_week()), p_customer, p_item, test.this_week() + 1 + p_day_offset, p_qty, 'manual', 'ok')
+  SELECT test.week(d - extract(dow FROM d)::int), p_customer, p_item, d, p_qty, 'manual', 'ok'
+  FROM (SELECT test.this_week() + 1 + p_day_offset AS d) x
   RETURNING id
 $$ LANGUAGE sql;
 

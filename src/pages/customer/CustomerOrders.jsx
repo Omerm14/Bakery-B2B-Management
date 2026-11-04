@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { ChevronRight, ChevronLeft, LogOut, Send } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { useCustomerWeek } from '../../hooks/useCustomerWeek'
 import { useCustomerMenuItems } from '../../hooks/useCustomerMenuItems'
 import { useBranding } from '../../hooks/useBranding'
 import { useToast } from '../../context/ToastContext'
-import { WEEK_DAYS, formatShortDate, dayDate, toLocalISODate } from '../../constants/days'
+import { WEEK_DAYS, formatShortDate, dayDate, toLocalISODate, weekStart } from '../../constants/days'
 import { CATEGORY_ORDER } from '../../constants/categories'
 import DayOrderView from './DayOrderView'
 import WeekSummaryView from './WeekSummaryView'
@@ -14,6 +14,7 @@ import SendSuccessPopup from '../../components/customer/SendSuccessPopup'
 import flooryLogoOnDark from '../../assets/floory/logo-horizontal-ondark.png'
 import { trackEvent } from '../../lib/posthog'
 import { carryForwardQty } from '../../lib/carryForward'
+import { isDateInWeek } from '../../lib/weekGuard'
 
 const FAVORITES_KEY = '__favorites__'
 
@@ -24,6 +25,12 @@ export default function CustomerOrders() {
   const branding = useBranding()
   const [customer, setCustomer] = useState(null)
   const [weekId, setWeekId] = useState(null)
+  // Week start (ISO) that weekId / orderLines were loaded for. Sending is
+  // only allowed while it matches the week on screen — see loadWeek().
+  const [loadedWeekStart, setLoadedWeekStart] = useState(null)
+  // Bumped on every loadWeek() call; a load that finishes after a newer one
+  // started drops its results instead of overwriting the newer week's.
+  const loadSeq = useRef(0)
   // `${menuItemId}_${date}` -> { quantity, id?, pending? }. Last week's
   // amount is carried forward and written through immediately (silently,
   // same as the existing Wednesday auto-copy) — the customer never needs
@@ -105,18 +112,28 @@ export default function CustomerOrders() {
     return result
   }, [customer, week.weekStartISO])
 
+  // Incident 2026-08-21: weekId used to be set right after the first await
+  // here, while orderLines still held the previous week's unsent edits and
+  // no load was ever cancelled. A send in that window stored last week's
+  // dates under this week's id; the Wednesday rollover then re-created
+  // those stray rows every week (migration 070). Now a load only publishes
+  // its results if it is still the latest one, and weekId, the week it
+  // belongs to and its lines are published together at the end.
   const loadWeek = useCallback(async () => {
     if (!customer) return
+    const seq = ++loadSeq.current
+    const isStale = () => seq !== loadSeq.current
+    const weekStartISO = week.weekStartISO
     setLoading(true)
     setLoadError(false)
     try {
       const { id: wid, error: weekIdError } = await week.getWeekId()
+      if (isStale()) return
       if (weekIdError) {
         setLoadError(true)
         toast.error('טעינת השבוע נכשלה — נסו שוב')
         return
       }
-      setWeekId(wid)
 
       const lockAts = {}
       let lockAtFailed = false
@@ -126,6 +143,7 @@ export default function CustomerOrders() {
         if (error) lockAtFailed = true
         lockAts[date] = data
       }))
+      if (isStale()) return
       setLockAtByDate(lockAts)
       if (lockAtFailed) { setLoadError(true); toast.error('בדיקת מועדי העדכון נכשלה — נסו שוב') }
 
@@ -136,6 +154,7 @@ export default function CustomerOrders() {
           .select('id, menu_item_id, delivery_date, quantity, change_reason, no_carry_forward')
           .eq('week_id', wid)
           .eq('customer_id', customer.id)
+        if (isStale()) return
         if (linesError) { setLoadError(true); toast.error('טעינת ההזמנה נכשלה — נסו שוב') }
         for (const l of lines || []) map[`${l.menu_item_id}_${l.delivery_date}`] = l
 
@@ -155,6 +174,7 @@ export default function CustomerOrders() {
         const prevQtyByItemOffset = customer.auto_sync === false
           ? {}
           : await fetchPreviousWeekQtyByOffset()
+        if (isStale()) return
         const autoDefaults = []
         for (const item of menuItems) {
           for (const d of WEEK_DAYS) {
@@ -206,13 +226,38 @@ export default function CustomerOrders() {
         }
       }
 
+      if (isStale()) return
+      setWeekId(wid)
+      setLoadedWeekStart(weekStartISO)
       setOrderLines(map)
     } finally {
-      setLoading(false)
+      if (!isStale()) setLoading(false)
     }
   }, [customer, week.weekStartISO, menuItems, fetchPreviousWeekQtyByOffset])
 
+  // A week switch drops everything that belonged to the old week at once —
+  // its id, its lines (including unsent edits; navigation asks first, see
+  // confirmLeaveWeek) and an open review modal — instead of leaving them
+  // live until the new week finishes loading. Declared before the load
+  // effect so it runs first.
+  useEffect(() => {
+    setWeekId(null)
+    setLoadedWeekStart(null)
+    setOrderLines({})
+    setLockAtByDate({})
+    setPendingChanges(null)
+  }, [week.weekStartISO])
+
   useEffect(() => { loadWeek() }, [loadWeek])
+
+  const hasUnsentEdits = Object.values(orderLines).some(l => l?.pending)
+  function confirmLeaveWeek() {
+    return !hasUnsentEdits || window.confirm('יש שינויים שלא נשלחו בשבוע הזה. לעבור שבוע ולבטל אותם?')
+  }
+
+  // Sending is only possible for the week on screen, once it has finished
+  // loading — never with an id or lines left over from another week.
+  const sendReady = !!weekId && !loading && loadedWeekStart === week.weekStartISO
 
   const canEdit = useMemo(() => {
     const map = {}
@@ -247,13 +292,14 @@ export default function CustomerOrders() {
   // for the actual upsert, which only runs after the customer reviews
   // (and optionally flags lines "one-time") and confirms.
   function reviewOrder() {
-    if (!customer || !weekId || sending) return
+    if (!customer || !sendReady || sending) return
     let skippedLocked = 0
     const changes = []
     for (const [key, line] of Object.entries(orderLines)) {
       if (!line.pending) continue
       const [menuItemId, date] = key.split('_')
-      if (canEdit[date] === false) { skippedLocked++; continue }
+      if (!isDateInWeek(date, loadedWeekStart)) continue
+      if (canEdit[date] !== true) { skippedLocked++; continue }
       if (line.quantity === (line.original_quantity ?? 0)) continue
       const item = menuItems.find(i => i.id === menuItemId)
       changes.push({
@@ -289,7 +335,7 @@ export default function CustomerOrders() {
   // a delta — a value typed back to its original is still a valid write),
   // baking in each line's one-time decision from the confirm modal.
   async function confirmSend() {
-    if (!customer || !weekId || sending || !pendingChanges) return
+    if (!customer || !sendReady || sending || !pendingChanges) return
     const oneTimeByKey = Object.fromEntries(pendingChanges.map(c => [c.key, c.oneTime]))
 
     setSending(true)
@@ -299,7 +345,10 @@ export default function CustomerOrders() {
       for (const [key, line] of Object.entries(orderLines)) {
         if (!line.pending) continue
         const [menuItemId, date] = key.split('_')
-        if (canEdit[date] === false) { skippedLocked++; continue }
+        // weekId belongs to loadedWeekStart; a date outside it would be
+        // stored under the wrong week (rejected by the DB since 070).
+        if (!isDateInWeek(date, loadedWeekStart)) continue
+        if (canEdit[date] !== true) { skippedLocked++; continue }
         upserts.push({
           week_id: weekId,
           customer_id: customer.id,
@@ -354,7 +403,7 @@ export default function CustomerOrders() {
       trackEvent('order_submitted', { items_changed: changedCount, lines_submitted: upserts.length, skipped_locked: skippedLocked, one_time_count: oneTimeCount })
     } catch (err) {
       console.error('[CustomerOrders.confirmSend]', err)
-      toast.error('שליחת ההזמנה נכשלה — נסו שוב')
+      toast.error(err?.hint === 'delivery_date_outside_week' ? err.message : 'שליחת ההזמנה נכשלה — נסו שוב')
       trackEvent('order_submit_failed')
     } finally {
       setSending(false)
@@ -385,21 +434,39 @@ export default function CustomerOrders() {
     return total
   }
 
+  // Moving past Saturday / before Sunday switches the week, so it asks
+  // before dropping unsent edits, same as the week arrows.
   function nextDay() {
-    setDayOffset(prev => {
-      if (prev >= 6) { week.nextWeek(); return 0 }
-      return prev + 1
-    })
+    if (dayOffset >= 6) {
+      if (!confirmLeaveWeek()) return
+      week.nextWeek()
+      setDayOffset(0)
+    } else {
+      setDayOffset(dayOffset + 1)
+    }
   }
 
   function prevDay() {
-    setDayOffset(prev => {
-      if (prev <= 0) { week.prevWeek(); return 6 }
-      return prev - 1
-    })
+    if (dayOffset <= 0) {
+      if (!confirmLeaveWeek()) return
+      week.prevWeek()
+      setDayOffset(6)
+    } else {
+      setDayOffset(dayOffset - 1)
+    }
+  }
+
+  function prevWeek() {
+    if (confirmLeaveWeek()) week.prevWeek()
+  }
+
+  function nextWeek() {
+    if (confirmLeaveWeek()) week.nextWeek()
   }
 
   function goToToday() {
+    const todayWeek = toLocalISODate(weekStart())
+    if (todayWeek !== week.weekStartISO && !confirmLeaveWeek()) return
     week.goToToday()
     setDayOffset(new Date().getDay())
   }
@@ -454,18 +521,18 @@ export default function CustomerOrders() {
 
       <div className="week-nav">
         {viewMode === 'week' && (
-          <button className="btn btn-ghost btn-sm" onClick={week.prevWeek}><ChevronRight size={16} /></button>
+          <button className="btn btn-ghost btn-sm" onClick={prevWeek}><ChevronRight size={16} /></button>
         )}
         <span className="week-label">{week.weekLabel}</span>
         {viewMode === 'week' && (
-          <button className="btn btn-ghost btn-sm" onClick={week.nextWeek}><ChevronLeft size={16} /></button>
+          <button className="btn btn-ghost btn-sm" onClick={nextWeek}><ChevronLeft size={16} /></button>
         )}
         <button className="btn btn-ghost btn-sm" onClick={goToToday} style={{ fontSize: 12 }}>השבוע</button>
       </div>
 
       {weekId && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-          <button className="btn btn-primary btn-sm" onClick={reviewOrder} disabled={sending}>
+          <button className="btn btn-primary btn-sm" onClick={reviewOrder} disabled={sending || !sendReady}>
             <Send size={14} /> {sending ? 'שולח...' : 'שלח הזמנה'}
           </button>
         </div>
