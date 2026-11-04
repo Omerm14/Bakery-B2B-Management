@@ -8,11 +8,12 @@ import { useMenuItems } from '../hooks/useMenuItems'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { useToast } from '../context/ToastContext'
 import { useTranslation } from '../context/LanguageContext'
-import { WEEK_DAYS, toLocalISODate, formatShortDate } from '../constants/days'
+import { WEEK_DAYS, formatShortDate } from '../constants/days'
 import SearchInput from '../components/SearchInput'
 import { customerDisplayName } from '../lib/displayName'
 import { trackEvent } from '../lib/posthog'
 import { carryForwardQty } from '../lib/carryForward'
+import { isDateInWeek, addDaysISO } from '../lib/weekGuard'
 import SendReviewModal from '../components/customer/SendReviewModal'
 
 export default function Orders() {
@@ -36,6 +37,11 @@ export default function Orders() {
   const [customerFilter, setCustomerFilter] = useState('')
   const [orderLines, setOrderLines] = useState({}) // key: `${menuItemId}_${date}` => line
   const [weekId, setWeekId] = useState(null)
+  // Week start (ISO) that weekId / orderLines were loaded for; saves require
+  // it to match the week on screen. loadSeq drops results of a load that a
+  // newer one has overtaken (see loadOrders).
+  const [loadedWeekStart, setLoadedWeekStart] = useState(null)
+  const loadSeq = useRef(0)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showAddCustomer, setShowAddCustomer] = useState(false)
@@ -75,8 +81,12 @@ export default function Orders() {
   }, [customers, location.state])
 
   useEffect(() => {
+    // Drop the previous customer/week's id and lines at once, so nothing
+    // can be saved against them while the new ones load.
+    setWeekId(null)
+    setLoadedWeekStart(null)
+    setOrderLines({})
     if (selectedCustomer) loadOrders()
-    else setOrderLines({})
     setDrafts({})
     setPendingChanges(null)
     setChangeNote('')
@@ -96,11 +106,19 @@ export default function Orders() {
     return !draftCount || window.confirm(t('orders.confirmDiscardDrafts'))
   }
 
+  // A save takes week_id from weekId and dates from the grid; they must be
+  // the same week. Results of a load that a newer load (fast week/customer
+  // switching) has overtaken are dropped, and weekId is published together
+  // with the lines it belongs to. Same race that put Gazeti's portal order
+  // under the wrong week on 2026-08-21 (migration 070).
   async function loadOrders() {
+    const seq = ++loadSeq.current
+    const isStale = () => seq !== loadSeq.current
+    const weekStartISO = week.weekStartISO
     setLoading(true)
     try {
       const wid = await week.getOrCreateWeek()
-      setWeekId(wid)
+      if (isStale()) return
 
       const { data: lines } = await supabase
         .from('order_lines')
@@ -108,15 +126,22 @@ export default function Orders() {
         .eq('week_id', wid)
         .eq('customer_id', selectedCustomer.id)
 
+      if (isStale()) return
+
       const map = {}
       for (const l of lines || []) {
         map[`${l.menu_item_id}_${l.delivery_date}`] = l
       }
+      setWeekId(wid)
+      setLoadedWeekStart(weekStartISO)
       setOrderLines(map)
     } finally {
-      setLoading(false)
+      if (!isStale()) setLoading(false)
     }
   }
+
+  // Saving is only possible for the week on screen, once it has loaded.
+  const saveReady = !!weekId && !loading && loadedWeekStart === week.weekStartISO
 
   function handleQtyChange(menuItemId, date, value, via = 'orders_grid') {
     // Piece-count items ("יח׳") don't have fractional units in real life —
@@ -144,7 +169,7 @@ export default function Orders() {
   // line already flagged one-time stays one-time. Either way a one-time
   // line reverts to its regular quantity next week (migration 062).
   async function openReview() {
-    if (!draftCount || reviewOpening) return
+    if (!draftCount || reviewOpening || !saveReady) return
     setReviewOpening(true)
     try {
       const dates = [...new Set(Object.keys(drafts).map(k => k.split('_')[1]))]
@@ -181,13 +206,15 @@ export default function Orders() {
   }
 
   async function confirmSave() {
-    if (!pendingChanges || saving) return
+    if (!pendingChanges || saving || !saveReady) return
     const oneTimeByKey = Object.fromEntries(pendingChanges.map(c => [c.key, c.oneTime]))
     setSaving(true)
     try {
-      const wid = weekId || await week.getOrCreateWeek()
+      const wid = weekId
       const now = new Date().toISOString()
-      const upserts = Object.entries(drafts).map(([key, d]) => {
+      // weekId belongs to loadedWeekStart: a draft dated outside it would be
+      // stored under the wrong week (rejected by the DB since migration 070).
+      const upserts = Object.entries(drafts).filter(([key]) => isDateInWeek(key.split('_')[1], loadedWeekStart)).map(([key, d]) => {
         const [menuItemId, date] = key.split('_')
         return {
           week_id: wid,
@@ -207,6 +234,7 @@ export default function Orders() {
           updated_at: now,
         }
       })
+      if (!upserts.length) return
       const { error } = await supabase
         .from('order_lines')
         .upsert(upserts, { onConflict: 'week_id,customer_id,menu_item_id,delivery_date' })
@@ -223,7 +251,8 @@ export default function Orders() {
       console.error('[confirmSave]', err)
       // The inactive-item DB guard (migration 061) carries a readable
       // Hebrew message — show it as-is rather than the generic one.
-      toast.error(err?.hint === 'inactive_menu_item' ? err.message : t('orders.toastSaveFailed'))
+      // Same for the week guard (migration 070).
+      toast.error(['inactive_menu_item', 'delivery_date_outside_week'].includes(err?.hint) ? err.message : t('orders.toastSaveFailed'))
     } finally {
       setSaving(false)
     }
@@ -243,7 +272,9 @@ export default function Orders() {
   }
 
   async function copyPrevWeek() {
-    if (!selectedCustomer || !weekId || draftCount) return
+    if (!selectedCustomer || !saveReady || draftCount) return
+    const targetWeekId = weekId
+    const targetWeekStart = loadedWeekStart
     // Staff turned automatic carry-forward off for this customer (migration
     // 057). This button is an explicit staff action rather than automation,
     // so it stays available — but confirm, since copying here is exactly what
@@ -252,10 +283,9 @@ export default function Orders() {
     setCopying(true)
     try {
       // Get previous week
-      const prevStart = new Date(week.weekStartISO)
-      prevStart.setDate(prevStart.getDate() - 7)
+      const prevStartISO = addDaysISO(targetWeekStart, -7)
       const { data: prevWeekRow } = await supabase
-        .from('weeks').select('id').eq('start_date', toLocalISODate(prevStart)).single()
+        .from('weeks').select('id').eq('start_date', prevStartISO).single()
       if (!prevWeekRow) { toast.info(t('orders.toastNoPrevWeek')); return }
 
       const { data: prevLines } = await supabase
@@ -265,20 +295,22 @@ export default function Orders() {
         .eq('customer_id', selectedCustomer.id)
 
       // One-time lines come back at their regular quantity, not skipped.
+      // Only lines dated inside the previous week: a stray line from another
+      // week would be copied into the wrong week (how Gazeti's stray rows
+      // spread on 2026-09-14, migration 070).
       const toCopy = (prevLines || [])
+        .filter(l => isDateInWeek(l.delivery_date, prevStartISO))
         .map(l => ({ ...l, quantity: carryForwardQty(l) }))
         .filter(l => l.quantity > 0)
       if (!toCopy.length) { toast.info(t('orders.toastNoPrevWeek')); return }
 
       // Shift dates by 7 days
       const upserts = toCopy.map(l => {
-        const d = new Date(l.delivery_date)
-        d.setDate(d.getDate() + 7)
         return {
-          week_id: weekId,
+          week_id: targetWeekId,
           customer_id: selectedCustomer.id,
           menu_item_id: l.menu_item_id,
-          delivery_date: toLocalISODate(d),
+          delivery_date: addDaysISO(l.delivery_date, 7),
           quantity: l.quantity,
           source: 'manual',
           status: 'ok',
@@ -428,7 +460,7 @@ export default function Orders() {
                   <button
                     className="btn btn-ghost btn-sm"
                     onClick={copyPrevWeek}
-                    disabled={copying || !!draftCount}
+                    disabled={copying || !!draftCount || !saveReady}
                     title={draftCount ? t('orders.copyPrevDisabledDrafts') : t('orders.copyPrevWeekTitle')}
                   >
                     <Copy size={13} /> {copying ? t('orders.copying') : t('orders.copyPrevWeek')}
@@ -442,7 +474,7 @@ export default function Orders() {
                     <button className="btn btn-ghost btn-sm" onClick={() => window.confirm(t('orders.confirmDiscardDrafts')) && setDrafts({})}>
                       {t('orders.discardDrafts')}
                     </button>
-                    <button className="btn btn-primary btn-sm" onClick={() => openReview()} disabled={reviewOpening}>
+                    <button className="btn btn-primary btn-sm" onClick={() => openReview()} disabled={reviewOpening || !saveReady}>
                       {t('orders.reviewAndSave')}
                     </button>
                   </div>
