@@ -6,7 +6,7 @@
 
 const W = 1080
 const H = 1350
-const C = {
+export const C = {
   bg: '#0A0F0D', surf: '#111917', bdr: '#1C2522', grid: '#1A2420',
   t1: '#F2F1EA', t2: '#A8B5AE', t3: '#6E7B74',
   acc: '#3DD6A3', prevBar: '#2B3A35', red: '#E8604C', amber: '#E0A93D',
@@ -17,11 +17,11 @@ export function esc(v) {
   return String(v ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]))
 }
 
-const num = v => Number(v ?? 0)
-const fmtInt = v => Math.round(num(v)).toLocaleString('en-US')
-const fmtK = v => (num(v) >= 1000 ? (num(v) / 1000).toFixed(1) + 'k' : String(Math.round(num(v))))
-const ddmm = iso => { const [, m, d] = String(iso).split('-'); return `${d}.${m}` }
-const ddmmyyyy = iso => { const [y, m, d] = String(iso).split('-'); return `${d}.${m}.${y}` }
+export const num = v => Number(v ?? 0)
+export const fmtInt = v => Math.round(num(v)).toLocaleString('en-US')
+export const fmtK = v => (num(v) >= 1000 ? (num(v) / 1000).toFixed(1) + 'k' : String(Math.round(num(v))))
+export const ddmm = iso => { const [, m, d] = String(iso).split('-'); return `${d}.${m}` }
+export const ddmmyyyy = iso => { const [y, m, d] = String(iso).split('-'); return `${d}.${m}.${y}` }
 
 export function pctChange(cur, prev) {
   return num(prev) === 0 ? null : Math.round(((num(cur) - num(prev)) * 100) / num(prev))
@@ -59,18 +59,18 @@ export function caption(s) {
 // RTL strings are wrapped in RLMs: the renderer resolves the paragraph
 // direction from the text, and a line ending in "ב-34%." would otherwise
 // get its trailing number and period laid out left-to-right.
-const RLM = '\u200F'
-const text = (x, y, str, { size = 24, weight = 400, fill = C.t1, anchor = 'end', family = 'Assistant', rtl = true } = {}) =>
+export const RLM = '\u200F'
+export const text = (x, y, str, { size = 24, weight = 400, fill = C.t1, anchor = 'end', family = 'Assistant', rtl = true } = {}) =>
   `<text x="${x}" y="${y}" font-family="${family}" font-size="${size}" font-weight="${weight}" fill="${fill}" text-anchor="${anchor}"${rtl ? ' direction="rtl"' : ''}>${rtl ? RLM + esc(str) + RLM : esc(str)}</text>`
 
-const card = (x, y, w, h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="22" fill="${C.surf}" stroke="${C.bdr}"/>`
+export const card = (x, y, w, h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="22" fill="${C.surf}" stroke="${C.bdr}"/>`
 
 // ▲ / ▼ drawn as paths: the fonts have no arrow glyphs.
-const arrow = (x, y, up, fill) => up
+export const arrow = (x, y, up, fill) => up
   ? `<path d="M${x} ${y} l9 -14 l9 14 z" fill="${fill}"/>`
   : `<path d="M${x} ${y - 14} l9 14 l9 -14 z" fill="${fill}"/>`
 
-function delta(x, y, value, { suffix = '%', goodWhenUp = true, neutral = false, label } = {}) {
+export function delta(x, y, value, { suffix = '%', goodWhenUp = true, neutral = false, label } = {}) {
   if (label) return text(x, y, label, { size: 21, weight: 700, fill: C.acc })
   if (value === null || value === undefined) return text(x, y, '—', { size: 21, weight: 700, fill: C.t3 })
   const up = value >= 0
